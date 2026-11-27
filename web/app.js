@@ -898,7 +898,7 @@ function shouldAutoSSORedirect({isGuest, hostname, bypassAutoAuth, authErr, logi
 }
 
 async function boot(){
-  state.data = {runs:[],issues:[],tasks:[],workflowMetrics:[],syncLogs:[],agents:[],workflows:[],projects:[],repositories:[],users:[],rules:[],skills:[],mcpServers:[],executors:[],sandboxes:[]};
+  state.data = {runs:[],issues:[],tasks:[],workflowMetrics:[],syncLogs:[],trackerImport:null,agents:[],workflows:[],projects:[],repositories:[],users:[],rules:[],skills:[],mcpServers:[],executors:[],sandboxes:[]};
   bind(); renderProjectSwitcher(); updateApprovalBadge();
 
   // 1. 检查 URL 中是否有 SSO 回调的 code
@@ -1331,6 +1331,7 @@ function bind(){
   $('#issueForm').onsubmit=saveIssue;
   $('#dispatchIssue').onclick=dispatchIssue;
   $('#syncNowBtn').onclick=syncNow;
+  $('#trackerImportBtn').onclick=triggerTrackerImport;
   $('#saveSyncConfig').onclick=saveSyncConfig;
   $('#scheduleJobForm').onsubmit=saveScheduleJob;
   const scheduleSaveAndRun=$('#scheduleSaveAndRun');
@@ -2157,7 +2158,7 @@ function switchView(name){
     }
     refreshRuns(false,true);
   }
-  if(name==='issues'){refreshIssues();renderSync();const issueId=new URL(location.href).searchParams.get('issueId');if(issueId)openIssueDetail(issueId)}
+  if(name==='issues'){refreshIssues();renderSync();loadTrackerImport();const issueId=new URL(location.href).searchParams.get('issueId');if(issueId)openIssueDetail(issueId)}
 
   if(name==='aiSchedules'){renderScheduleJobs();refreshAISchedules()}
   if(name==='bots')loadBots();

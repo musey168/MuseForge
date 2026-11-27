@@ -23,6 +23,12 @@
 .sync-repo-item b{color:var(--text)}
 .sync-repo-item code{font-size:11px;color:var(--muted-2)}
 .sync-repo-item em{font-size:10px;color:var(--blue);font-style:normal}
+.sync-import-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px}
+.sync-import-status{font-size:11px;color:var(--muted-2)}
+.sync-import-status.success{color:var(--green)}
+.sync-import-status.partial{color:var(--amber,#b7791f)}
+.sync-import-status.failed{color:var(--red)}
+.sync-import-reason{font-size:11px;color:var(--red);flex:1;min-width:0}
 .sync-config-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-bottom:12px}
 .sync-config-grid label{display:block;font-size:10.5px;color:var(--muted);font-weight:650;margin-bottom:3px}
 .sync-config-grid input{width:100%;border:1px solid var(--line-strong);border-radius:6px;padding:6px 8px;font-size:11.5px;background:var(--bg-soft);color:var(--text)}

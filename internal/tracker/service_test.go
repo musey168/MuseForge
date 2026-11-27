@@ -172,6 +172,7 @@ type memIssueStore struct {
 	repositories map[string]domain.Repository
 	projects     map[string]domain.Project
 	users        []domain.User
+	runs         map[string]domain.TrackerImportRun
 }
 
 func (m *memIssueStore) Issues() []domain.Issue {
@@ -241,12 +242,26 @@ func (m *memIssueStore) PutSyncedIssue(v domain.Issue) error {
 	}
 	return m.PutIssue(v)
 }
+func (m *memIssueStore) PutImportedIssue(v domain.Issue) error {
+	return m.PutIssue(v)
+}
 func (m *memIssueStore) DeleteIssue(id string) error {
 	delete(m.issues, id)
 	return nil
 }
 func (m *memIssueStore) PutSyncConfig(domain.SyncConfig) error { return nil }
 func (m *memIssueStore) SyncConfig() domain.SyncConfig         { return domain.SyncConfig{} }
+func (m *memIssueStore) PutTrackerImportRun(run domain.TrackerImportRun) error {
+	if m.runs == nil {
+		m.runs = map[string]domain.TrackerImportRun{}
+	}
+	m.runs[run.Provider] = run
+	return nil
+}
+func (m *memIssueStore) LatestTrackerImportRun(provider string) (domain.TrackerImportRun, bool) {
+	run, ok := m.runs[provider]
+	return run, ok
+}
 
 func TestReconcileTAPDRemovesStoriesMissingFromIteration(t *testing.T) {
 	store := &memIssueStore{issues: map[string]domain.Issue{

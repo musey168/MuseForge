@@ -3,12 +3,12 @@ package tracker
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -40,6 +40,10 @@ func (s *Service) githubClient(project string) (*githubClient, error) {
 		}
 	}
 	base := s.githubAPIBase
+	if base == "" {
+		// A GitHub Enterprise install serves its own API root.
+		base = strings.TrimSpace(os.Getenv("AGENTFLOW_GITHUB_API_BASE"))
+	}
 	if base == "" {
 		base = "https://api.github.com"
 	}
@@ -74,6 +78,18 @@ func (s *Service) githubClientForRun(project, localProjectID, gitToken string) (
 		return g, "项目 " + local + " Owner 的 Git Token", nil
 	}
 	return g, "首个绑定该仓库的项目 Owner 的 Git Token", nil
+}
+
+// githubClientWithToken builds the client of one repository with an explicit
+// credential. The import path resolves the credential itself, so the token
+// the client would pick on its own is replaced, not merged.
+func (s *Service) githubClientWithToken(project, token string) (*githubClient, error) {
+	g, err := s.githubClient(project)
+	if err != nil {
+		return nil, err
+	}
+	g.token = strings.TrimSpace(token)
+	return g, nil
 }
 
 func (s *Service) githubTokenForUser(userID int64) string {
@@ -258,11 +274,41 @@ func (s *Service) githubMergeBranch(project, branch, target, title, description 
 // issues for projects whose Owner has no access, and break the import of
 // projects whose Owner does.
 func (s *Service) pullGitHubIssues(store IssueStoreAdapter, repo domain.Repository) (int, error) {
-	g, _, err := s.githubClientForRun(repo.GongfengProjectID, repo.ProjectID, "")
-	if err != nil {
-		return 0, err
+	return s.importProviderRepository(store, &githubProvider{service: s}, repo)
+}
+
+// githubProvider adapts GitHub to the shared tracker import path.
+type githubProvider struct {
+	service *Service
+}
+
+func (p *githubProvider) Name() string { return "github" }
+
+func (p *githubProvider) IDPrefix() string { return "gh" }
+
+func (p *githubProvider) CredentialHost() string { return "github.com" }
+
+// LocalStatus maps GitHub's own state onto the local status vocabulary.
+func (p *githubProvider) LocalStatus(state string) (string, string) {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "open":
+		return "todo", ""
+	case "closed":
+		return "closed", "external"
+	default:
+		return "backlog", ""
 	}
-	count := 0
+}
+
+// ListIssues lists the GitHub issues of one repository. GitHub returns pull
+// requests on the issues listing; they are not requirements, so they are
+// skipped here and the shared path never learns about them.
+func (p *githubProvider) ListIssues(ctx context.Context, repo domain.Repository, token string) ([]ProviderIssue, error) {
+	g, err := p.service.githubClientWithToken(repo.GongfengProjectID, token)
+	if err != nil {
+		return nil, err
+	}
+	var out []ProviderIssue
 	for page := 1; page <= 100; page++ {
 		var list []struct {
 			ID          int64           `json:"id"`
@@ -275,40 +321,29 @@ func (s *Service) pullGitHubIssues(store IssueStoreAdapter, repo domain.Reposito
 			PullRequest json.RawMessage `json:"pull_request"`
 		}
 		if err := g.request("GET", "/issues?state=all&per_page=100&page="+strconv.Itoa(page), nil, &list); err != nil {
-			return count, err
+			return nil, err
 		}
 		for _, item := range list {
 			if len(item.PullRequest) > 0 {
 				continue
 			}
-			id := fmt.Sprintf("gh-%s-%d", repo.ID, item.Number)
-			issue := domain.Issue{ID: id, Number: item.Number, ProjectID: repo.ProjectID, RepositoryID: repo.ID, BaseBranch: repo.DefaultBranch, Kind: "issue", Title: item.Title, Description: item.Body, Priority: "medium", Source: "github", Status: gongfengStateToStatus(item.State), CreatedAt: item.CreatedAt, UpdatedAt: time.Now().UTC(), ExternalRef: &domain.ExternalRef{Source: "github", ExternalID: strconv.FormatInt(item.ID, 10), ExternalIID: item.Number, ExternalURL: item.URL, ExternalState: item.State, ExternalType: "issue", SyncedAt: time.Now().UTC()}}
-			issue.ExternalRef.SourceContentHash = githubBodyHash(item.Body)
-			if item.State == "open" {
-				issue.Status = "todo"
-			}
-			if item.State == "closed" {
-				issue.CloseSource = "external"
-			}
-			if old, ok := store.Issue(id); ok {
-				applyExistingIssue(&issue, old)
-				if old.Clarification.Status != "" || (old.ExternalRef != nil && githubBodyHash(old.Description) != old.ExternalRef.SourceContentHash) {
-					issue.Description = old.Description
-				}
-			}
-			if err := store.PutIssue(issue); err != nil {
-				return count, err
-			}
-			count++
+			out = append(out, ProviderIssue{
+				Number:     item.Number,
+				Title:      item.Title,
+				Body:       item.Body,
+				State:      item.State,
+				Kind:       "issue",
+				URL:        item.URL,
+				ExternalID: strconv.FormatInt(item.ID, 10),
+				CreatedAt:  item.CreatedAt,
+			})
 		}
 		if len(list) < 100 {
-			return count, nil
+			return out, nil
 		}
 	}
-	return count, fmt.Errorf("GitHub import exceeded 100 pages; narrow the repository scope")
+	return nil, fmt.Errorf("GitHub import exceeded 100 pages; narrow the repository scope")
 }
-
-func githubBodyHash(body string) string { return fmt.Sprintf("%x", sha256.Sum256([]byte(body))) }
 
 func (s *Service) refreshGitHubDelivery(store MRDeliveryStore, project string, number int) error {
 	g, err := s.githubClient(project)

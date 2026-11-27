@@ -889,6 +889,23 @@ type knowledgeSubmissionRow struct {
 
 func (knowledgeSubmissionRow) TableName() string { return "knowledge_submissions" }
 
+// trackerImportRunRow is the outcome of one tracker provider's last
+// requirement import. One row per provider: the run replaces the previous
+// one, so the platform always knows the last outcome.
+type trackerImportRunRow struct {
+	ID         string    `gorm:"column:id;primaryKey;size:64"`
+	Provider   string    `gorm:"column:provider;size:32"`
+	ProjectID  string    `gorm:"column:project_id;size:64"`
+	Status     string    `gorm:"column:status;size:32"`
+	Imported   int       `gorm:"column:imported"`
+	Failed     int       `gorm:"column:failed"`
+	StartedAt  time.Time `gorm:"column:started_at"`
+	FinishedAt time.Time `gorm:"column:finished_at"`
+	Payload    []byte    `gorm:"column:payload;type:json"`
+}
+
+func (trackerImportRunRow) TableName() string { return "tracker_import_runs" }
+
 // allModels lists every table for the sqlite test schema (AutoMigrate).
 func allModels() []any {
 	return []any{domain.BotUserBinding{}, domain.BotBindingChallenge{}, domain.BotConnection{}, domain.BotConversation{}, domain.BotInteraction{}, notificationBotRow{}, botCredentialRow{}, botNativeSessionRow{}, botPendingDraftRow{}, botChatOriginRow{}, botClarifySessionRow{}, domain.NotificationDelivery{},
@@ -915,6 +932,7 @@ func allModels() []any {
 		knowledgeUsageEventRow{},
 		evoPolicyRow{}, evoFindingRow{}, evoProposalRow{}, evoAssetGateRow{}, evoQueueRow{}, evoReplayRow{}, assetVersionRow{}, runAssetPinRow{}, evoSignalRow{}, evoSampleRow{}, evoSOPPolicyRow{},
 		platformSettingsRow{},
+		trackerImportRunRow{},
 		PlatformGitSSHHost{}, PlatformGitHTTPSHost{}, PlatformGitHTTPHost{},
 	}
 }
