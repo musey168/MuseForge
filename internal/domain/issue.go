@@ -230,7 +230,7 @@ func (i Issue) ManuallyClosed() bool {
 // TrackerClosed reads the tracker's raw state so a lagging local status cannot
 // make an externally closed work item executable.
 func (i Issue) TrackerClosed() bool {
-	if i.ExternalRef == nil || (i.Source != "gongfeng" && i.Source != "tapd" && i.Source != "github") {
+	if i.ExternalRef == nil || (i.Source != "gongfeng" && i.Source != "tapd" && i.Source != "github" && i.Source != "gitlab") {
 		return false
 	}
 	state := strings.ToLower(strings.TrimSpace(i.ExternalRef.ExternalState))

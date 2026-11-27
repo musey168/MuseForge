@@ -61,6 +61,8 @@ func trackerKind(providerKind string) string {
 		return "bug"
 	case "task":
 		return "task"
+	case "issue", "incident", "test_case":
+		return "issue"
 	default:
 		return "issue"
 	}

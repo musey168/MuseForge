@@ -1126,12 +1126,16 @@
       </div>
       <div class="sync-panel-summary" id="syncPanelSummary"></div>
       <div class="sync-panel-config" id="syncPanelConfig">
-        <p class="sync-auth-hint" id="syncScopeHint">按<strong>当前项目已绑定的 GitHub 仓库</strong>拉取 Issue，使用项目 Owner 在个人设置里配置的 GitHub 访问令牌。立即同步和自动同步覆盖平台上所有项目，由平台管理员操作。</p>
+        <p class="sync-auth-hint" id="syncScopeHint">按<strong>当前项目已绑定的 GitHub / GitLab 仓库</strong>拉取 Issue，使用项目 Owner 在个人设置里配置的 GitHub 或 GitLab 访问令牌。立即同步和自动同步覆盖平台上所有项目，由平台管理员操作。</p>
         <div id="syncGongfengRepos" class="sync-repo-list"></div>
         <div class="sync-import-row">
+          <select id="trackerImportProvider" class="select small" aria-label="导入来源">
+            <option value="github" selected>GitHub</option>
+            <option value="gitlab">GitLab</option>
+          </select>
           <button id="trackerImportBtn" class="button dark small">⟳ 立即导入 GitHub 需求</button>
           <span id="trackerImportStatus" class="sync-import-status">尚未导入</span>
-          <small class="sync-import-hint">按当前项目已绑定的 GitHub 仓库导入需求</small>
+          <small id="trackerImportHint" class="sync-import-hint">按当前项目已绑定的 GitHub 仓库导入需求</small>
         </div>
         <div id="trackerImportRepos" class="sync-repo-list"></div>
         <div class="sync-config-grid">

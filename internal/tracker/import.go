@@ -34,7 +34,7 @@ func (s *Service) ImportTracker(store IssueStoreAdapter, providerName, projectID
 // TrackerProviders lists the tracker providers the platform can import
 // requirements from.
 func TrackerProviders() []string {
-	return []string{"github"}
+	return []string{"github", "gitlab"}
 }
 
 // trackerProvider returns the adapter of a provider name. GitLab adds its own
@@ -43,6 +43,8 @@ func (s *Service) trackerProvider(name string) (IssueProvider, bool) {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "github":
 		return &githubProvider{service: s}, true
+	case "gitlab":
+		return &gitlabProvider{service: s}, true
 	default:
 		return nil, false
 	}
