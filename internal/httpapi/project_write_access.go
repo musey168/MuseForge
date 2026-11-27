@@ -190,6 +190,17 @@ func (d deps) allowAssetWrite(c *gin.Context, path string) bool {
 		peekJSON(c, &body)
 		issue, _ := d.repo.Issue(strings.TrimSpace(body.IssueID))
 		return d.requireProjectWriter(c, issue.ProjectID)
+	case "/api/tracker/import":
+		// A project-scoped import needs a writer of that project; an import
+		// without one covers every project, so it needs the platform.
+		var body struct {
+			ProjectID string `json:"projectId"`
+		}
+		peekJSON(c, &body)
+		if project := strings.TrimSpace(body.ProjectID); project != "" {
+			return d.requireProjectWriter(c, project)
+		}
+		return d.requirePlatformAdmin(c)
 	case "/api/mcp-market/install", "/api/mcp-servers/custom":
 		var body struct {
 			Scope     string `json:"scope"`

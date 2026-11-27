@@ -37,7 +37,7 @@ func (r *IssuesRepo) IssueImage(issueID, imageID string) (IssueImage, error) {
 func (r *IssuesRepo) CreateIssueWithImages(issue domain.Issue, images []IssueImage) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	issue, err := r.prepareIssueForSave(issue, false, false)
+	issue, err := r.prepareIssueForSave(issue, issueWriteLocal, false)
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (r *IssuesRepo) CreateIssueWithImages(issue domain.Issue, images []IssueIma
 func (r *IssuesRepo) PutIssueWithCopiedImages(issue domain.Issue, previousID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	issue, err := r.prepareIssueForSave(issue, false, false)
+	issue, err := r.prepareIssueForSave(issue, issueWriteLocal, false)
 	if err != nil {
 		return err
 	}

@@ -186,6 +186,7 @@ type Store struct {
 	*EngineInstancesRepo
 	*KnowledgeRepo
 	*PlatformSettingsRepo
+	*TrackerRepo
 	*SSHHostTrustRepo
 	*HTTPSHostTrustRepo
 	*GitHTTPHostTrustRepo
@@ -221,6 +222,7 @@ func newStore(db *gorm.DB) *Store {
 	s.KnowledgeRepo = &KnowledgeRepo{deps: d}
 	s.EvolutionRepo = &EvolutionRepo{deps: d, catalog: s.CatalogRepo}
 	s.PlatformSettingsRepo = &PlatformSettingsRepo{deps: d}
+	s.TrackerRepo = &TrackerRepo{deps: d}
 	s.SSHHostTrustRepo = &SSHHostTrustRepo{deps: d}
 	s.HTTPSHostTrustRepo = &HTTPSHostTrustRepo{deps: d}
 	return s

@@ -193,7 +193,19 @@ func (r *IssuesRepo) ReserveIssueDispatch(task domain.Task) (domain.Task, bool, 
 func (r *IssuesRepo) PutSyncedIssue(v domain.Issue) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.saveIssueLocked(v, true, false)
+	return r.saveIssueLocked(v, issueWriteSynced, false)
+}
+
+// PutImportedIssue writes a requirement a tracker import merged. The status
+// and the close source are the merged ones, taken verbatim: the tracker layer
+// owns the rule that decides whether the tracker or the user owns the
+// status, and the repo layer must not second-guess it. A local write would
+// re-force "closed" on every requirement the tracker closed, which would
+// undo a status the user set by hand.
+func (r *IssuesRepo) PutImportedIssue(v domain.Issue) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.saveIssueLocked(v, issueWriteImported, false)
 }
 
 // PatchIssue loads the current row, applies fn, and writes it back under the
@@ -215,7 +227,7 @@ func (r *IssuesRepo) PatchIssue(id string, fn func(*domain.Issue) error) (domain
 	if err := fn(&issue); err != nil {
 		return issue, err
 	}
-	if err := r.saveIssueLocked(issue, false, true); err != nil {
+	if err := r.saveIssueLocked(issue, issueWriteLocal, true); err != nil {
 		return issue, err
 	}
 	stored, ok := r.Issue(id)
@@ -226,11 +238,26 @@ func (r *IssuesRepo) PatchIssue(id string, fn func(*domain.Issue) error) (domain
 }
 
 func (r *IssuesRepo) putIssueLocked(v domain.Issue) error {
-	return r.saveIssueLocked(v, false, false)
+	return r.saveIssueLocked(v, issueWriteLocal, false)
 }
 
-func (r *IssuesRepo) saveIssueLocked(v domain.Issue, fromSync, existingOnly bool) error {
-	v, err := r.prepareIssueForSave(v, fromSync, existingOnly)
+// issueWriteMode says how a write treats the requirement's local lifecycle.
+type issueWriteMode int
+
+const (
+	// issueWriteLocal is a user edit: the repo layer re-derives the status
+	// from the tracker state, as it always has.
+	issueWriteLocal issueWriteMode = iota
+	// issueWriteSynced is a tracker refresh that must not touch the local
+	// lifecycle: the stored status wins.
+	issueWriteSynced
+	// issueWriteImported is a tracker import whose status the tracker layer
+	// already merged: the status and the close source are taken verbatim.
+	issueWriteImported
+)
+
+func (r *IssuesRepo) saveIssueLocked(v domain.Issue, mode issueWriteMode, existingOnly bool) error {
+	v, err := r.prepareIssueForSave(v, mode, existingOnly)
 	if err != nil {
 		return err
 	}
@@ -244,13 +271,13 @@ func (r *IssuesRepo) saveIssueLocked(v domain.Issue, fromSync, existingOnly bool
 	return r.writeIssue(v)
 }
 
-func (r *IssuesRepo) prepareIssueForSave(v domain.Issue, fromSync, existingOnly bool) (domain.Issue, error) {
+func (r *IssuesRepo) prepareIssueForSave(v domain.Issue, mode issueWriteMode, existingOnly bool) (domain.Issue, error) {
 	now := time.Now().UTC()
 	old, ok := r.Issue(v.ID)
 	if existingOnly && !ok {
 		return v, ErrIssueNotFound
 	}
-	preserveStatus := fromSync && ok
+	preserveStatus := mode == issueWriteSynced && ok
 	if ok {
 		if preserveStatus {
 			v.Status = old.Status
@@ -296,25 +323,30 @@ func (r *IssuesRepo) prepareIssueForSave(v domain.Issue, fromSync, existingOnly 
 		}
 	}
 	if !preserveStatus {
-		if v.TrackerClosed() && v.Status != "closed" {
-			v.Status = "closed"
-			v.CloseSource = "external"
-		}
-		if v.Status == "closed" {
-			if v.CloseSource == "" {
-				if ok && old.Status == "closed" {
-					v.CloseSource = old.CloseSource
-					if v.CloseSource == "" {
-						v.CloseSource = "manual" // pre-CloseSource manual close
-					}
-				} else if v.TrackerClosed() {
-					v.CloseSource = "external"
-				} else {
-					v.CloseSource = "manual"
-				}
+		// An import carries the status the tracker layer already merged, so
+		// the repo layer must not re-force "closed" on a requirement the
+		// user moved to another status.
+		if mode != issueWriteImported {
+			if v.TrackerClosed() && v.Status != "closed" {
+				v.Status = "closed"
+				v.CloseSource = "external"
 			}
-		} else {
-			v.CloseSource = ""
+			if v.Status == "closed" {
+				if v.CloseSource == "" {
+					if ok && old.Status == "closed" {
+						v.CloseSource = old.CloseSource
+						if v.CloseSource == "" {
+							v.CloseSource = "manual" // pre-CloseSource manual close
+						}
+					} else if v.TrackerClosed() {
+						v.CloseSource = "external"
+					} else {
+						v.CloseSource = "manual"
+					}
+				}
+			} else {
+				v.CloseSource = ""
+			}
 		}
 		if v.Status == "done" || v.Status == "closed" || v.Status == "cancelled" || v.GongfengClosed() {
 			v.AutomationState = "ignored"

@@ -69,9 +69,17 @@ type IssueStoreAdapter interface {
 	PutIssue(v domain.Issue) error
 	PutIssueWithCopiedImages(v domain.Issue, previousID string) error
 	PutSyncedIssue(v domain.Issue) error
+	// PutImportedIssue writes a requirement a tracker import merged. Its
+	// status is the merged one and must not be re-derived.
+	PutImportedIssue(v domain.Issue) error
 	DeleteIssue(id string) error
 	PutSyncConfig(cfg domain.SyncConfig) error
 	SyncConfig() domain.SyncConfig
+	// PutTrackerImportRun stores the outcome of one provider's import run.
+	PutTrackerImportRun(run domain.TrackerImportRun) error
+	// LatestTrackerImportRun returns the stored outcome of one provider's
+	// last import run.
+	LatestTrackerImportRun(provider string) (domain.TrackerImportRun, bool)
 }
 
 // ProjectAuthStore provides the ownership and credential context needed to
@@ -303,20 +311,24 @@ func (s *Service) PullAll(store IssueStoreAdapter) error {
 	syncCount := 0
 
 	repositories := store.Repositories()
+	// GitHub goes through the shared tracker import path, so the platform
+	// sync and the on-demand import list, merge and write requirements the
+	// same way, and both record their run.
+	githubRun := s.importProviderIssues(store, &githubProvider{service: s}, "")
+	for _, outcome := range githubRun.Repositories {
+		status, message := "success", fmt.Sprintf("GitHub: imported %d work items", outcome.Imported)
+		if outcome.Status == domain.TrackerImportFailed {
+			status = "failed"
+			message = outcome.Reason
+		}
+		s.addLog(domain.SyncLog{ID: fmt.Sprintf("sync-%d", githubRun.StartedAt.UnixNano()), Direction: "pull", Source: "github", Action: "sync_issues", Status: status, Message: message, ProjectID: outcome.ProjectID, StartedAt: githubRun.StartedAt, FinishedAt: githubRun.FinishedAt})
+		syncCount += outcome.Imported
+	}
+	if githubRun.Failed > 0 {
+		lastErr = fmt.Errorf("%s", githubRun.Reason)
+	}
 	for _, repo := range repositories {
 		if repo.Provider == "github" {
-			started := time.Now().UTC()
-			n, err := s.pullGitHubIssues(store, repo)
-			status, message := "success", fmt.Sprintf("GitHub: imported %d work items", n)
-			if err != nil {
-				status = "failed"
-				message = err.Error()
-			}
-			s.addLog(domain.SyncLog{ID: fmt.Sprintf("sync-%d", started.UnixNano()), Direction: "pull", Source: "github", Action: "sync_issues", Status: status, Message: message, ProjectID: repo.ProjectID, StartedAt: started, FinishedAt: time.Now().UTC()})
-			syncCount += n
-			if err != nil {
-				lastErr = err
-			}
 			continue
 		}
 		if repo.Provider != "gongfeng" || repo.GongfengProjectID == "" {
@@ -370,18 +382,11 @@ func (s *Service) PullScheduleJob(store IssueStoreAdapter, job domain.ScheduleJo
 	defer s.endSync()
 	switch strings.ToLower(strings.TrimSpace(job.Source)) {
 	case "github":
-		count := 0
-		var last error
-		for _, repo := range store.Repositories() {
-			if repo.Provider == "github" && (job.ProjectID == "" || repo.ProjectID == job.ProjectID) {
-				n, err := s.pullGitHubIssues(store, repo)
-				count += n
-				if err != nil {
-					last = err
-				}
-			}
+		run := s.importProviderIssues(store, &githubProvider{service: s}, job.ProjectID)
+		if run.Status != domain.TrackerImportSuccess {
+			return run.Imported, nil, fmt.Errorf("%s", run.Reason)
 		}
-		return count, nil, last
+		return run.Imported, nil, nil
 	case "gongfeng":
 		count := 0
 		var last error

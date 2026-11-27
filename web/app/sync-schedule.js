@@ -64,7 +64,58 @@ function renderSync(){
   if(syncing){$('#syncNowBtn').textContent='⟳ 同步中…';$('#syncNowBtn').disabled=true}else{$('#syncNowBtn').textContent='⟳ 立即同步';$('#syncNowBtn').disabled=!canSync}
   $('#syncNowBtn').title=adminOnly;
   $('#syncLogList').innerHTML=scopedLogs.length?scopedLogs.slice(0,20).map(l=>`<div class="sync-log-item"><span class="sync-log-direction ${l.direction}">${l.direction==='pull'?'拉取':'推送'}</span><span class="sync-log-source">${l.source}</span><span class="sync-log-message">${escapeHTML(l.message||l.action)}</span><span class="sync-log-status ${l.status}">${l.status==='success'?'成功':'失败'}</span><span class="sync-log-time">${new Date(l.startedAt).toLocaleTimeString()}</span></div>`).join(''):'<div class="sync-empty">暂无同步记录</div>';
+  renderTrackerImport();
   renderScheduleJobs();
+}
+// trackerImportLabel 是最近一次导入的结果：时间、结论和原因。
+function trackerImportLabel(run){
+  if(!run)return '尚未导入';
+  const when=knownTime(run.finishedAt||run.startedAt)?.toLocaleString()||'—';
+  const label=run.status==='success'?'成功':run.status==='partial'?'部分成功':'失败';
+  return `最近导入：${when} · ${label}${run.reason?` · ${run.reason}`:''}`;
+}
+// renderTrackerImport 画出最近一次导入的结论和每个仓库的结果。
+function renderTrackerImport(){
+  const run=state.data.trackerImport;
+  const status=$('#trackerImportStatus');
+  if(status){status.textContent=trackerImportLabel(run);status.className=`sync-import-status ${run&&run.status?run.status:''}`}
+  const host=$('#trackerImportRepos');
+  if(!host)return;
+  const projectName=id=>{const p=(state.data.projects||[]).find(x=>x.id===id);return p?p.name:''};
+  const outcomes=(run&&run.repositories)||[];
+  host.innerHTML=outcomes.length?outcomes.map(o=>{
+    const elsewhere=o.projectId&&state.projectFilter&&o.projectId!==state.projectFilter?`（${projectName(o.projectId)||o.projectId}）`:'';
+    return `<div class="sync-repo-item"><b>${escapeHTML(o.name||o.repositoryId||'')}</b>${elsewhere?`<span class="sync-stat"><b>·</b>${escapeHTML(elsewhere)}</span>`:''}<span class="sync-stat ${o.status==='failed'?'danger':'success'}"><b>${o.status==='failed'?'!':'✓'}</b>${o.status==='failed'?'失败':'成功'}</span>${o.reason?`<span class="sync-import-reason">${escapeHTML(o.reason)}</span>`:''}</div>`;
+  }).join(''):'';
+}
+// loadTrackerImport 读出最近一次导入的结果；它存在服务端，重启后仍在。
+async function loadTrackerImport(){
+  try{
+    const answer=await api('/api/tracker/import?provider=github',{silent:true});
+    state.data.trackerImport=(answer&&answer.run)||null;
+  }catch(e){
+    state.data.trackerImport=null;
+  }
+  renderTrackerImport();
+}
+// triggerTrackerImport 立即导入 GitHub 需求，并刷新需求列表和导入结论。
+async function triggerTrackerImport(){
+  const button=$('#trackerImportBtn');
+  if(button){button.disabled=true;button.textContent='⟳ 导入中…'}
+  try{
+    const answer=await api('/api/tracker/import',{method:'POST',body:JSON.stringify({provider:'github',projectId:state.projectFilter||''})});
+    state.data.trackerImport=(answer&&answer.run)||null;
+    renderTrackerImport();
+    await refreshIssues();
+    const run=state.data.trackerImport;
+    if(run&&run.status==='success')toast(`已导入 ${run.imported} 条需求`);
+    else if(run&&run.status==='partial')toast(`部分仓库导入失败：${run.reason||''}`);
+    else toast(`导入失败：${run&&run.reason?run.reason:'没有可导入的仓库'}`);
+  }catch(e){
+    toast(e.message||'导入失败');
+  }finally{
+    if(button){button.disabled=false;button.textContent='⟳ 立即导入 GitHub 需求'}
+  }
 }
 function scheduleJobRunning(job){return job?.lastStatus==='running'}
 const SCHEDULE_OPEN_AFTER_RUN_KEY='agentflow.scheduleOpenAfterRun';
@@ -949,7 +1000,7 @@ async function deleteScheduleJob(id){
     resetScheduleJobForm();renderScheduleJobs();toast(`${label}已删除`);
   }catch(err){toast(err.message)}
 }
-async function refreshSyncStatus(){try{const wasSyncing=!!state.data.syncing,[status,jobs]=await Promise.all([api('/api/sync/status',{silent:true}),api('/api/schedule-jobs',{silent:true})]);state.data.syncLogs=status.logs||[];state.data.syncing=status.syncing||false;state.data.syncConfig=status.config||state.data.syncConfig;state.data.scheduleJobs=jobs||[];renderSync();if(wasSyncing&&!state.data.syncing)await refreshIssues()}catch(e){if(!state.data.syncing)$('#syncBadge').textContent='连接异常'}}
+async function refreshSyncStatus(){try{const wasSyncing=!!state.data.syncing,[status,jobs]=await Promise.all([api('/api/sync/status',{silent:true}),api('/api/schedule-jobs',{silent:true})]);state.data.syncLogs=status.logs||[];state.data.syncing=status.syncing||false;state.data.syncConfig=status.config||state.data.syncConfig;state.data.scheduleJobs=jobs||[];renderSync();await loadTrackerImport();if(wasSyncing&&!state.data.syncing)await refreshIssues()}catch(e){if(!state.data.syncing)$('#syncBadge').textContent='连接异常'}}
 async function syncNow(){try{$('#syncNowBtn').textContent='⟳ 同步中…';$('#syncNowBtn').disabled=true;state.data.syncing=true;renderSync();await api('/api/sync/now',{method:'POST',body:'{}'});toast('同步已启动…');let attempts=0,checking=false;const poll=setInterval(async()=>{if(checking)return;checking=true;attempts++;try{const status=await api('/api/sync/status');state.data.syncLogs=status.logs||[];state.data.syncing=status.syncing||false;state.data.syncConfig=status.config||state.data.syncConfig;if(!state.data.syncing){clearInterval(poll);const issues=await api('/api/issues');state.data.issues=issues;renderIssues();renderSync();const scoped=state.data.syncLogs.filter(l=>!state.projectFilter||!l.projectId||l.projectId===state.projectFilter);const failed=['github','gongfeng','tapd'].map(source=>scoped.find(l=>l.source===source)).filter(l=>l&&l.status==='failed');toast(failed.length?`同步未完全成功：${failed.map(l=>l.source==='github'?'GitHub':l.source==='gongfeng'?'工蜂':'TAPD').join('、')}，详见诊断`:`同步完成：已刷新外部工作项`)}else if(attempts>=80){clearInterval(poll);renderSync();toast('同步仍在后台执行，可稍后查看结果')}}catch(e){if(attempts>=80){clearInterval(poll);state.data.syncing=false;renderSync();toast(`同步状态检查失败：${e.message}`)}}finally{checking=false}},1500)}catch(e){toast(e.message);state.data.syncing=false;renderSync()}}
 async function saveSyncConfig(){
   const project=currentProject();
