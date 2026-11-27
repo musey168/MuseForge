@@ -2,9 +2,11 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -18,6 +20,14 @@ const (
 	controlReconnectMax = 30 * time.Second
 )
 
+// The control channel carries exactly two operations: CLI maintenance and the
+// CLI model probe. The operation names are the wire values the platform
+// sends; they are part of the protocol, not of the runner's internals.
+const (
+	controlOperationMaintenance = "maintenance"
+	controlOperationLoginModels = "login_models"
+)
+
 // controlReadTimeout outlives two server ping periods (30s). Without a read
 // deadline a half-open socket keeps ReadJSON blocked forever: the daemon
 // looks connected and never reconnects. The server only sends pings, so the
@@ -26,18 +36,33 @@ var controlReadTimeout = 75 * time.Second
 
 var controlWriteTimeout = 10 * time.Second
 
-// controlMessage is the control-socket wire format. The daemon is an
-// inventory: the socket carries no task, no workspace and no conversation —
-// only the three operations the machine inventory still needs.
-type controlMessage struct {
-	Type              string                          `json:"type"`
-	RequestID         string                          `json:"requestId,omitempty"`
-	WorkspaceRequest  *domain.RunnerWorkspaceRequest  `json:"workspaceRequest,omitempty"`
-	WorkspaceResponse *domain.RunnerWorkspaceResponse `json:"workspaceResponse,omitempty"`
+// controlRequest is the request the platform sends over the control channel.
+type controlRequest struct {
+	Operation     string                          `json:"operation,omitempty"`
+	Maintenance   *domain.RunnerMaintenanceRequest `json:"maintenance,omitempty"`
+	ModelProvider string                          `json:"modelProvider,omitempty"`
 }
 
-// controlLoop maintains one outbound WebSocket for the server's control
-// operations. Reconnect is automatic.
+// controlResponse is the runner's answer to one control request.
+type controlResponse struct {
+	Payload json.RawMessage `json:"payload,omitempty"`
+	Error   string          `json:"error,omitempty"`
+	Code    string          `json:"code,omitempty"`
+	Status  int             `json:"status,omitempty"`
+}
+
+// controlMessage is the envelope of the runner's outbound control channel:
+// the platform asks with a "workspace.request" and reads the answer from the
+// matching "workspace.response".
+type controlMessage struct {
+	Type              string           `json:"type"`
+	RequestID         string           `json:"requestId,omitempty"`
+	WorkspaceRequest  *controlRequest  `json:"workspaceRequest,omitempty"`
+	WorkspaceResponse *controlResponse `json:"workspaceResponse,omitempty"`
+}
+
+// controlLoop maintains one outbound WebSocket for immediate server-to-runner
+// controls. Reconnect is automatic.
 func (d *Daemon) controlLoop(ctx context.Context) {
 	backoff := controlReconnectMin
 	for ctx.Err() == nil {
@@ -62,9 +87,7 @@ func (d *Daemon) controlLoop(ctx context.Context) {
 		d.wsOnline.Store(true)
 		backoff = controlReconnectMin
 		_ = conn.SetWriteDeadline(time.Now().Add(controlWriteTimeout))
-		if err = conn.WriteJSON(controlMessage{Type: "hello"}); err == nil {
-			err = d.readControls(ctx, conn)
-		}
+		err = d.readControls(ctx, conn)
 		d.wsOnline.Store(false)
 		_ = conn.Close()
 		if ctx.Err() == nil && err != nil {
@@ -76,12 +99,10 @@ func (d *Daemon) controlLoop(ctx context.Context) {
 	}
 }
 
-// readControls serves the control requests the machine inventory still needs:
-// CLI maintenance, the CLI model probe and the SSH host-key probe. Everything
-// else the socket used to carry is gone with the execution engine.
+// readControls answers the control requests the platform still sends.
 func (d *Daemon) readControls(daemonCtx context.Context, conn *websocket.Conn) error {
 	ctx, cancel := context.WithCancel(daemonCtx)
-	var requests sync.WaitGroup
+	defer cancel()
 	var writeMu sync.Mutex
 	writeMessage := func(message controlMessage) error {
 		writeMu.Lock()
@@ -93,8 +114,6 @@ func (d *Daemon) readControls(daemonCtx context.Context, conn *websocket.Conn) e
 		}
 		return err
 	}
-	slots := make(chan struct{}, 4)
-	defer func() { cancel(); _ = conn.Close(); requests.Wait() }()
 	done := make(chan struct{})
 	go func() {
 		select {
@@ -125,56 +144,42 @@ func (d *Daemon) readControls(daemonCtx context.Context, conn *websocket.Conn) e
 		if message.Type != "workspace.request" || message.WorkspaceRequest == nil {
 			continue
 		}
-		request := *message.WorkspaceRequest
-		switch request.Operation {
-		case domain.RunnerWorkspaceOperationMaintenance,
-			domain.RunnerWorkspaceOperationLoginModels,
-			domain.RunnerWorkspaceOperationSSHHostKeyProbe:
-		default:
-			_ = writeMessage(controlMessage{
-				Type:              "workspace.response",
-				RequestID:         message.RequestID,
-				WorkspaceResponse: &domain.RunnerWorkspaceResponse{Status: 400, Error: "unsupported control operation"},
-			})
-			continue
+		response, startUpdate := d.handleControlRequest(ctx, daemonCtx, *message.WorkspaceRequest)
+		err := writeMessage(controlMessage{
+			Type:              "workspace.response",
+			RequestID:         message.RequestID,
+			WorkspaceResponse: &response,
+		})
+		if startUpdate != nil {
+			startUpdate()
 		}
-		select {
-		case slots <- struct{}{}:
-		default:
-			_ = writeMessage(controlMessage{
-				Type:              "workspace.response",
-				RequestID:         message.RequestID,
-				WorkspaceResponse: &domain.RunnerWorkspaceResponse{Status: 429, Error: "too many control requests"},
-			})
-			continue
+		if err != nil {
+			_ = conn.Close()
+			return err
 		}
-		requests.Add(1)
-		go func(requestID string, request domain.RunnerWorkspaceRequest) {
-			defer requests.Done()
-			defer func() { <-slots }()
-			var response domain.RunnerWorkspaceResponse
-			var startUpdate func()
-			switch request.Operation {
-			case domain.RunnerWorkspaceOperationMaintenance:
-				response, startUpdate = d.maintenanceResponse(ctx, ctx, request.Maintenance)
-			case domain.RunnerWorkspaceOperationLoginModels:
-				response = d.runnerLoginModels(ctx, request.ModelProvider)
-			default:
-				response = d.runnerSSHHostKey(ctx, request)
-			}
-			err := writeMessage(controlMessage{
-				Type:              "workspace.response",
-				RequestID:         requestID,
-				WorkspaceResponse: &response,
-			})
-			if startUpdate != nil {
-				startUpdate()
-			}
-			if err != nil {
-				_ = conn.Close()
-			}
-		}(message.RequestID, request)
 	}
+}
+
+// handleControlRequest serves the two operations the machine inventory still
+// offers. The callback starts the actual update after the answer was sent.
+func (d *Daemon) handleControlRequest(ctx, daemonCtx context.Context, request controlRequest) (controlResponse, func()) {
+	switch request.Operation {
+	case controlOperationMaintenance:
+		return d.maintenanceResponse(ctx, daemonCtx, request.Maintenance)
+	case controlOperationLoginModels:
+		return d.runnerLoginModels(ctx, request.ModelProvider)
+	default:
+		return controlResponse{Status: http.StatusBadRequest, Error: "unsupported runner operation"}, nil
+	}
+}
+
+// runnerPayload encodes one answer payload for the control channel.
+func runnerPayload(value any) controlResponse {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return controlResponse{Error: err.Error(), Status: http.StatusInternalServerError}
+	}
+	return controlResponse{Payload: payload, Status: http.StatusOK}
 }
 
 func waitContext(ctx context.Context, duration time.Duration) bool {

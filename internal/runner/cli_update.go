@@ -84,8 +84,8 @@ func (d *Daemon) applyNativeCLIUpdate(ctx context.Context, rt domain.RunnerRunti
 		return domain.RunnerMaintenanceResult{Status: "failed", Message: "机器上有运行中的工作，请空闲后重试"}
 	}
 	defer d.updateMu.Unlock()
-	if d.updateReady.Load() || d.runnerExecutionActive() {
-		return domain.RunnerMaintenanceResult{Status: "failed", Message: "机器上有运行中的工作，请空闲后重试"}
+	if d.updateReady.Load() {
+		return domain.RunnerMaintenanceResult{Status: "failed", Message: "Runner 正在重启，请稍后重试"}
 	}
 	dir, err := os.MkdirTemp("", "loopforge-cli-update-")
 	if err != nil {

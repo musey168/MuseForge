@@ -50,15 +50,6 @@ var defaultProviders = []providerSpec{
 	{Kind: "zcode", Binary: "zcode", VersionFlags: []string{"--output-format", "stream-json", "--mode", "yolo"}},
 }
 
-// terminalProviderKind is the built-in remote-terminal capability: the
-// platform can dispatch shell commands (verification gates, and later
-// sandbox-side operations) to this machine.
-const terminalProviderKind = "terminal"
-
-// mockProviderKind is served in-process (no binary) so an end-to-end test can
-// exercise register/claim/execute/complete without any real Agent CLI.
-const mockProviderKind = "mock"
-
 // extraSearchPaths covers CLIs installed in user-local directories that a
 // launchd/systemd service environment does not include in PATH (the daemon
 // often runs with a minimal /usr/bin:/bin PATH even though the user's shell
@@ -117,8 +108,7 @@ func detectRuntimes(ctx context.Context, extraBinaries map[string]string, invent
 			log.Printf("managed CLI updates disabled: %v", err)
 		}
 	}
-	out := make([]domain.RunnerRuntime, 0, len(specs)+2)
-	out = append(out, builtinRuntimes()...)
+	out := make([]domain.RunnerRuntime, 0, len(specs))
 	for _, spec := range specs {
 		binary, managed := inventory.BinaryFor(spec.Kind)
 		if !managed {

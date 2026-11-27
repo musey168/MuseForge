@@ -34,9 +34,9 @@ func (d *Daemon) cliUpdateRuntime(provider string) (domain.RunnerRuntime, bool) 
 
 // The callback starts work after the acceptance reply has been sent. A
 // browser disconnect does not interrupt a CLI update or the Runner restart.
-func (d *Daemon) maintenanceResponse(ctx, daemonCtx context.Context, request *domain.RunnerMaintenanceRequest) (domain.RunnerWorkspaceResponse, func()) {
+func (d *Daemon) maintenanceResponse(ctx, daemonCtx context.Context, request *domain.RunnerMaintenanceRequest) (controlResponse, func()) {
 	if request == nil {
-		return domain.RunnerWorkspaceResponse{Status: http.StatusBadRequest, Error: "缺少更新请求"}, nil
+		return controlResponse{Status: http.StatusBadRequest, Error: "缺少更新请求"}, nil
 	}
 	provider := request.Provider
 	key, version := runnerMaintenanceKey, runnerVersion
@@ -52,42 +52,42 @@ func (d *Daemon) maintenanceResponse(ctx, daemonCtx context.Context, request *do
 		result, found := d.maintenance.results[key]
 		d.maintenance.mu.Unlock()
 		if found && (provider != "" || request.StatusOnly || result.Status == "updating" || result.Status == "restarting") {
-			return runnerWorkspacePayload(result), nil
+			return runnerPayload(result), nil
 		}
 		if provider != "" {
 			if !updateAvailable {
-				return runnerWorkspacePayload(cliUpdateManualResult()), nil
+				return runnerPayload(cliUpdateManualResult()), nil
 			}
-			return runnerWorkspacePayload(domain.RunnerMaintenanceResult{Status: "ready", Current: version, CanUpdate: true}), nil
+			return runnerPayload(domain.RunnerMaintenanceResult{Status: "ready", Current: version, CanUpdate: true}), nil
 		}
-		return runnerWorkspacePayload(d.inspectRunnerUpdate(ctx)), nil
+		return runnerPayload(d.inspectRunnerUpdate(ctx)), nil
 	}
 	if !updateAvailable {
-		return domain.RunnerWorkspaceResponse{Status: http.StatusConflict, Error: cliUpdateManualResult().Message}, nil
+		return controlResponse{Status: http.StatusConflict, Error: cliUpdateManualResult().Message}, nil
 	}
 
 	if provider == "" && d.cfg.DisableAutoUpdate {
-		return domain.RunnerWorkspaceResponse{Status: http.StatusConflict, Error: "此 Runner 已关闭平台更新，请在执行机器上更新"}, nil
+		return controlResponse{Status: http.StatusConflict, Error: "此 Runner 已关闭平台更新，请在执行机器上更新"}, nil
 	}
 	d.updateMu.RLock()
 	defer d.updateMu.RUnlock()
 	d.maintenance.mu.Lock()
 	defer d.maintenance.mu.Unlock()
 	if d.updateReady.Load() {
-		return domain.RunnerWorkspaceResponse{Status: http.StatusConflict, Error: "Runner 正在重启，请稍后重试"}, nil
+		return controlResponse{Status: http.StatusConflict, Error: "Runner 正在重启，请稍后重试"}, nil
 	}
 	if d.maintenance.active != "" {
 		if d.maintenance.active == key {
-			return runnerWorkspacePayload(d.maintenance.results[key]), nil
+			return runnerPayload(d.maintenance.results[key]), nil
 		}
-		return domain.RunnerWorkspaceResponse{Status: http.StatusConflict, Error: "此机器正在更新，请稍后重试"}, nil
+		return controlResponse{Status: http.StatusConflict, Error: "此机器正在更新，请稍后重试"}, nil
 	}
 	if d.maintenance.results == nil {
 		d.maintenance.results = make(map[string]domain.RunnerMaintenanceResult)
 	}
 	pending := domain.RunnerMaintenanceResult{Status: "updating", Current: version}
 	d.maintenance.results[key], d.maintenance.active = pending, key
-	return runnerWorkspacePayload(pending), func() {
+	return runnerPayload(pending), func() {
 		d.maintenance.jobs.Add(1)
 		go d.runMaintenance(daemonCtx, key, provider, version)
 	}
@@ -131,8 +131,8 @@ func (d *Daemon) runMaintenance(ctx context.Context, key, provider, version stri
 	d.maintenance.mu.Lock()
 	d.maintenance.results[key], d.maintenance.active = result, ""
 	d.maintenance.mu.Unlock()
-	if result.Status == "restarting" && d.cancelClaimLoop != nil {
-		d.cancelClaimLoop()
+	if result.Status == "restarting" {
+		d.requestRestart()
 	}
 }
 
