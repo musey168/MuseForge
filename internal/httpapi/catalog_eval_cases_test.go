@@ -664,6 +664,7 @@ func TestClosedRepositoryErrorResponses(t *testing.T) {
 	d := &deps{repo: f.s, engine: f.e}
 	catalog := &catalogHandlers{deps: d}
 	runs := &runsHandlers{deps: d}
+	insights := &insightsHandlers{deps: d}
 	schedules := &scheduleHandlers{deps: d}
 	runners := &runnersHandlers{deps: d, runnerWaiters: newRunnerWaiterRegistry()}
 	tokens := &tokenHandlers{deps: d}
@@ -676,7 +677,7 @@ func TestClosedRepositoryErrorResponses(t *testing.T) {
 		want         int
 	}{
 		{http.MethodDelete, "/repositories?id=any", nil, catalog.repositories, nil, http.StatusBadRequest},
-		{http.MethodGet, "/analytics", nil, runs.analytics, nil, http.StatusServiceUnavailable},
+		{http.MethodGet, "/usage", nil, insights.usage, nil, http.StatusInternalServerError},
 		{http.MethodGet, "/runs", nil, runs.runs, nil, http.StatusBadRequest},
 		{http.MethodDelete, "/schedule/id", nil, schedules.scheduleJob, map[string]string{"id": "id"}, http.StatusBadRequest},
 		{http.MethodPost, "/runner-tasks", map[string]any{"provider": "mock", "prompt": "prompt"},

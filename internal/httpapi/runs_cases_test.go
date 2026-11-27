@@ -32,10 +32,10 @@ func TestRunReadAnalyticsAndActionBranches(t *testing.T) {
 		body         any
 		want         int
 	}{
-		{http.MethodGet, "/api/analytics?from=bad", nil, 400},
-		{http.MethodGet, "/api/analytics?to=bad", nil, 400},
-		{http.MethodGet, "/api/analytics?origin=bad", nil, 400},
-		{http.MethodGet, "/api/analytics?origin=all&requirementsOnly=1", nil, 200},
+		{http.MethodGet, "/api/usage?from=bad", nil, 400},
+		{http.MethodGet, "/api/usage?to=bad", nil, 400},
+		{http.MethodGet, "/api/usage?grain=bad", nil, 400},
+		{http.MethodGet, "/api/usage?projectId=platform", nil, 200},
 		{http.MethodGet, "/api/workflow-metrics?projectId=platform", nil, 200},
 		{http.MethodGet, "/api/runs?responsible=me&projectId=platform", nil, 200},
 		{http.MethodGet, "/api/runs/cvb-run-more", nil, 200},

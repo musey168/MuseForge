@@ -2634,16 +2634,20 @@ paths:
                   $ref: "#/components/schemas/WorkflowMetrics"
         "401":
           $ref: "#/components/responses/Unauthorized"
-  /api/analytics:
+  /api/usage:
     get:
       tags: [Analytics]
-      operationId: getAnalytics
+      operationId: getUsage
       parameters:
         - name: projectId
           in: query
           schema:
             type: string
         - name: workflowId
+          in: query
+          schema:
+            type: string
+        - name: userId
           in: query
           schema:
             type: string
@@ -2657,13 +2661,26 @@ paths:
           schema:
             type: string
             format: date-time
+        - name: grain
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month]
+        - name: tz
+          in: query
+          schema:
+            type: string
+        - name: bucket
+          in: query
+          schema:
+            type: string
       responses:
         "200":
-          description: Analytics snapshot
+          description: The usage console of the externally reported executions
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AnalyticsSnapshot"
+                $ref: "#/components/schemas/UsageConsole"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -6077,28 +6094,14 @@ components:
         mrMerged: {type: integer, description: 'Individual MRs landed on mainline'}
         mrIntegrated: {type: integer, description: 'Individual MRs landed on an integration branch'}
         issuesWithMergedMr: {type: integer, description: 'Requirements with a mainline MR, used by the requirement funnel'}
-    AnalyticsSnapshot:
+    UsageConsole:
       type: object
       additionalProperties: true
-      required: [filter, summary, trend, workflows, agents, executors, models, nodes, failures, coverage, delivery, demo]
+      required: [summary, trend, models, providers, executions, empty]
       properties:
-        filter:
-          $ref: "#/components/schemas/OpenObject"
         summary:
-          $ref: "#/components/schemas/AnalyticsCostSummary"
+          $ref: "#/components/schemas/UsageConsoleSummary"
         trend:
-          type: array
-          items:
-            $ref: "#/components/schemas/OpenObject"
-        workflows:
-          type: array
-          items:
-            $ref: "#/components/schemas/OpenObject"
-        agents:
-          type: array
-          items:
-            $ref: "#/components/schemas/OpenObject"
-        executors:
           type: array
           items:
             $ref: "#/components/schemas/OpenObject"
@@ -6106,28 +6109,50 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OpenObject"
-        nodes:
+        providers:
           type: array
           items:
             $ref: "#/components/schemas/OpenObject"
-        failures:
+        workflows:
           type: array
           items:
             $ref: "#/components/schemas/OpenObject"
-        coverage:
-          $ref: "#/components/schemas/OpenObject"
-        deliveries:
-          type: array
-          items:
-            $ref: "#/components/schemas/AnalyticsDelivery"
-        delivery:
-          $ref: "#/components/schemas/AnalyticsDeliverySummary"
-        demo:
-          $ref: "#/components/schemas/OpenObject"
-        runTraces:
+        executions:
           type: array
           items:
             $ref: "#/components/schemas/OpenObject"
+        empty:
+          type: boolean
+        timeZone:
+          type: string
+        grain:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+    UsageConsoleSummary:
+      type: object
+      additionalProperties: true
+      properties:
+        executions: {type: integer}
+        inputTokens: {type: integer}
+        outputTokens: {type: integer}
+        cacheReadTokens: {type: integer}
+        cacheWriteTokens: {type: integer}
+        totalTokens: {type: integer}
+        cacheHitRate: {type: number}
+        totalCostUsd: {type: number}
+        totalCostCny: {type: number}
+        costCurrency: {type: string}
+        usdToCny: {type: number}
+        costReportedUsd: {type: number}
+        costEstimatedUsd: {type: number}
+        reportedExecutions: {type: integer}
+        estimatedExecutions: {type: integer}
+        unknownCostExecutions: {type: integer}
+        costCoveragePct: {type: number}
+        malformedReports: {type: integer}
+        skippedExecutions: {type: integer}
     Bootstrap:
       type: object
       additionalProperties: true

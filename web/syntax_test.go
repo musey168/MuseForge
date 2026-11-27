@@ -1269,26 +1269,33 @@ func TestPlaybooksPageRemoved(t *testing.T) {
 	}
 }
 
-func TestObsDeliveryBadgeShowsWithoutFullScan(t *testing.T) {
+func TestUsageConsoleDropsRunQualitySurfaces(t *testing.T) {
 	src, err := os.ReadFile("app/observability.js")
 	if err != nil {
 		t.Fatal(err)
 	}
 	code := string(src)
-	start := strings.Index(code, "const badge=$('#obsDeliveryCount');")
-	if start < 0 {
-		t.Fatal("delivery badge render missing")
+	// The usage console reports externally reported usage only. Every run-quality
+	// surface (success rate, P95, tool-call rate, interventions, automation rate,
+	// reworks, member and project tables, delivery funnel, activity cards and
+	// the week-hour heatmap) must be gone from the interface and the code.
+	for _, unwanted := range []string{
+		"successRate", "p95", "toolSuccessRate", "humanInterventions", "automationRate",
+		"rework", "runTraces", "obsScopedView", "weekHour", "funnel", "owners",
+		"delivery", "vibe", "memberTable", "userTable", "导出报告",
+	} {
+		if strings.Contains(code, unwanted) {
+			t.Fatalf("the usage console still contains the removed surface %q", unwanted)
+		}
 	}
-	end := strings.Index(code[start:], "\n  const reopen=")
-	if end < 0 {
-		t.Fatal("delivery badge render block not found")
-	}
-	block := code[start : start+end]
-	if strings.Contains(block, "obsAnalyticsFull") {
-		t.Fatalf("delivery badge must not wait for the full delivery scan: %s", block)
-	}
-	if !strings.Contains(block, "state.analytics?.delivery?.issues") || !strings.Contains(block, "badge.hidden=!n") {
-		t.Fatalf("delivery badge should read overview delivery count and hide at zero: %s", block)
+	for _, want := range []string{
+		"/api/usage", "obsUsageTokenPanel", "obsUsageCostPanel", "obsUsageCachePanel",
+		"obsUsageTrendCard", "obsUsageBreakdownCard", "obsUsageExecutionCard", "obsUsageEmptyPanel",
+		"/api/insights/v1/sources",
+	} {
+		if !strings.Contains(code, want) {
+			t.Fatalf("the usage console is missing %q", want)
+		}
 	}
 }
 
@@ -1298,14 +1305,16 @@ func TestUsageAnalysisUI(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := string(html)
-	for _, want := range []string{`data-obs-tab="overview"><svg class="agent-icon harness-icon" data-icon="token" width="14" height="14" aria-hidden="true"></svg>总览`, `data-obs-tab="delivery"><svg class="agent-icon harness-icon" data-icon="flag" width="14" height="14" aria-hidden="true"></svg>交付`, `id="exportObsReport"`} {
+	for _, want := range []string{`<h1>用量台</h1>`, `id="refreshObs"`, `id="obsManageSources"`, `id="obsBody"`, `id="obsExpand"`} {
 		if !strings.Contains(page, want) {
-			t.Fatalf("usage analysis UI missing %q", want)
+			t.Fatalf("usage console UI missing %q", want)
 		}
 	}
-	for _, not := range []string{`data-obs-tab="quality"`, `data-obs-tab="cost"`, `data-obs-tab="agents"`, `data-obs-tab="trace"`} {
+	// The overview/delivery tab bar, the delivery badge and the run-quality
+	// HTML report export are gone.
+	for _, not := range []string{`id="obsTabs"`, `data-obs-tab=`, `id="obsDeliveryCount"`, `id="exportObsReport"`, `id="obsLiveState"`} {
 		if strings.Contains(page, not) {
-			t.Fatalf("usage analysis still has extra tab %q", not)
+			t.Fatalf("usage console still ships the removed control %q", not)
 		}
 	}
 	js, err := readAppBundle()
@@ -1313,82 +1322,49 @@ func TestUsageAnalysisUI(t *testing.T) {
 		t.Fatal(err)
 	}
 	code := string(js)
-	for _, want := range []string{"ensureObsUserFilter", "obsRunMatchesUser", "exportObsReport", "buildObsReportHTML", "userDisplay(user)", "assigneeUserId", "各模型用量", "每人每日用量", "成员汇总", "data-obs-scope", "setObsScope", "需求类型分布", "LOOP 版本对比", "节点质量明细", "setObsTrendGrain", "obsTrendChart", "该责任人在各项目", "data-obs-grain", "grain=", "全部", "obsApiGrain", "obsRangeCaption", "obsPeriodPicker", "setObsPeriod", "obsScopedView", "data-obs-period", "不含暂停/恢复", "obsSummaryCard", "workflow_task_id", "averageTokensPerRun", "toolSuccessRate", "runTraces", "obs-traces", "isPreviewHost", "showDirectRunButton"} {
+	for _, want := range []string{
+		"/api/usage", "grain=", "bucket=", "tz=",
+		"obsUsageTokenPanel", "obsUsageCostPanel", "obsUsageCachePanel", "obsUsageTrendCard",
+		"obsUsageBreakdownCard", "obsUsageExecutionCard", "obsUsageEmptyPanel",
+		"obsUsageMoney", "obsUsageCostText", "obsUsageStepBucket",
+		"openObsSources", "obsCanManageSources", "/api/insights/v1/sources",
+		"isPreviewHost", "showDirectRunButton",
+	} {
 		if !strings.Contains(code, want) {
-			t.Fatalf("app.js is missing %q", want)
+			t.Fatalf("app bundle is missing %q", want)
 		}
 	}
 	node, err := exec.LookPath("node")
 	if err != nil {
-		t.Skip("node not installed; skipping usage analysis helper check")
+		t.Skip("node not installed; skipping usage console helper check")
 	}
 	script := `
 const assert = require('node:assert/strict');
 const code = require('node:fs').readFileSync('` + appBundlePath(t) + `', 'utf8');
 global.state = {
-  currentUser: {id: 7, loginName: 'alice', chineseName: '爱丽丝'},
-  obsUserFilter: '',
-  obsUserFilterReady: false,
-  obsScope: 'user',
-  data: {
-    users: [{id: 7, loginName: 'alice', chineseName: '爱丽丝'}, {id: 8, loginName: 'bob', chineseName: '鲍勃'}],
-    issues: [{id: 'iss-1', assigneeUserId: 7, source: 'gongfeng'}],
-    tasks: [{runId: 'run-assignee', issueId: 'iss-1'}],
-  }
+  currentUser: {id: 7, loginName: 'alice'},
+  usageGrain: 'day', usageBucket: '', usageBuckets: [],
+  data: { users: [{id: 7, loginName: 'alice'}] },
 };
-function userById(id){return (state.data.users||[]).find(u=>Number(u.id)===Number(id))}
-function userDisplay(user){return user?(user.chineseName&&user.loginName?user.loginName+'('+user.chineseName+')':user.loginName||user.chineseName||('用户 '+user.id)):''}
-eval(code.slice(code.indexOf('function ensureObsUserFilter(){'), code.indexOf('async function switchObsTab')));
-eval(code.slice(code.indexOf('function obsUserName(id){'), code.indexOf('function obsUserChoices(){')));
-assert.equal(obsUserName(7), 'alice(爱丽丝)');
-assert.equal(obsRunMatchesUser({executionContext:{responsibleUserId:7}}, 7), true);
-assert.equal(obsRunMatchesUser({id:'run-assignee', executionContext:{}}, 7), true);
-assert.equal(obsRunMatchesUser({id:'run-assignee', executionContext:{}}, 8), false);
-ensureObsUserFilter();
-assert.equal(state.obsUserFilter, '7');
-state.obsUserFilterReady=false;state.obsUserFilter='';state.obsScope='project';
-ensureObsUserFilter();
-assert.equal(state.obsUserFilter, '', 'project dimension must not default to current user');
-assert.ok(code.includes("api('/api/analytics'+analyticsQuery"));
-assert.ok(code.includes("obsScope()==='user'&&state.obsUserFilter"));
-assert.ok(code.includes('grain='));
-assert.ok(code.includes('crossProject'));
-assert.ok(!code.includes('function obsQuality('));
-eval(code.slice(code.indexOf('function obsTrendGrain(){'), code.indexOf('function ensureObsUserFilter')));
 function formatTokens(n){return String(n)}
 function escapeHTML(s){return String(s)}
 function lfT(zh){return zh}
-assert.equal(obsWeekLabel('2026-W37'), '9/7–9/13');
-assert.equal(obsTrendLabel({date:'2026-09-16'}), '09/16');
-assert.equal(obsTrendValue({tokens:10,runs:2,issues:3,costUsd:1.5},'issues'), 3);
-const delta=obsPeriodDelta([{date:'2026-W36',tokens:200},{date:'2026-W37',tokens:100}],'tokens');
-assert.equal(delta.delta, -100);
-assert.ok(obsDeltaChip(delta,true).includes('good'));
-assert.ok(obsTrendChart([{date:'2026-W36',tokens:20},{date:'2026-W37',tokens:10}],'tokens').includes('obs-chart-line'));
-state.obsTrendGrain='all';
-assert.equal(obsApiGrain(), 'month');
-assert.equal(obsRangeCaption(), '累计');
-assert.equal(obsTrendWindow([{date:'2020-01'},{date:'2026-09'}]).length, 2);
-state.obsTrendGrain='day';
-state.obsPeriodKey='2026-09-20';
-assert.equal(obsTrendWindow(Array.from({length:40},()=>({date:'x'}))).length, 30);
-assert.equal(obsStepPeriodKey('2026-09-20','day',1), '2026-09-21');
-assert.equal(obsPeriodRange('2026-09-20','day').to.toISOString().slice(0,10), '2026-09-21');
-assert.equal(obsDateToWeekKey(new Date(Date.UTC(2026,8,16))), '2026-W38');
-assert.equal(obsPeriodRange('2026-W37','week').label, '9/7–9/13');
-state.analytics={runTraces:[
-  {status:'succeeded',tokens:100,humanInterventions:0,issueId:'a',createdAt:'2026-09-20T08:00:00Z',durationMs:1000,toolCallsSucceeded:2,toolCallsFailed:0},
-  {status:'failed',tokens:50,humanInterventions:1,issueId:'b',createdAt:'2026-09-21T08:00:00Z',durationMs:2000,toolCallsSucceeded:0,toolCallsFailed:1}
-]};
-const scoped=obsScopedView();
-assert.equal(scoped.total, 1);
-assert.equal(scoped.tokens, 100);
-assert.equal(scoped.demo.humanInterventions, 0);
-assert.ok(!code.slice(code.indexOf('async function refreshObs(){'), code.indexOf('function runCost(')).includes("api('/api/runs"));
+eval(code.slice(code.indexOf('function obsUsageGrain(){'), code.indexOf('async function obsLoadUsage(){')));
+eval(code.slice(code.indexOf('function obsUsageMoney(value,currency){'), code.indexOf('function obsUsageStatusText(status){')));
+eval(code.slice(code.indexOf('function obsUsageStepBucket(buckets,current,step){'), code.indexOf('function shiftObsUsageBucket(step){')));
+assert.equal(obsUsageGrain(), 'day');
+state.usageGrain='nonsense';
+assert.equal(obsUsageGrain(), 'day');
+assert.equal(obsUsageMoney(8.61,'CNY'), '¥8.61');
+assert.equal(obsUsageMoney(1.23,'USD'), '$1.23');
+assert.match(obsUsageCostText(0,'unknown','CNY'), /未识别/);
+assert.equal(obsUsageCostText(2.5,'reported','CNY'), '¥2.50');
+assert.equal(obsUsageStepBucket(['2026-10-01','2026-10-02'],'2026-10-01',-1), null);
+assert.equal(obsUsageStepBucket(['2026-10-01','2026-10-02'],'2026-10-01',1), '2026-10-02');
 `
 	out, err := exec.Command(node, "-e", script).CombinedOutput()
 	if err != nil {
-		t.Fatalf("usage analysis helper check failed: %v\n%s", err, out)
+		t.Fatalf("usage console helper check failed: %v\n%s", err, out)
 	}
 }
 
@@ -1406,8 +1382,7 @@ func TestListPaginationUI(t *testing.T) {
 		"paginateList('issues'",
 		"paginateList('runs'",
 		"paginateList('mcp'",
-		"obs-users",
-		"obs-deliveries",
+		"obs-executions",
 		"data-page-key",
 	} {
 		if !strings.Contains(code, want) {
@@ -1451,7 +1426,7 @@ assert.deepEqual(p3.items, items.slice(40,45));
 assert.equal(pagerHTML('issues', {total:10,size:20}).trim(), '');
 resetListPage('issues');
 assert.equal(state.listPages.issues, 1);
-const obs = paginateList('obs-users', items);
+const obs = paginateList('obs-executions', items);
 assert.equal(obs.size, 20);
 `
 	if out, err := exec.Command(node, "-e", script).CombinedOutput(); err != nil {
@@ -2619,20 +2594,20 @@ func TestCodexStyleLeftMiniRailLayout(t *testing.T) {
 	if !strings.Contains(railNav, `data-view="issues" data-tooltip="需求列表" aria-label="需求列表"`) {
 		t.Fatal("#platformRail must contain the issues entry labelled 需求列表")
 	}
-	if !strings.Contains(railNav, `data-view="observability" data-tooltip="统计" aria-label="统计"`) {
-		t.Fatal("#platformRail observability button must be labelled 统计")
+	if !strings.Contains(railNav, `data-view="observability" data-tooltip="用量台" aria-label="用量台"`) {
+		t.Fatal("#platformRail observability button must be labelled 用量台")
 	}
 	if strings.Index(railNav, `data-view="observability"`) > strings.Index(railNav, `data-view="issues"`) {
-		t.Fatal("统计 must stay before 需求列表 in #platformRail")
+		t.Fatal("用量台 must stay before 需求列表 in #platformRail")
 	}
 	if strings.Index(railNav, `data-view="issues"`) > strings.Index(railNav, `data-view="approvals"`) {
 		t.Fatal("需求列表 must sit before 待我确认 in #platformRail")
 	}
 	if strings.Index(railNav, `data-view="observability"`) > strings.Index(railNav, `data-view="approvals"`) {
-		t.Fatal("统计 must sit before 待我确认 in #platformRail")
+		t.Fatal("用量台 must sit before 待我确认 in #platformRail")
 	}
 	if strings.Contains(page[sidebarIdx:], `data-view="observability"`) {
-		t.Fatal("settings navigation must not duplicate the 统计 entry")
+		t.Fatal("settings navigation must not duplicate the 用量台 entry")
 	}
 	if !strings.Contains(page[sidebarIdx:], `data-view="runners"`) {
 		t.Fatal("settings navigation must contain the runners entry")
@@ -2702,27 +2677,27 @@ func TestCodexStyleLeftMiniRailLayout(t *testing.T) {
 	}
 	appJs := string(appJsBytes)
 	if !strings.Contains(appJs, "const noSidebarViews = ['issues', 'approvals', 'observability'];") {
-		t.Fatal("app.js must hide the sidebar on the rail-only pages: 需求列表, 待我确认, 统计")
+		t.Fatal("app.js must hide the sidebar on the rail-only pages: 需求列表, 待我确认, 用量台")
 	}
 	managed := appJs[strings.Index(appJs, "const settingsManagementViews="):]
 	managed = managed[:strings.Index(managed, "\n")]
 	if strings.Contains(managed, "'observability'") {
-		t.Fatal("统计 must not enter settings management mode")
+		t.Fatal("用量台 must not enter settings management mode")
 	}
 	for _, view := range []string{"'sops'", "'runs'", "'aiSchedules'", "'bots'"} {
 		if !strings.Contains(managed, view) {
 			t.Fatalf("%s moved into the settings sidebar and must enter settings management mode", view)
 		}
 	}
-	if !strings.Contains(appJs, "observability:'统计'") {
-		t.Fatal("viewTitles.observability must be 统计")
+	if !strings.Contains(appJs, "observability:'用量台'") {
+		t.Fatal("viewTitles.observability must be 用量台")
 	}
 	accessBytes, err := Files.ReadFile("app/access.js")
 	if err != nil {
 		t.Fatal(err)
 	}
 	access := string(accessBytes)
-	for _, want := range []string{"['observability','统计','用量分析 · Token 与质量']", "['issues','需求列表'"} {
+	for _, want := range []string{"['observability','用量台','上报用量 · Token 与费用']", "['issues','需求列表'"} {
 		if !strings.Contains(access, want) {
 			t.Fatalf("command palette is missing %q", want)
 		}

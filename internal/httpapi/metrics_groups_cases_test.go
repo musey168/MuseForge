@@ -40,7 +40,7 @@ func TestRunsRemainingPureAndHTTPBranches(t *testing.T) {
 		auth   bool
 		want   int
 	}{
-		{http.MethodGet, "/api/analytics?from=2026-10-01T00:00:00Z&to=2026-10-30T00:00:00Z&origin=external&scope=x&userId=1&issueSource=tapd&grain=day&tz=UTC", nil, false, http.StatusOK},
+		{http.MethodGet, "/api/usage?from=2026-10-01T00:00:00Z&to=2026-10-30T00:00:00Z&grain=day&tz=UTC&userId=1", nil, false, http.StatusOK},
 		{http.MethodGet, "/api/runs?responsible=me", nil, false, http.StatusUnauthorized},
 		{http.MethodPost, "/api/runs", map[string]any{}, false, http.StatusConflict},
 		{http.MethodPost, "/api/runs", map[string]any{"projectId": "missing"}, true, http.StatusBadRequest},

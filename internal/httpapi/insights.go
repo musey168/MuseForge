@@ -156,6 +156,13 @@ func decodeInsightJSON(c *gin.Context, dst any) bool {
 	}
 	return true
 }
+// countRejectedReport records one refused report against its credential, so
+// the console can show that reports arrived but were not usable. A refused
+// report is counted, never stored, and never affects the reports after it.
+func (h *insightsHandlers) countRejectedReport(sourceID string) {
+	_ = h.repo.CountRejectedInsightReport(sourceID)
+}
+
 func (h *insightsHandlers) ingest(c *gin.Context) {
 	token, ok := bearerToken(c.Request)
 	if !ok {
@@ -177,13 +184,16 @@ func (h *insightsHandlers) ingest(c *gin.Context) {
 	}
 	var input domain.InsightExecution
 	if !decodeInsightJSON(c, &input) {
+		h.countRejectedReport(source.ID)
 		return
 	}
 	if reason := validateInsightExecution(&input, time.Now().UTC()); reason != "" {
+		h.countRejectedReport(source.ID)
 		c.JSON(400, gin.H{"error": reason})
 		return
 	}
 	if input.ExternalUserID != "" && source.UserMappings[input.ExternalUserID] <= 0 {
+		h.countRejectedReport(source.ID)
 		c.JSON(400, gin.H{"error": "externalUserId 未配置用户映射；无责任人时请省略"})
 		return
 	}
@@ -207,6 +217,62 @@ func (h *insightsHandlers) ingest(c *gin.Context) {
 		code = 200
 	}
 	c.JSON(code, gin.H{"id": input.ID, "sourceId": source.ID, "status": status})
+}
+
+// usage serves the usage console: the tokens and the cost of the work
+// reported from outside the platform. It aggregates only reported
+// executions; the platform's own run metrics are not part of it.
+func (h *insightsHandlers) usage(c *gin.Context) {
+	filter, ok := usageConsoleFilter(c)
+	if !ok {
+		return
+	}
+	snapshot, err := h.repo.UsageConsole(filter)
+	if err != nil {
+		if errors.Is(err, repo.ErrInvalidUsageBucket) {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		// A store failure is the platform's, not the caller's.
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, snapshot)
+}
+
+// usageConsoleFilter reads the period and the scope of the console.
+func usageConsoleFilter(c *gin.Context) (domain.AnalyticsFilter, bool) {
+	filter := domain.AnalyticsFilter{
+		ProjectID:  strings.TrimSpace(c.Query("projectId")),
+		UserID:     strings.TrimSpace(c.Query("userId")),
+		WorkflowID: strings.TrimSpace(c.Query("workflowId")),
+		Grain:      strings.TrimSpace(c.Query("grain")),
+		TimeZone:   strings.TrimSpace(c.Query("tz")),
+		Bucket:     strings.TrimSpace(c.Query("bucket")),
+	}
+	switch strings.ToLower(filter.Grain) {
+	case "", "day", "week", "month":
+	default:
+		c.JSON(400, gin.H{"error": "grain 必须为 day、week 或 month"})
+		return filter, false
+	}
+	if raw := c.Query("from"); raw != "" {
+		value, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "invalid from timestamp"})
+			return filter, false
+		}
+		filter.From = value
+	}
+	if raw := c.Query("to"); raw != "" {
+		value, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "invalid to timestamp"})
+			return filter, false
+		}
+		filter.To = value
+	}
+	return filter, true
 }
 func validateInsightExecution(v *domain.InsightExecution, now time.Time) string {
 	if v.Type != "workflow_execution" {

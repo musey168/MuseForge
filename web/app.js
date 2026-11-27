@@ -8,14 +8,14 @@ window.__AGENTFLOW_APP_DOMAIN__ = document.querySelector('meta[name="agentflow-a
 const knownTime = v => { const d = v ? new Date(v) : null; return d && d.getFullYear() > 1970 ? d : null; };
 const clone = v => v==null ? v : JSON.parse(JSON.stringify(v));
 const state = {
-  data:null, currentUser:null, authRequired:false, currentView:'', analytics:null, workflow:null, workflowSaved:null, workflowDirty:false, selectedNode:null, connectFrom:null, connectCursor:null, activeRun:null,
+  data:null, currentUser:null, authRequired:false, currentView:'', workflow:null, workflowSaved:null, workflowDirty:false, selectedNode:null, connectFrom:null, connectCursor:null, activeRun:null,
   selectedAgent:null, selectedRun:null, selectedRunNode:null, runFilter:'all', runQuery:'', runWorkflowFilter:'',
   selectedIssue:null, projectFilter:'', projectDraft:null, requirementIssueId:null, sourceFilter:'',
   projectAdminDetailId:null, projectAdminTab:'basic', projectAdminQuery:'', projectAdminFilter:'all', projectDraftFor:'', projectDraftBase:null, projectIdentCustom:false, projectIdentSeed:'', projectAdminErrors:{},
   sopScope:'project', agentScope:'project', ruleScope:'project', skillScope:'project', sandboxScope:'project',
   issueRunFilter:'', issueStatusFilter:'', issueAssigneeFilter:'', issueQuery:'', issueView:localStorage.getItem('agentflow.issueView')||'table',
   assetType:'sandboxes', selectedAsset:null, assetQuery:'', assetDirty:false, mcpTab:'installed', mcpScope:'project', mcpMarket:[], mcpQuery:'', editingMCPId:'', poll:null, runStream:null,
-  obsTab:'overview', obsDeliveryFilter:'all', obsTraceRunId:null, obsTraceAdapter:'live', obsScope:localStorage.getItem('agentflow.obsScope')==='project'?'project':'user', obsUserFilter:'', obsSourceFilter:'', obsUserFilterReady:false, obsTrendGrain:['day','week','month','all'].includes(localStorage.getItem('agentflow.obsTrendGrain'))?localStorage.getItem('agentflow.obsTrendGrain'):'all', obsPeriodKey:'', obsTrendMetric:['runs','issues','cost'].includes(localStorage.getItem('agentflow.obsTrendMetric'))?localStorage.getItem('agentflow.obsTrendMetric'):'tokens', obsCrossProject:null, drawerOpen:false, issueDetailTab:'overview', issueDetailData:null, propTab:'basic',
+  usage:null, usageLoading:false, usageError:'', usageGrain:['day','week','month'].includes(localStorage.getItem('agentflow.usageGrain'))?localStorage.getItem('agentflow.usageGrain'):'day', usageBucket:'', usageBuckets:[], usageMetric:'tokens', usageExpanded:'', drawerOpen:false, issueDetailTab:'overview', issueDetailData:null, propTab:'basic',
   uiScroll:{runId:'', nodeId:'', graphLeft:0, feedTop:0, telTop:0, feedStick:true, telStick:true},
   runLogs:null, runTelemetry:null, runTelemetryAdapter:'live', runWorkspace:null,
   accessClient:'cursor',
@@ -887,6 +887,17 @@ function runIssueTitle(r){const task=(state.data.tasks||[]).find(t=>t.runId===r.
 function isLoopbackHost(hostname){
   return hostname==='localhost'||hostname==='127.0.0.1'||hostname==='[::1]'||hostname==='0.0.0.0';
 }
+// The flow preview host only exposes the run button; every other deployment hides it.
+function isPreviewHost(){
+  const host=String((typeof location!=='undefined'&&location.hostname)||'').toLowerCase();
+  const domain=String((typeof state!=='undefined'&&state.appDomain)||(typeof window!=='undefined'&&window.__AGENTFLOW_APP_DOMAIN__)||'').toLowerCase();
+  return host==='loopforge-test.example.com'||domain==='loopforge-test.example.com'||host.includes('-test.')||isLoopbackHost(host);
+}
+function showDirectRunButton(onFlow){
+  const btn=$('#runButton');
+  if(!btn)return;
+  btn.style.display=onFlow&&isPreviewHost()?'':'none';
+}
 function isOAHost(hostname){
   if(isLoopbackHost(hostname))return false;
   if(typeof state!=='undefined' && state?.appDomain && hostname===state.appDomain)return true;
@@ -1407,8 +1418,7 @@ function bind(){
   $$('[data-jump]').forEach(el=>el.onclick=()=>switchView(el.dataset.jump));
   $('#refreshApprovals').onclick=()=>renderApprovals(false);
   $('#refreshObs').onclick=refreshObs;
-  $('#exportObsReport').onclick=exportObsReport;
-  $$('.obs-tab').forEach(btn=>btn.onclick=()=>switchObsTab(btn.dataset.obsTab));
+  $('#obsManageSources').onclick=openObsSources;
   $$('.drawer-tab').forEach(btn=>btn.onclick=()=>{state.issueDetailTab=btn.dataset.dtab;$$('.drawer-tab').forEach(x=>x.classList.toggle('active',x===btn));renderIssueDetailTab()});
   const issueDrawer=$('#issueDetailDrawer');
   if(issueDrawer&&issueDrawer.parentElement!==document.body)document.body.appendChild(issueDrawer);
@@ -1427,7 +1437,6 @@ function bind(){
     renderProjectSwitcher();renderIssues();renderSync();renderProjectAdmin();
     renderSOPCatalog();renderAgents();renderAssets();renderMCPManagement();renderRuns();renderWorkflowMeta();
     renderApprovals(true);
-    renderObsTabs();
     if($('#dashboardView').classList.contains('active'))renderDashboard();
     if($('#observabilityView').classList.contains('active'))refreshObs();
     if($('#evolutionView')?.classList.contains('active')&&typeof renderEvolutionView==='function')renderEvolutionView();
@@ -1710,8 +1719,8 @@ function setSettingsSidebarExpanded(expanded,focusToggle=false){
     });
   }
 }
-function viewTitles(){return {management:'设置',issues:'需求列表',aiSchedules:'定时任务',bots:'通道管理',runs:'运行记录',approvals:'待我确认',sops:'流程模板',flow:'流程设计',agents:'角色定义',mcp:'能力资产',rules:'能力资产',skills:'能力资产',knowledge:'我的知识库',sandboxes:'沙箱管理',observability:'统计',projects:'项目配置',projectCredentials:'凭据管理',platform:'平台管理',runners:'执行机器',settings:'个人配置',access:'访问密钥',guide:'访问密钥',evolution:'RSI工作台'}}
-// 从流程模板打开的流程设计）按 data-nav-match 高亮它们所属的入口。
+function viewTitles(){return {management:'设置',issues:'需求列表',aiSchedules:'定时任务',bots:'通道管理',runs:'运行记录',approvals:'待我确认',sops:'流程模板',flow:'流程设计',agents:'角色定义',mcp:'能力资产',rules:'能力资产',skills:'能力资产',knowledge:'我的知识库',sandboxes:'沙箱管理',observability:'用量台',projects:'项目配置',projectCredentials:'凭据管理',platform:'平台管理',runners:'执行机器',settings:'个人配置',access:'访问密钥',guide:'访问密钥',evolution:'RSI工作台'}}
+  // 从流程模板打开的流程设计）按 data-nav-match 高亮它们所属的入口。
 function settingsNavMatches(btn,name){return btn.dataset.view===name||String(btn.dataset.navMatch||'').split(/\s+/).includes(name)}
 const assetTypeGroups={capability:['mcp','rules','skills']};
 function assetTypeGroup(name){return Object.keys(assetTypeGroups).find(key=>assetTypeGroups[key].includes(name))||''}
@@ -1954,4 +1963,4 @@ function switchView(name){
   if(name==='guide')renderGuide();
   if(name==='flow'){if(!state.workflow?.nodes?.some(n=>n.id===state.selectedNode))state.selectedNode=null;renderWorkflowMeta();renderCanvas();renderProperties();setFlowView('canvas');refreshGenericWorkflowRoles()}
 }
-function renderAll(){renderUserBadge();renderPlatformNav();renderObsTabs();renderProjectSwitcher();renderIssues();renderSOPCatalog();renderWorkflowMeta();renderCanvas();renderProperties();renderAgents();renderAssets();renderMCPManagement();renderRuns();renderSync();renderProjectAdmin();renderDashboard();renderGuide();updateApprovalBadge();if($('#knowledgeView')?.classList.contains('active')&&typeof loadKnowledgeView==='function')loadKnowledgeView();showDirectRunButton($('#flowView').classList.contains('active'))}
+function renderAll(){renderUserBadge();renderPlatformNav();renderProjectSwitcher();renderIssues();renderSOPCatalog();renderWorkflowMeta();renderCanvas();renderProperties();renderAgents();renderAssets();renderMCPManagement();renderRuns();renderSync();renderProjectAdmin();renderDashboard();renderGuide();updateApprovalBadge();if($('#knowledgeView')?.classList.contains('active')&&typeof loadKnowledgeView==='function')loadKnowledgeView();showDirectRunButton($('#flowView').classList.contains('active'))}
