@@ -32,10 +32,9 @@ type issueListPage struct {
 	HasMore bool                `json:"hasMore"`
 }
 
-// issuesHandlers 依赖 tasks（列表/详情触发任务状态同步）。
+// issuesHandlers 提供服务端的个人需求表。
 type issuesHandlers struct {
 	*deps
-	tasks *tasksHandlers
 }
 
 func (h issuesHandlers) importTAPD(c *gin.Context) {
@@ -150,7 +149,6 @@ func (h issuesHandlers) applyTAPDImportRepositories(issue *domain.Issue, previou
 func (h issuesHandlers) issues(c *gin.Context) {
 	r := c.Request
 	if r.Method == http.MethodGet {
-		h.tasks.syncTasks()
 		items := filterIssues(h.repo.Issues(), issueListQuery{
 			ProjectID: strings.TrimSpace(c.Query("projectId")),
 			Status:    strings.TrimSpace(c.Query("status")),
@@ -456,17 +454,11 @@ type issueRoute struct {
 }
 
 var issueRoutes = map[string]issueRoute{
-	"/api/issues/:id":                     {handle: issuesHandlers.issueDetail, methods: []string{http.MethodGet, http.MethodDelete}},
-	"/api/issues/:id/images/:imageId":     {handle: issuesHandlers.issueImage, methods: []string{http.MethodGet}},
-	"/api/issues/:id/comments":            {handle: issuesHandlers.addIssueComment, methods: []string{http.MethodPost}},
-	"/api/issues/:id/runs":                {handle: issuesHandlers.issueRuns, methods: []string{http.MethodGet}},
-	"/api/issues/:id/clarification":       {handle: issuesHandlers.submitIssueClarification, methods: []string{http.MethodPost}},
-	"/api/issues/:id/reopen":              {handle: issuesHandlers.reopenIssue, methods: []string{http.MethodPost}},
-	"/api/issues/:id/close":               {handle: issuesHandlers.closeIssue, methods: []string{http.MethodPost}},
-	"/api/issues/:id/resync-tapd":         {handle: issuesHandlers.resyncTAPDIssue, methods: []string{http.MethodPost}},
-	"/api/issues/:id/requirement":         {handle: issuesHandlers.issueRequirement, methods: []string{http.MethodGet}},
-	"/api/issues/:id/sops":                {handle: issuesHandlers.issueSOPs, methods: []string{http.MethodGet, http.MethodPut}},
-	"/api/issues/:id/dispatch":            {handle: issuesHandlers.dispatchIssueRoute, methods: []string{http.MethodPost}},
+	"/api/issues/:id":                 {handle: issuesHandlers.issueDetail, methods: []string{http.MethodGet, http.MethodDelete}},
+	"/api/issues/:id/images/:imageId": {handle: issuesHandlers.issueImage, methods: []string{http.MethodGet}},
+	"/api/issues/:id/comments":        {handle: issuesHandlers.addIssueComment, methods: []string{http.MethodPost}},
+	"/api/issues/:id/reopen":          {handle: issuesHandlers.reopenIssue, methods: []string{http.MethodPost}},
+	"/api/issues/:id/close":           {handle: issuesHandlers.closeIssue, methods: []string{http.MethodPost}},
 }
 
 func (h issuesHandlers) issue(c *gin.Context) {

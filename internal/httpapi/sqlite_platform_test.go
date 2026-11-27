@@ -73,11 +73,11 @@ func TestPlatformServesItsSurfacesFromSQLiteFile(t *testing.T) {
 	// is ingested through the source's bearer token.
 	created := requestJSONAuthed[struct {
 		Source domain.InsightSource `json:"source"`
-		Token  string                `json:"token"`
+		Token  string               `json:"token"`
 	}](t, h, user, http.MethodPost, "/api/insights/v1/sources", map[string]any{
-		"projectId":    "atlas",
-		"name":         "runner",
-		"userMappings": map[string]int64{"external-user": user.ID},
+		"projectId":     "atlas",
+		"name":          "runner",
+		"userMappings":  map[string]int64{"external-user": user.ID},
 		"expiresInDays": 30,
 	}, http.StatusCreated)
 	if created.Source.ID == "" || created.Token == "" {

@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/runtime"
 
 	"github.com/gorilla/websocket"
 )
@@ -19,6 +18,16 @@ import (
 const (
 	controlReconnectMin = time.Second
 	controlReconnectMax = 30 * time.Second
+)
+
+// The control channel carries exactly three operations: CLI maintenance, the
+// CLI model probe and the SSH host-key probe. The operation names are the
+// wire values the platform sends; they are part of the protocol, not of the
+// runner's internals.
+const (
+	controlOperationMaintenance = "maintenance"
+	controlOperationLoginModels = "login_models"
+	controlOperationSSHHostKey  = "ssh_host_key_probe"
 )
 
 // controlReadTimeout outlives two server ping periods (30s). Without a read
@@ -29,23 +38,36 @@ var controlReadTimeout = 75 * time.Second
 
 var controlWriteTimeout = 10 * time.Second
 
+// controlRequest is the request the platform sends over the control channel.
+type controlRequest struct {
+	Operation     string                           `json:"operation,omitempty"`
+	Maintenance   *domain.RunnerMaintenanceRequest `json:"maintenance,omitempty"`
+	ModelProvider string                           `json:"modelProvider,omitempty"`
+	// SSHHostKeyAddress is the git host whose public key the machine should
+	// read. It belongs to the SSH host-key probe operation only.
+	SSHHostKeyAddress string `json:"sshHostKeyAddress,omitempty"`
+}
+
+// controlResponse is the runner's answer to one control request.
+type controlResponse struct {
+	Payload json.RawMessage `json:"payload,omitempty"`
+	Error   string          `json:"error,omitempty"`
+	Code    string          `json:"code,omitempty"`
+	Status  int             `json:"status,omitempty"`
+}
+
+// controlMessage is the envelope of the runner's outbound control channel:
+// the platform asks with a "workspace.request" and reads the answer from the
+// matching "workspace.response".
 type controlMessage struct {
-	ToolRequest        *domain.RunnerToolRequest           `json:"toolRequest,omitempty"`
-	ToolResponse       *domain.RunnerToolResponse          `json:"toolResponse,omitempty"`
-	Type               string                              `json:"type"`
-	TaskID             string                              `json:"taskId,omitempty"`
-	DesiredState       string                              `json:"desiredState,omitempty"`
-	ActiveTaskIDs      []string                            `json:"activeTaskIds,omitempty"`
-	RequestID          string                              `json:"requestId,omitempty"`
-	WorkspaceRequest   *domain.RunnerWorkspaceRequest      `json:"workspaceRequest,omitempty"`
-	WorkspaceResponse  *domain.RunnerWorkspaceResponse     `json:"workspaceResponse,omitempty"`
-	ObserveImageBuild  bool                                `json:"observeImageBuild,omitempty"`
-	ImageBuildProgress *domain.WorkspaceImageBuildProgress `json:"imageBuildProgress,omitempty"`
+	Type              string           `json:"type"`
+	RequestID         string           `json:"requestId,omitempty"`
+	WorkspaceRequest  *controlRequest  `json:"workspaceRequest,omitempty"`
+	WorkspaceResponse *controlResponse `json:"workspaceResponse,omitempty"`
 }
 
 // controlLoop maintains one outbound WebSocket for immediate server-to-runner
-// controls. Reconnect is automatic; durable desired_state and lease renewal
-// cover every disconnected interval.
+// controls. Reconnect is automatic.
 func (d *Daemon) controlLoop(ctx context.Context) {
 	backoff := controlReconnectMin
 	for ctx.Err() == nil {
@@ -70,9 +92,7 @@ func (d *Daemon) controlLoop(ctx context.Context) {
 		d.wsOnline.Store(true)
 		backoff = controlReconnectMin
 		_ = conn.SetWriteDeadline(time.Now().Add(controlWriteTimeout))
-		if err = conn.WriteJSON(controlMessage{Type: "hello", ActiveTaskIDs: d.activeTaskIDs()}); err == nil {
-			err = d.readControls(ctx, conn)
-		}
+		err = d.readControls(ctx, conn)
 		d.wsOnline.Store(false)
 		_ = conn.Close()
 		if ctx.Err() == nil && err != nil {
@@ -84,11 +104,10 @@ func (d *Daemon) controlLoop(ctx context.Context) {
 	}
 }
 
+// readControls answers the control requests the platform still sends.
 func (d *Daemon) readControls(daemonCtx context.Context, conn *websocket.Conn) error {
 	ctx, cancel := context.WithCancel(daemonCtx)
-	var requests sync.WaitGroup
-	var workspaceCancelMu sync.Mutex
-	workspaceCancels := map[string]context.CancelFunc{}
+	defer cancel()
 	var writeMu sync.Mutex
 	writeMessage := func(message controlMessage) error {
 		writeMu.Lock()
@@ -100,16 +119,6 @@ func (d *Daemon) readControls(daemonCtx context.Context, conn *websocket.Conn) e
 		}
 		return err
 	}
-	d.conversationMu.Lock()
-	if d.conversationReplies == nil {
-		d.conversationReplies = map[string]chan domain.RunnerToolResponse{}
-	}
-	d.conversationForward = func(callCtx context.Context, token string, body json.RawMessage) (json.RawMessage, error) {
-		return d.forwardConversationTool(ctx, callCtx, writeMessage, token, body)
-	}
-	d.conversationMu.Unlock()
-	slots := make(chan struct{}, 8)
-	defer func() { cancel(); _ = conn.Close(); requests.Wait(); d.checkpointTransfers.Close() }()
 	done := make(chan struct{})
 	go func() {
 		select {
@@ -137,76 +146,49 @@ func (d *Daemon) readControls(daemonCtx context.Context, conn *websocket.Conn) e
 			return err
 		}
 		_ = conn.SetReadDeadline(time.Now().Add(controlReadTimeout))
-		if message.Type == "agent_tool.response" && message.ToolResponse != nil {
-			d.deliverConversationReply(message.RequestID, *message.ToolResponse)
+		if message.Type != "workspace.request" || message.WorkspaceRequest == nil {
 			continue
 		}
-		if message.Type == "workspace.cancel" {
-			workspaceCancelMu.Lock()
-			stop := workspaceCancels[message.RequestID]
-			workspaceCancelMu.Unlock()
-			if stop != nil {
-				stop()
-			}
-			continue
+		response, startUpdate := d.handleControlRequest(ctx, daemonCtx, *message.WorkspaceRequest)
+		err := writeMessage(controlMessage{
+			Type:              "workspace.response",
+			RequestID:         message.RequestID,
+			WorkspaceResponse: &response,
+		})
+		if startUpdate != nil {
+			startUpdate()
 		}
-		if message.Type == "task.control" {
-			d.signalTaskControl(message.TaskID, message.DesiredState)
-			continue
-		}
-		if message.Type == "workspace.request" && message.WorkspaceRequest != nil {
-			select {
-			case slots <- struct{}{}:
-			default:
-				response := domain.RunnerWorkspaceResponse{Status: 429, Error: "too many workspace requests"}
-				err := writeMessage(controlMessage{Type: "workspace.response", RequestID: message.RequestID, WorkspaceResponse: &response})
-				if err != nil {
-					return err
-				}
-				continue
-			}
-			requestCtx := ctx
-			stopRequest := func() {}
-			if domain.IsCancelableRunnerWorkspaceOperation(message.WorkspaceRequest.Operation) {
-				requestCtx, stopRequest = context.WithCancel(ctx)
-				workspaceCancelMu.Lock()
-				workspaceCancels[message.RequestID] = stopRequest
-				workspaceCancelMu.Unlock()
-			}
-			requests.Add(1)
-			go func(message controlMessage, requestCtx context.Context, stopRequest context.CancelFunc) {
-				defer requests.Done()
-				defer func() { <-slots }()
-				defer func() {
-					stopRequest()
-					workspaceCancelMu.Lock()
-					delete(workspaceCancels, message.RequestID)
-					workspaceCancelMu.Unlock()
-				}()
-				var response domain.RunnerWorkspaceResponse
-				var startUpdate func()
-				if message.WorkspaceRequest.Operation == domain.RunnerWorkspaceOperationMaintenance {
-					response, startUpdate = d.maintenanceResponse(requestCtx, daemonCtx, message.WorkspaceRequest.Maintenance)
-				} else {
-					if message.ObserveImageBuild {
-						requestCtx = runtime.WithDockerBuildProgress(requestCtx, func(progress domain.WorkspaceImageBuildProgress) {
-							if requestCtx.Err() == nil {
-								_ = writeMessage(controlMessage{Type: "workspace.image_progress", RequestID: message.RequestID, ImageBuildProgress: &progress})
-							}
-						})
-					}
-					response = d.readRunnerWorkspace(requestCtx, *message.WorkspaceRequest)
-				}
-				err := writeMessage(controlMessage{Type: "workspace.response", RequestID: message.RequestID, WorkspaceResponse: &response})
-				if startUpdate != nil {
-					startUpdate()
-				}
-				if err != nil {
-					_ = conn.Close()
-				}
-			}(message, requestCtx, stopRequest)
+		if err != nil {
+			_ = conn.Close()
+			return err
 		}
 	}
+}
+
+// handleControlRequest serves the two operations the machine inventory still
+// offers. The callback starts the actual update after the answer was sent.
+func (d *Daemon) handleControlRequest(ctx, daemonCtx context.Context, request controlRequest) (controlResponse, func()) {
+	switch request.Operation {
+	case controlOperationMaintenance:
+		return d.maintenanceResponse(ctx, daemonCtx, request.Maintenance)
+	case controlOperationLoginModels:
+		response := d.runnerLoginModels(ctx, request.ModelProvider)
+		return response, nil
+	case controlOperationSSHHostKey:
+		response := d.runnerSSHHostKey(ctx, request.SSHHostKeyAddress)
+		return response, nil
+	default:
+		return controlResponse{Status: http.StatusBadRequest, Error: "unsupported runner operation"}, nil
+	}
+}
+
+// runnerPayload encodes one answer payload for the control channel.
+func runnerPayload(value any) controlResponse {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return controlResponse{Error: err.Error(), Status: http.StatusInternalServerError}
+	}
+	return controlResponse{Payload: payload, Status: http.StatusOK}
 }
 
 func waitContext(ctx context.Context, duration time.Duration) bool {
@@ -217,104 +199,5 @@ func waitContext(ctx context.Context, duration time.Duration) bool {
 		return false
 	case <-timer.C:
 		return true
-	}
-}
-
-func (d *Daemon) registerTaskControl(taskID string) chan string {
-	d.controlMu.Lock()
-	defer d.controlMu.Unlock()
-	ch := make(chan string, 1)
-	d.controls[taskID] = ch
-	if desiredState := d.pendingControls[taskID]; desiredState != "" {
-		ch <- desiredState
-		delete(d.pendingControls, taskID)
-	}
-	return ch
-}
-
-func (d *Daemon) unregisterTaskControl(taskID string) {
-	d.controlMu.Lock()
-	delete(d.controls, taskID)
-	delete(d.pendingControls, taskID)
-	d.controlMu.Unlock()
-}
-
-func (d *Daemon) taskControl(taskID string) <-chan string {
-	d.controlMu.RLock()
-	defer d.controlMu.RUnlock()
-	return d.controls[taskID]
-}
-
-func (d *Daemon) signalTaskControl(taskID, desiredState string) {
-	d.controlMu.Lock()
-	ch := d.controls[taskID]
-	if ch == nil {
-		d.pendingControls[taskID] = desiredState
-		d.controlMu.Unlock()
-		return
-	}
-	d.controlMu.Unlock()
-	select {
-	case ch <- desiredState:
-	default:
-	}
-}
-
-func (d *Daemon) activeTaskIDs() []string {
-	d.controlMu.RLock()
-	defer d.controlMu.RUnlock()
-	ids := make([]string, 0, len(d.controls))
-	for id := range d.controls {
-		ids = append(ids, id)
-	}
-	return ids
-}
-
-// forwardConversationTool sends one agent_tool.request over the control
-// connection and waits for the matching agent_tool.response. It returns early
-// when either the caller (callCtx) or the control connection (connCtx) ends.
-// readControls must have initialised d.conversationReplies.
-func (d *Daemon) forwardConversationTool(connCtx, callCtx context.Context, write func(controlMessage) error, token string, body json.RawMessage) (json.RawMessage, error) {
-	if err := callCtx.Err(); err != nil {
-		return nil, err
-	}
-	id := fmt.Sprintf("tool-%d", d.conversationToolSeq.Add(1))
-	reply := make(chan domain.RunnerToolResponse, 1)
-	d.conversationMu.Lock()
-	d.conversationReplies[id] = reply
-	d.conversationMu.Unlock()
-	defer func() { d.conversationMu.Lock(); delete(d.conversationReplies, id); d.conversationMu.Unlock() }()
-	err := write(controlMessage{Type: "agent_tool.request", RequestID: id, ToolRequest: &domain.RunnerToolRequest{Token: token, Body: body, SupportsCancel: true}})
-	if err != nil {
-		return nil, err
-	}
-	select {
-	case response := <-reply:
-		if response.Error != "" {
-			return nil, errors.New(response.Error)
-		}
-		return response.Body, nil
-	case <-callCtx.Done():
-		if connCtx.Err() == nil {
-			_ = write(controlMessage{Type: "agent_tool.cancel", RequestID: id})
-		}
-		return nil, callCtx.Err()
-	case <-connCtx.Done():
-		return nil, connCtx.Err()
-	}
-}
-
-// deliverConversationReply hands an agent_tool.response to the waiting
-// forwardConversationTool call. Replies for unknown or already-answered
-// request IDs are dropped without blocking the control read loop.
-func (d *Daemon) deliverConversationReply(requestID string, response domain.RunnerToolResponse) {
-	d.conversationMu.Lock()
-	reply := d.conversationReplies[requestID]
-	d.conversationMu.Unlock()
-	if reply != nil {
-		select {
-		case reply <- response:
-		default:
-		}
 	}
 }

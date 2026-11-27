@@ -20,7 +20,7 @@ export AGENTFLOW_E2E_BASE=http://127.0.0.1:8090
 
 ```bash
 ./local.sh                                         # 全部 API 用例
-./local.sh api/30-runs.test.mjs api/35-runner-mode.test.mjs
+./local.sh api/30-runs.test.mjs
 AGENTFLOW_E2E_CODEBUDDY_API_KEY=ck_... ./local.sh api/40-model.test.mjs   # 带真实模型
 ./local.sh all                                     # API + UI
 ```
@@ -73,8 +73,7 @@ node e2e/setup-model-keys.mjs
 - `api/10-catalog`：规则、技能文件、MCP、环境、沙箱、角色和 LOOP CRUD，修订/恢复/克隆、引用保护、模板采用、仓库登记。
 - `api/20-issues`：需求、评论、审计、澄清门禁、派发、关闭与重开、删除（已有执行记录需确认强制删除，执行中拒绝，已结束的执行记录可强制删除）。
 - `api/30-runs`：脚本执行、产物与工作区、审批/驳回、返工、重试、暂停/恢复、取消、子 LOOP 与 SSE。
-- `api/30-runs`、`api/35-runner-mode` 里的“带代码仓库的子 LOOP”：父流程写文件 → 子 LOOP 读到并再写一个 → 父流程读到；同时检查节点没有提交、远端没被推送，分别覆盖平台本机和执行机器。
-- `api/35-runner-mode`：下载、启动并绑定真实 Runner，验证跨节点产物交接和失败场景，结束后恢复默认执行机器。
+- `api/30-runs` 里的“带代码仓库的子 LOOP”：父流程写文件 → 子 LOOP 读到并再写一个 → 父流程读到；同时检查节点没有提交、远端没被推送。
 - `api/36-cloud-pool`：无个人 Runner 时的 Worker/执行池路径与共享沙箱。
 - `api/40-model`：真实模型生成文件并通过脚本验证、子 LOOP 里的 Agent 修改父流程的代码、运行评估、助手问答、会话保存和 SSE；助手在项目对话里新建项目时草稿不归属当前项目，确认执行草稿后下一轮不重复写入。
 - `api/45-delivery-model`：四个真实模型角色完成规划、代码修复、独立评审和交付；真实 Python 测试、人工审批及验收后代码哈希检查。

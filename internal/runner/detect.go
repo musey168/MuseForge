@@ -2,12 +2,10 @@ package runner
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
-	goruntime "runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -49,15 +47,6 @@ var defaultProviders = []providerSpec{
 	// --output-format, so compatibility is probed with the flags we pass.
 	{Kind: "zcode", Binary: "zcode", VersionFlags: []string{"--output-format", "stream-json", "--mode", "yolo"}},
 }
-
-// terminalProviderKind is the built-in remote-terminal capability: the
-// platform can dispatch shell commands (verification gates, and later
-// sandbox-side operations) to this machine.
-const terminalProviderKind = "terminal"
-
-// mockProviderKind is served in-process (no binary) so an end-to-end test can
-// exercise register/claim/execute/complete without any real Agent CLI.
-const mockProviderKind = "mock"
 
 // extraSearchPaths covers CLIs installed in user-local directories that a
 // launchd/systemd service environment does not include in PATH (the daemon
@@ -117,8 +106,7 @@ func detectRuntimes(ctx context.Context, extraBinaries map[string]string, invent
 			log.Printf("managed CLI updates disabled: %v", err)
 		}
 	}
-	out := make([]domain.RunnerRuntime, 0, len(specs)+2)
-	out = append(out, builtinRuntimes()...)
+	out := make([]domain.RunnerRuntime, 0, len(specs))
 	for _, spec := range specs {
 		binary, managed := inventory.BinaryFor(spec.Kind)
 		if !managed {
@@ -182,27 +170,6 @@ func runtimeProviderSpecs(extraBinaries map[string]string) []providerSpec {
 	return specs
 }
 
-// builtinRuntimes returns the in-process runtimes every runner reports
-// regardless of installed CLIs: the mock provider and the terminal
-// capability, which lets the platform run verification gates and
-// sandbox-side commands on this machine.
-func builtinRuntimes() []domain.RunnerRuntime {
-	return []domain.RunnerRuntime{
-		{
-			Provider:     mockProviderKind,
-			BinaryPath:   "(builtin)",
-			Capabilities: []string{"non_interactive"},
-			Status:       domain.RuntimeStatusOnline,
-		},
-		{
-			Provider:     terminalProviderKind,
-			BinaryPath:   "(builtin)",
-			Capabilities: []string{"terminal"},
-			Status:       domain.RuntimeStatusOnline,
-		},
-	}
-}
-
 func probeVersion(ctx context.Context, path string, flags []string, environments ...map[string]string) string {
 	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -225,35 +192,4 @@ func probeVersion(ctx context.Context, path string, flags []string, environments
 		line = line[:128]
 	}
 	return line
-}
-
-// providerBinaryPath resolves the binary path for a claimed task from the
-// runner's own runtime inventory.
-func providerBinaryPath(runtimes []domain.RunnerRuntime, provider string) (string, bool) {
-	for _, rt := range runtimes {
-		if strings.EqualFold(rt.Provider, provider) && rt.Status != domain.RuntimeStatusDisabled {
-			return rt.BinaryPath, true
-		}
-	}
-	return "", false
-}
-
-// providerArgv builds the non-interactive CLI invocation. task.Args lets a
-// task pass additional flags (for example a model override); the prompt is
-// always the final positional argument so it can never be swallowed as a flag
-// value.
-func providerArgv(provider, binary string, prompt string, extraArgs []string) ([]string, error) {
-	args := append([]string{}, extraArgs...)
-	switch strings.TrimSpace(provider) {
-	case "claude-code":
-		return append([]string{binary}, append(args, "-p", "--output-format", "text", prompt)...), nil
-	case "codex":
-		return append([]string{binary}, append(args, "exec", "--skip-git-repo-check", prompt)...), nil
-	case "codebuddy":
-		// Keep CodeBuddy unattended: bypass permission prompts and terminate
-		// option parsing before the positional prompt.
-		return append([]string{binary}, append(args, "-y", "--permission-mode", "bypassPermissions", "--setting-sources", "user", "--", prompt)...), nil
-	default:
-		return nil, fmt.Errorf("provider %q is not supported by this runner (%s/%s)", provider, goruntime.GOOS, goruntime.GOARCH)
-	}
 }

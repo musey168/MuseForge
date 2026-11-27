@@ -110,4 +110,3 @@ func TestProjectDeleteArchivesAndRestores(t *testing.T) {
 	// Admins can delete projects they do not own.
 	requestJSONAuthed[domain.Project](t, h, admin, http.MethodDelete, "/api/projects/okr-system", nil, 200)
 }
-

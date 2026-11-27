@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"agentflow/internal/agentcli"
 	"agentflow/internal/domain"
-	"agentflow/internal/runtime"
 
 	"github.com/gin-gonic/gin"
 )
@@ -84,8 +84,8 @@ func (h *usersHandlers) probeCLIModels(c *gin.Context) {
 		baseURL = strings.TrimSpace(*req.BaseURL)
 	}
 	configuredBaseURL := baseURL
-	if req.Protocol != nil && runtime.IsAgentCLI(engine) {
-		protocol = runtime.AgentCLIProtocol(engine, *req.Protocol)
+	if req.Protocol != nil && agentcli.IsAgentCLI(engine) {
+		protocol = agentcli.AgentCLIProtocol(engine, *req.Protocol)
 	}
 	c.Header("Cache-Control", "private, no-store")
 	if engine == assistantEngineCodeBuddy && req.Environment != nil {
@@ -120,7 +120,7 @@ func (h *usersHandlers) probeCLIModels(c *gin.Context) {
 		c.JSON(http.StatusOK, cliModelProbeResult{Models: cliModelsWithEfforts(engine, models, ""), Source: source})
 		return
 	}
-	if engine == runtime.AgentCLICursor {
+	if engine == agentcli.AgentCLICursor {
 		h.probeCursorModels(c, apiKey)
 		return
 	}
@@ -143,16 +143,16 @@ func (h *usersHandlers) probeCLIModels(c *gin.Context) {
 			baseURL = "https://api.openai.com/v1"
 		case assistantEngineClaude:
 			baseURL = assistantAnthropicAPIBase
-		case runtime.AgentCLIKimi:
+		case agentcli.AgentCLIKimi:
 			baseURL, anthropic = "https://api.kimi.com/coding/v1", false
-		case runtime.AgentCLIDeepSeek:
+		case agentcli.AgentCLIDeepSeek:
 			baseURL, anthropic = "https://api.deepseek.com", false
-		case runtime.AgentCLIZCode:
+		case agentcli.AgentCLIZCode:
 			baseURL, anthropic = "https://open.bigmodel.cn/api/coding/paas/v4", false
 		}
 	}
 	var models []assistantDiscoveredModel
-	if engine == runtime.AgentCLIAntigravity && protocol == runtime.AgentCLIProtocolGemini {
+	if engine == agentcli.AgentCLIAntigravity && protocol == agentcli.AgentCLIProtocolGemini {
 		if baseURL == "" {
 			baseURL = "https://generativelanguage.googleapis.com"
 		}
@@ -230,14 +230,14 @@ func discoverGeminiModelsWithClient(ctx context.Context, client *http.Client, ke
 // the models a key may use depend on its account plan.
 func (h *usersHandlers) probeCursorModels(c *gin.Context, apiKey string) {
 	if apiKey == "" {
-		c.JSON(http.StatusOK, cliModelProbeResult{Error: "请先填写 " + assistantEngineLabel(runtime.AgentCLICursor) + " API Key"})
+		c.JSON(http.StatusOK, cliModelProbeResult{Error: "请先填写 " + assistantEngineLabel(agentcli.AgentCLICursor) + " API Key"})
 		return
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
 	models, err := cursorAgentModels(ctx, apiKey)
 	if errors.Is(err, errAssistantCLIMissing) {
-		c.JSON(http.StatusOK, cliModelProbeResult{Models: cliModelsWithEfforts(runtime.AgentCLICursor, cliModelsOf(assistantEngineBuiltinModels(runtime.AgentCLICursor)), ""), Source: "builtin"})
+		c.JSON(http.StatusOK, cliModelProbeResult{Models: cliModelsWithEfforts(agentcli.AgentCLICursor, cliModelsOf(assistantEngineBuiltinModels(agentcli.AgentCLICursor)), ""), Source: "builtin"})
 		return
 	}
 	if err != nil {
@@ -248,7 +248,7 @@ func (h *usersHandlers) probeCursorModels(c *gin.Context, apiKey string) {
 		c.JSON(http.StatusOK, cliModelProbeResult{Error: "Cursor CLI 没有返回可用模型，可以手动添加模型"})
 		return
 	}
-	c.JSON(http.StatusOK, cliModelProbeResult{Models: cliModelsWithEfforts(runtime.AgentCLICursor, models, ""), Source: "official"})
+	c.JSON(http.StatusOK, cliModelProbeResult{Models: cliModelsWithEfforts(agentcli.AgentCLICursor, models, ""), Source: "official"})
 }
 
 var cursorModelLine = regexp.MustCompile(`^([A-Za-z0-9][A-Za-z0-9._-]*) - (.+)$`)
@@ -256,7 +256,7 @@ var cursorModelLine = regexp.MustCompile(`^([A-Za-z0-9][A-Za-z0-9._-]*) - (.+)$`
 // cursorAgentModels runs `cursor-agent models` in a throwaway HOME with only
 // the user's key, so no server token or stored CLI login is visible to it.
 func cursorAgentModels(ctx context.Context, apiKey string) ([]domain.CLIModel, error) {
-	bin, err := resolveAssistantEngineBin(runtime.AgentCLICursor)
+	bin, err := resolveAssistantEngineBin(agentcli.AgentCLICursor)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +279,7 @@ func cursorAgentModels(ctx context.Context, apiKey string) ([]domain.CLIModel, e
 			return nil, errors.New("Cursor CLI 响应超时")
 		}
 		if strings.Contains(strings.ToLower(string(out)), "unauthorized") || strings.Contains(string(out), "401") {
-			return nil, assistantCredentialError{engine: runtime.AgentCLICursor}
+			return nil, assistantCredentialError{engine: agentcli.AgentCLICursor}
 		}
 		return nil, fmt.Errorf("cursor-agent models 退出：%v", err)
 	}
@@ -290,7 +290,7 @@ func cursorAgentModels(ctx context.Context, apiKey string) ([]domain.CLIModel, e
 // row per family. The built-in table wins; other IDs ending in a recognized
 // effort suffix fold the same way.
 func cursorModelFamilies(models []domain.CLIModel) []domain.CLIModel {
-	return runtime.FoldCursorCLIModels(models)
+	return agentcli.FoldCursorCLIModels(models)
 }
 
 func parseCursorModels(output string) []domain.CLIModel {

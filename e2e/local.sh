@@ -3,7 +3,7 @@
 # checkout, so unmerged changes can be exercised end to end.
 #
 #   ./local.sh                     API scenarios (default)
-#   ./local.sh api/30-runs.test.mjs api/35-runner-mode.test.mjs
+#   ./local.sh api/30-runs.test.mjs
 #   ./local.sh all                 API, then UI
 #
 # It starts its own MySQL container and platform process, seeds a user with an

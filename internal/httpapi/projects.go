@@ -2,9 +2,7 @@ package httpapi
 
 import (
 	"agentflow/internal/domain"
-	"agentflow/internal/repo"
 	"github.com/gin-gonic/gin"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -66,9 +64,7 @@ func (h *projectsHandlers) projects(c *gin.Context) {
 				}
 			}
 		}
-		isNew := true
 		if existing, ok := h.repo.Project(v.ID); ok {
-			isNew = false
 			if v.OwnerID == 0 {
 				v.OwnerID = existing.OwnerID
 			}
@@ -82,12 +78,6 @@ func (h *projectsHandlers) projects(c *gin.Context) {
 		if err := h.applyProjectPlaybook(&v); err != nil {
 			c.JSON(400, map[string]string{"error": err.Error()})
 			return
-		}
-		// A brand-new project starts with the built-in LoopForge backend
-		// delivery LOOP when none was picked, so synced and newly created
-		// requirements run out of the box (see repo.bindDefaultWorkflow).
-		if isNew && strings.TrimSpace(v.WorkflowID) == "" {
-			v.WorkflowID = repo.GenericBackendDeliveryWorkflowID
 		}
 		if v.OwnerID > 0 {
 			if _, ok := h.repo.User(v.OwnerID); !ok {
@@ -133,13 +123,6 @@ func (h *projectsHandlers) projects(c *gin.Context) {
 		if err := h.repo.PutProject(v); err != nil {
 			respond(c, err)
 			return
-		}
-		if isNew {
-			if err := ensureDefaultProjectMCPs(h.repo, v.ID); err != nil {
-				log.Printf("ensure default MCPs for project %s: %v", v.ID, err)
-			} else {
-				h.configureSync(h.repo.SyncConfig())
-			}
 		}
 		stored, _ := h.repo.Project(v.ID)
 		c.JSON(200, domain.PublicProject(stored))

@@ -234,4 +234,3 @@ func TestInsightsValidationAndHTTP(t *testing.T) {
 		t.Fatal("insight marshal")
 	}
 }
-

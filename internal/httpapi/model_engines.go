@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"agentflow/internal/agentcli"
 	"agentflow/internal/domain"
-	"agentflow/internal/runtime"
 )
 
 // The assistant stores CLI-prefixed model IDs. Bare concrete IDs from older
@@ -32,7 +32,7 @@ const (
 
 // assistantCLIEngines are the CLIs other than CodeBuddy, in switch order.
 func assistantCLIEngines() []string {
-	return append([]string{assistantEngineCodex, assistantEngineClaude}, runtime.AgentCLIKinds...)
+	return append([]string{assistantEngineCodex, assistantEngineClaude}, agentcli.AgentCLIKinds...)
 }
 
 func assistantModelEngine(id string) (engine, model string) {
@@ -102,7 +102,7 @@ func assistantEngineLabel(engine string) string {
 	case assistantEngineCodeBuddy, "":
 		return "CodeBuddy"
 	}
-	return runtime.AgentCLILabel(engine)
+	return agentcli.AgentCLILabel(engine)
 }
 
 func assistantEngineCredential(user domain.User, engine string) (apiKey, baseURL string) {
@@ -115,7 +115,7 @@ func assistantEngineCredential(user domain.User, engine string) (apiKey, baseURL
 		return strings.TrimSpace(user.CodeBuddyAPIKey), strings.TrimSpace(user.CodeBuddyBaseURL)
 	}
 	cred := user.AgentCLICredentials[engine]
-	if runtime.IsAgentCLI(engine) && engine != runtime.AgentCLICursor {
+	if agentcli.IsAgentCLI(engine) && engine != agentcli.AgentCLICursor {
 		baseURL = strings.TrimSpace(cred.BaseURL)
 	}
 	return strings.TrimSpace(cred.APIKey), baseURL
@@ -124,21 +124,21 @@ func assistantEngineCredential(user domain.User, engine string) (apiKey, baseURL
 // assistantEngineProtocol is the API protocol an agent CLI speaks; "" for
 // the other CLIs.
 func assistantEngineProtocol(user domain.User, engine string) string {
-	if !runtime.IsAgentCLI(engine) {
+	if !agentcli.IsAgentCLI(engine) {
 		return ""
 	}
-	return runtime.AgentCLIProtocol(engine, user.AgentCLICredentials[engine].Protocol)
+	return agentcli.AgentCLIProtocol(engine, user.AgentCLICredentials[engine].Protocol)
 }
 
 // assistantEngineAnthropicModels reports whether the model list behind a
 // Base URL is the Anthropic one ({base}/v1/models, x-api-key).
 func assistantEngineAnthropicModels(engine, protocol string) bool {
-	return engine == assistantEngineClaude || protocol == runtime.AgentCLIProtocolMessages
+	return engine == assistantEngineClaude || protocol == agentcli.AgentCLIProtocolMessages
 }
 
 func antigravityUsesCustomEndpoint(user domain.User) bool {
-	_, baseURL := assistantEngineCredential(user, runtime.AgentCLIAntigravity)
-	return baseURL != "" || assistantEngineProtocol(user, runtime.AgentCLIAntigravity) == runtime.AgentCLIProtocolChat
+	_, baseURL := assistantEngineCredential(user, agentcli.AgentCLIAntigravity)
+	return baseURL != "" || assistantEngineProtocol(user, agentcli.AgentCLIAntigravity) == agentcli.AgentCLIProtocolChat
 }
 
 func assistantEngineCustomModels(user domain.User, engine string) []domain.CLIModel {
@@ -287,11 +287,11 @@ func assistantDiscoveredModelsFor(ctx context.Context, user domain.User, engine 
 	listed := assistantSavedModels(user, engine)
 	if len(listed) == 0 && key != "" && baseURL != "" {
 		if assistantEngineAnthropicModels(engine, protocol) {
-			protocol = runtime.AgentCLIProtocolMessages
+			protocol = agentcli.AgentCLIProtocolMessages
 		}
 		listed = cachedAssistantEngineDiscovery(ctx, protocol, key, baseURL)
 	}
-	if engine == runtime.AgentCLICursor && key != "" && !user.AgentCLICredentials[engine].ModelsCustomized {
+	if engine == agentcli.AgentCLICursor && key != "" && !user.AgentCLICredentials[engine].ModelsCustomized {
 		fresh, pending := cachedCursorModels(key)
 		if len(fresh) > 0 {
 			listed = fresh
@@ -326,7 +326,7 @@ func assistantEngineModels(ctx context.Context, user domain.User, runnerLogin ma
 			listed, pending = assistantDiscoveredModelsFor(ctx, user, engine)
 			cursorModelsPending = cursorModelsPending || pending
 		}
-		if len(listed) == 0 && (engine != runtime.AgentCLIAntigravity || runnerLogin[engine] || !antigravityUsesCustomEndpoint(user)) {
+		if len(listed) == 0 && (engine != agentcli.AgentCLIAntigravity || runnerLogin[engine] || !antigravityUsesCustomEndpoint(user)) {
 			listed = assistantEngineBuiltinModels(engine)
 		}
 		catalog := cliModelsOf(listed)
@@ -393,7 +393,7 @@ func invalidateAssistantEngineDiscoveryCache(user domain.User) {
 		}
 		protocol := assistantEngineProtocol(user, engine)
 		if assistantEngineAnthropicModels(engine, protocol) {
-			protocol = runtime.AgentCLIProtocolMessages
+			protocol = agentcli.AgentCLIProtocolMessages
 		}
 		assistantDiscoveryCache.Delete(assistantDiscoveryKey(protocol, key, baseURL))
 	}
@@ -411,10 +411,10 @@ func cachedAssistantEngineDiscovery(ctx context.Context, protocol, apiKey, baseU
 	defer cancel()
 	var models []assistantDiscoveredModel
 	var err error
-	if protocol == runtime.AgentCLIProtocolGemini {
+	if protocol == agentcli.AgentCLIProtocolGemini {
 		models, err = discoverGeminiModels(ctx, apiKey, baseURL)
 	} else {
-		models, err = assistantEngineDiscover(ctx, protocol == runtime.AgentCLIProtocolMessages, apiKey, baseURL)
+		models, err = assistantEngineDiscover(ctx, protocol == agentcli.AgentCLIProtocolMessages, apiKey, baseURL)
 	}
 	ttl := assistantDiscoveryTTL
 	if err != nil || len(models) == 0 {
@@ -638,7 +638,7 @@ func assistantRequestModel(executor, model string) string {
 	case "claude", assistantEngineClaude:
 		return assistantEngineClaude + ":" + model
 	default:
-		if runtime.IsAgentCLI(executor) {
+		if agentcli.IsAgentCLI(executor) {
 			return strings.TrimSpace(executor) + ":" + model
 		}
 	}

@@ -10,8 +10,6 @@ import (
 	"strings"
 
 	"agentflow/internal/apperr"
-	"agentflow/internal/engine"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -44,10 +42,6 @@ func respond(c *gin.Context, err error) {
 			body[key] = value
 		}
 		c.JSON(appErrStatus(ae.Kind), body)
-		return
-	}
-	if errors.Is(err, engine.ErrExecutionDisabled) {
-		c.JSON(http.StatusForbidden, map[string]string{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})

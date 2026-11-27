@@ -334,7 +334,7 @@ func TestWorkspaceMoreRemoteProxyMatrix(t *testing.T) {
 func TestWorkspaceMoreEditAuthorizationAndErrors(t *testing.T) {
 	f := cvBNewHTTPFixture(t)
 	run := domain.Run{ID: "cvb-edit-more", Status: "succeeded", ExecutionContext: domain.TelemetryContext{ProjectID: "cvb-view-only"}, Nodes: map[string]*domain.NodeRun{}}
-	if err := f.s.PutProject(domain.Project{ID: "cvb-view-only", Name: "view", OwnerID: 0, }); err != nil {
+	if err := f.s.PutProject(domain.Project{ID: "cvb-view-only", Name: "view", OwnerID: 0}); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.s.PutRun(run); err != nil {

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"agentflow/internal/agentcli"
 	"agentflow/internal/apperr"
 	"agentflow/internal/domain"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 
 	"github.com/gin-gonic/gin"
 )
@@ -39,7 +39,7 @@ func (h *runnersHandlers) probeRunnerModels(c *gin.Context) {
 	var saved []domain.CLIModel
 	if req.UseSaved {
 		saved = runner.LoginModels[provider]
-		if provider == runtime.AgentCLIAntigravity {
+		if provider == agentcli.AgentCLIAntigravity {
 			stored, _ := h.repo.User(runner.OwnerUserID)
 			saved = assistantEngineCustomModels(stored, provider)
 		}
@@ -141,8 +141,8 @@ func runnerLoginModelsWithEfforts(provider string, models []domain.CLIModel) []d
 	models = slices.DeleteFunc(slices.Clone(models), func(model domain.CLIModel) bool {
 		return model.ID == assistantDefaultModel || model.ID == provider+":"+assistantDefaultModel || !assistantValidEngineModel(model.ID)
 	})
-	if provider == runtime.AgentCLIAntigravity {
-		models = runtime.FoldAgyAccountModels(models)
+	if provider == agentcli.AgentCLIAntigravity {
+		models = agentcli.FoldAgyAccountModels(models)
 	}
 	for i, model := range models {
 		levels := append([]string{}, assistantModelEffortsInCatalog(provider+":"+model.ID, models, true)...)

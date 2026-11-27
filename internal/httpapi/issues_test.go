@@ -768,7 +768,6 @@ func TestSecurityHeadersAndSameOriginCORS(t *testing.T) {
 		t.Fatalf("/next/ is not a framed workbench: %v", next.Header())
 	}
 
-
 	foreign := httptest.NewRequest(http.MethodOptions, "http://agentflow.example/api/issues", nil)
 	foreign.Header.Set("Origin", "https://evil.example")
 	foreignRec := httptest.NewRecorder()
