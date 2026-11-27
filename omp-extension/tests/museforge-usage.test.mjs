@@ -566,6 +566,16 @@ test("reads configuration from the user file, the project file, then the environ
 
 test("registers a session_shutdown handler that never throws out of the event", async () => {
   const dir = tempDir();
+  // The handler reads configuration itself, so pin the environment to a
+  // statistics database that does not exist: nothing may reach the network.
+  const saved = {
+    url: process.env.MUSEFORGE_URL,
+    token: process.env.MUSEFORGE_INSIGHT_TOKEN,
+    statsDb: process.env.MUSEFORGE_STATS_DB,
+  };
+  process.env.MUSEFORGE_URL = "http://127.0.0.1:1";
+  process.env.MUSEFORGE_INSIGHT_TOKEN = "afi_registration";
+  process.env.MUSEFORGE_STATS_DB = join(dir, "absent.db");
   try {
     const events = [];
     registerUsageReporting({ on: (name, handler) => events.push([name, handler]) });
@@ -575,14 +585,23 @@ test("registers a session_shutdown handler that never throws out of the event", 
     );
 
     const [, handler] = events[0];
-    // No credential configured: resolves without touching anything.
-    await handler({}, { cwd: dir, sessionManager: { getSessionFile: () => "" } });
+    // No session file: nothing to report.
+    const outcome = await handler({}, { cwd: dir, sessionManager: { getSessionFile: () => "" } });
+    assert.equal(outcome, undefined);
 
     // A statistics database that does not exist, and a handler-less context,
     // must not escape the handler either.
     await handler({}, { cwd: dir, sessionManager: { getSessionFile: () => join(dir, "s.jsonl") } });
     await handler({}, undefined);
   } finally {
+    for (const [key, value] of [
+      ["MUSEFORGE_URL", saved.url],
+      ["MUSEFORGE_INSIGHT_TOKEN", saved.token],
+      ["MUSEFORGE_STATS_DB", saved.statsDb],
+    ]) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
     rmSync(dir, { recursive: true, force: true });
   }
 });

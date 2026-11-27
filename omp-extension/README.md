@@ -115,7 +115,7 @@ node --test "omp-extension/tests/*.test.mjs"
 `[museforge-usage] report for <会话 ID> was not accepted`。常见原因：
 
 - 401：Token 已撤销、已过期，或复制不完整；
-- 400：配置里的 Token 不属于该项目，或时间/金额超出契约（扩展本身按契约生成）；
+- 400：上报内容超出契约（扩展按契约生成，出现即说明会话数据异常）；
 - 连不上：`url` 写错，或 MuseForge 没在运行。
 
 平台侧可用「用量分析 → 外部数据源」的拒绝计数确认上报是否到达但被拒。
