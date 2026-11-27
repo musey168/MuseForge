@@ -1146,7 +1146,7 @@
   }
 };
   const views = {
-    collaboration: "home-start", issues: "form", approvals: "gate",
+    issues: "form", approvals: "gate",
     sops: "workflow", runs: "runs", management: "dashboard", runners: "server",
     settings: "settings", bots: "robot", assistant: "sparkles", projects: "users", flow: "workflow",
     agents: "user", mcp: "connector", rules: "doc", skills: "skills",

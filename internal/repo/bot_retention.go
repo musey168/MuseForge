@@ -128,7 +128,7 @@ func (r *retentionRun) step(n *int64, pick func(int) ([]string, error), apply fu
 
 // PurgeBotChatRecords applies the retention policy once to write drafts, chat
 // clarifications, chat origins of runs and native session mappings.
-func (r *AssistantRepo) PurgeBotChatRecords(ctx context.Context, now time.Time, policy BotRetentionPolicy) (BotRetentionResult, error) {
+func (r *BotInteractionsRepo) PurgeBotChatRecords(ctx context.Context, now time.Time, policy BotRetentionPolicy) (BotRetentionResult, error) {
 	run := newRetentionRun(ctx, policy)
 	p, db := run.p, r.DB.WithContext(ctx)
 	var out BotRetentionResult
@@ -216,7 +216,7 @@ type BotNativeCleanupResult struct {
 // not cleaned yet (or failed last time). A mapping is skipped while another
 // mapping of the same native session is still running or not yet due, so a
 // shared native log is only removed when every turn using it has expired.
-func (r *AssistantRepo) DueBotNativeCleanups(cut time.Time, limit int) ([]BotNativeCleanup, error) {
+func (r *BotInteractionsRepo) DueBotNativeCleanups(cut time.Time, limit int) ([]BotNativeCleanup, error) {
 	var rows []botNativeSessionRow
 	if err := r.DB.Where("status IN ? AND finished_at < ? AND (cleanup_status = '' OR cleanup_status IS NULL OR cleanup_status = ?)", botNativeFinished, cut, BotNativeCleanupError).Order("finished_at").Limit(limit).Find(&rows).Error; err != nil {
 		return nil, err
@@ -252,7 +252,7 @@ func sharedNativeIDs(row botNativeSessionRow) []string {
 }
 
 // RecordBotNativeCleanup stores the outcome of one mapping.
-func (r *AssistantRepo) RecordBotNativeCleanup(res BotNativeCleanupResult, now time.Time) error {
+func (r *BotInteractionsRepo) RecordBotNativeCleanup(res BotNativeCleanupResult, now time.Time) error {
 	paths := strings.Join(res.Paths, "\n")
 	if len(paths) > 512 {
 		paths = paths[:509] + "..."
@@ -262,7 +262,7 @@ func (r *AssistantRepo) RecordBotNativeCleanup(res BotNativeCleanupResult, now t
 
 // BotNativeCleanupState returns the stored cleanup outcome of a mapping
 // (tests, diagnostics).
-func (r *AssistantRepo) BotNativeCleanupState(id string) (status, paths, detail string, err error) {
+func (r *BotInteractionsRepo) BotNativeCleanupState(id string) (status, paths, detail string, err error) {
 	var row botNativeSessionRow
 	if err = r.DB.First(&row, "id = ?", id).Error; err != nil {
 		return

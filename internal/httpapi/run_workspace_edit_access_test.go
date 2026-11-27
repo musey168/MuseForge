@@ -27,7 +27,7 @@ func TestWorkspaceEditAllowedCoversProjectRoles(t *testing.T) {
 	if err := h.repo.PutProject(domain.Project{ID: "unowned", Name: "Unowned"}); err != nil {
 		t.Fatal(err)
 	}
-	runs := &runsHandlers{deps: h.deps}
+	runs := &runsHandlers{deps: h}
 	runIn := func(projectID string) domain.Run {
 		return domain.Run{ID: "run-" + projectID, ExecutionContext: domain.TelemetryContext{ProjectID: projectID}}
 	}

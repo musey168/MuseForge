@@ -154,7 +154,7 @@ func TestVerifyGongfengToken(t *testing.T) {
 // typed token, GET falls back to the saved one, and only for oneself.
 func TestVerifyGitTokenAcceptsUnsavedToken(t *testing.T) {
 	h, u := workbenchFixture(t)
-	users := &usersHandlers{deps: h.deps}
+	users := &usersHandlers{deps: h}
 	var seen []string
 	previous := http.DefaultTransport
 	t.Cleanup(func() { http.DefaultTransport = previous })

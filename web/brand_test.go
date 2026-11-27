@@ -15,8 +15,8 @@ import (
 var visibleOldBrand = regexp.MustCompile(`AgentFlow([^A-Za-z0-9_]|$)`)
 
 func TestUserFacingFrontendSaysLoopForge(t *testing.T) {
-	roots := []string{"app", "extensions", "../chatbot/src", "../chatbot/public"}
-	files := []string{"../chatbot/index.html", "mcp-setup.txt"}
+	roots := []string{"app", "extensions"}
+	files := []string{"mcp-setup.txt"}
 	for _, pattern := range []string{"*.js", "*.html"} {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {

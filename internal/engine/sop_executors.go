@@ -122,8 +122,8 @@ func (a sopExecutorAccess) hasCredential(kind string) bool {
 	return a.user.HasExecutorCredential(kind) || kind == "codebuddy" && a.sharedCodeBuddy
 }
 
-func (a sopExecutorAccess) defaults() domain.AssistantDefaults {
-	preferred := a.user.AssistantDefaults
+func (a sopExecutorAccess) defaults() domain.ExecutorDefaults {
+	preferred := a.user.ExecutorDefaults
 	if ex, ok := repo.BuiltInExecutorForKind(preferred.Executor); ok && a.user.HasExecutorCredential(ex.Kind) && a.configured(ex.Kind) {
 		return a.defaultsFor(ex, preferred.Model, preferred.Effort)
 	}
@@ -139,12 +139,12 @@ func (a sopExecutorAccess) defaults() domain.AssistantDefaults {
 		}
 	}
 	if a.configured("codebuddy") {
-		return domain.AssistantDefaults{Executor: "codebuddy"}
+		return domain.ExecutorDefaults{Executor: "codebuddy"}
 	}
-	return domain.AssistantDefaults{}
+	return domain.ExecutorDefaults{}
 }
 
-func (a sopExecutorAccess) defaultsFor(ex domain.ExecutorDefinition, model, effort string) domain.AssistantDefaults {
+func (a sopExecutorAccess) defaultsFor(ex domain.ExecutorDefinition, model, effort string) domain.ExecutorDefaults {
 	if (ex.Kind == "codex" || ex.Kind == "claude-code") && a.runnerLogin(ex.Kind) {
 		return a.runnerLoginDefaults(ex)
 	}
@@ -152,11 +152,11 @@ func (a sopExecutorAccess) defaultsFor(ex domain.ExecutorDefinition, model, effo
 	if model == "" && a.user.HasExecutorCredential(ex.Kind) {
 		model = a.firstSavedModel(ex.Kind)
 	}
-	return domain.AssistantDefaults{Executor: ex.ID, Model: model, Effort: effort}
+	return domain.ExecutorDefaults{Executor: ex.ID, Model: model, Effort: effort}
 }
 
-func (a sopExecutorAccess) runnerLoginDefaults(ex domain.ExecutorDefinition) domain.AssistantDefaults {
-	defaults := domain.AssistantDefaults{Executor: ex.ID}
+func (a sopExecutorAccess) runnerLoginDefaults(ex domain.ExecutorDefinition) domain.ExecutorDefaults {
+	defaults := domain.ExecutorDefaults{Executor: ex.ID}
 	for _, model := range a.runner.LoginModels[ex.Kind] {
 		if model.ID == "" || model.ID == "default" || model.ID == ex.Kind+":default" || strings.HasPrefix(model.ID, "-") {
 			continue
@@ -230,11 +230,11 @@ func followsSOPExecutorDefault(node domain.WorkflowNode, role domain.AgentDefini
 		strings.TrimSpace(role.Model) == "" && strings.TrimSpace(role.Effort) == ""
 }
 
-func (e *Engine) planSOPExecutors(wf domain.WorkflowDefinition, ec domain.TelemetryContext, preflight bool) (map[string]domain.AssistantDefaults, []SOPExecutorRequirement, error) {
+func (e *Engine) planSOPExecutors(wf domain.WorkflowDefinition, ec domain.TelemetryContext, preflight bool) (map[string]domain.ExecutorDefaults, []SOPExecutorRequirement, error) {
 	roleIDs := templateSOPRoleIDs(e.repo, wf)
 	access := e.sopExecutorAccess(ec)
 	defaults := access.defaults()
-	selected := make(map[string]domain.AssistantDefaults)
+	selected := make(map[string]domain.ExecutorDefaults)
 	requirements := make([]SOPExecutorRequirement, 0)
 	seen := make(map[string]bool)
 	for _, node := range wf.Nodes {

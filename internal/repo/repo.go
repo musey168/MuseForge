@@ -124,19 +124,10 @@ type TokensRepo struct {
 	*deps
 }
 
-// AssistantRepo owns Studio AI assistant conversations and scheduled prompts.
-type AssistantRepo struct {
-	*deps
-	users         *UsersRepo
-	notifications *NotificationsRepo
-	*BotInteractionsRepo
-}
-
 // RunsRepo owns runs, their children (nodes/events/telemetry/logs/artifacts),
 // run leases and workflow metrics.
 type RunsRepo struct {
 	*deps
-	assistant     *AssistantRepo
 	issues        *IssuesRepo
 	catalog       *CatalogRepo
 	runners       *RunnersRepo
@@ -183,7 +174,6 @@ type Store struct {
 	*TasksRepo
 	*UsersRepo
 	*TokensRepo
-	*AssistantRepo
 	*RunsRepo
 	*RunnersRepo
 	*DeliveryRepo
@@ -191,8 +181,6 @@ type Store struct {
 	*InsightsRepo
 	*PreviewsRepo
 	*EngineInstancesRepo
-	*RoomsRepo
-	*SpacesRepo
 	*KnowledgeRepo
 	*PlatformSettingsRepo
 	*SSHHostTrustRepo
@@ -215,22 +203,18 @@ func newStore(db *gorm.DB) *Store {
 	s.UsersRepo = &UsersRepo{deps: d, gitHTTPHosts: s.GitHTTPHostTrustRepo}
 	s.BotInteractionsRepo = &BotInteractionsRepo{deps: d}
 	s.TokensRepo = &TokensRepo{deps: d}
-	s.AssistantRepo = &AssistantRepo{deps: d, users: s.UsersRepo}
 	s.TasksRepo = &TasksRepo{deps: d}
 	s.NotificationsRepo = &NotificationsRepo{deps: d, users: s.UsersRepo, projects: s.ProjectsRepo, interactions: s.BotInteractionsRepo}
-	s.AssistantRepo.notifications = s.NotificationsRepo
 	s.CatalogRepo = &CatalogRepo{deps: d, projects: s.ProjectsRepo, notifications: s.NotificationsRepo}
 	s.IssuesRepo = &IssuesRepo{deps: d, projects: s.ProjectsRepo, users: s.UsersRepo, tasks: s.TasksRepo}
 	s.NotificationsRepo.issues = s.IssuesRepo
 	s.RunnersRepo = &RunnersRepo{deps: d, projects: s.ProjectsRepo}
-	s.RunsRepo = &RunsRepo{deps: d, assistant: s.AssistantRepo, issues: s.IssuesRepo, catalog: s.CatalogRepo, runners: s.RunnersRepo, notifications: s.NotificationsRepo}
+	s.RunsRepo = &RunsRepo{deps: d, issues: s.IssuesRepo, catalog: s.CatalogRepo, runners: s.RunnersRepo, notifications: s.NotificationsRepo}
 	s.DeliveryRepo = &DeliveryRepo{deps: d, issues: s.IssuesRepo, tasks: s.TasksRepo, catalog: s.CatalogRepo, runs: s.RunsRepo}
 	s.InsightsRepo = &InsightsRepo{deps: d}
 	s.AnalyticsRepo = &AnalyticsRepo{deps: d, runs: s.RunsRepo, catalog: s.CatalogRepo, delivery: s.DeliveryRepo, issues: s.IssuesRepo, tasks: s.TasksRepo, projects: s.ProjectsRepo, insights: s.InsightsRepo}
 	s.PreviewsRepo = &PreviewsRepo{deps: d}
 	s.EngineInstancesRepo = &EngineInstancesRepo{deps: d}
-	s.RoomsRepo = &RoomsRepo{deps: d}
-	s.SpacesRepo = &SpacesRepo{deps: d}
 	s.KnowledgeRepo = &KnowledgeRepo{deps: d}
 	s.EvolutionRepo = &EvolutionRepo{deps: d, catalog: s.CatalogRepo}
 	s.PlatformSettingsRepo = &PlatformSettingsRepo{deps: d}

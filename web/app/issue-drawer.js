@@ -178,7 +178,6 @@ function renderIssueDetailTab(){
   host.querySelectorAll('[data-edit-issue]').forEach(b=>b.onclick=()=>{closeIssueDrawer();openIssue(issue)});
   host.querySelectorAll('[data-dispatch-issue]').forEach(b=>b.onclick=()=>triggerIssue(b.dataset.dispatchIssue,b.dataset.workflow));
   host.querySelectorAll('[data-retrigger-issue]').forEach(b=>b.onclick=()=>retriggerIssue(b.dataset.retriggerIssue,b.dataset.workflow));
-  host.querySelectorAll('[data-chat-issue]').forEach(b=>b.onclick=()=>openIssueInChatById(b.dataset.chatIssue));
   const noSOPWorkflow=()=>host.querySelector('[data-no-sop-workflow]')?.value||'';
   host.querySelectorAll('[data-no-sop-bind]').forEach(b=>b.onclick=()=>addIssueSOP(b.dataset.noSopBind,noSOPWorkflow()));
   host.querySelectorAll('[data-no-sop-run]').forEach(b=>b.onclick=()=>triggerIssue(b.dataset.noSopRun,noSOPWorkflow()));
@@ -790,7 +789,7 @@ function noSOPPaneHTML(issue){
   const picker=opts.length
     ?`<div class="no-sop-switch"><select class="select" data-no-sop-workflow aria-label="选择 LOOP">${opts.map(w=>`<option value="${escapeHTML(w.id)}">${escapeHTML(w.name)}</option>`).join('')}</select><button class="button ghost small" data-no-sop-bind="${escapeHTML(issue.id)}">只绑定</button>${blocked?'':`<button class="button ghost small" data-no-sop-run="${escapeHTML(issue.id)}">绑定并触发</button>`}</div>`
     :'<p class="muted">当前项目还没有可运行的 LOOP。</p>';
-  return `<div class="detail-section"><div class="issue-outcome conv-outcome"><span class="conv-outcome-kicker">不使用 LOOP</span><b>这条需求不走 LOOP</b><p>在对话里澄清需求、直接改代码；定时任务不会自动认领它。</p><div class="issue-outcome-actions"><button class="button primary small" data-chat-issue="${escapeHTML(issue.id)}">去对话处理</button></div></div></div><div class="detail-section"><h3>改为按 LOOP 交付<span class="sub">绑定后这条需求按 LOOP 跟进，也会参与定时触发</span></h3>${picker}</div>`;
+  return `<div class="detail-section"><div class="issue-outcome conv-outcome"><span class="conv-outcome-kicker">不使用 LOOP</span><b>这条需求不走 LOOP</b><p>在对话里澄清需求、直接改代码；定时任务不会自动认领它。</p></div></div><div class="detail-section"><h3>改为按 LOOP 交付<span class="sub">绑定后这条需求按 LOOP 跟进，也会参与定时触发</span></h3>${picker}</div>`;
 }
 function sopPane(issue,data){
   if(conversationWorkspaceIssue(issue,data.run))return conversationDeliveryHTML(issue,data);

@@ -18,68 +18,6 @@ async function createBot(name, extra = {}) {
   return bot;
 }
 
-test('AI workbench: a saved conversation is listed, opened, searched, renamed, archived and deleted', async ({ page }) => {
-  const id = `af-e2e-ui-${stamp()}`;
-  const title = `E2E UI 会话 ${stamp()}`;
-  const renamed = `${title} 改`;
-  await put(`/api/assistant/sessions/${id}`, {
-    title, projectId: P,
-    messages: [{ role: 'user', content: 'UI 第一问' }, { role: 'assistant', content: 'UI 第一答' }],
-  });
-  track(`assistant session ${id}`, () => del(`/api/assistant/sessions/${id}`, { expect: [200, 404] }));
-
-  const errors = watchErrors(page);
-  await openView(page, 'collaboration');
-  const app = page.frameLocator('#chatNextFrame');
-  const row = text => app.locator('.session-row').filter({ hasText: text });
-  const dialog = app.getByRole('dialog');
-
-  await expect(row(title)).toBeVisible({ timeout: 30_000 });
-  await row(title).locator('.session-link').click();
-  await expect(app.locator('.message.user').filter({ hasText: 'UI 第一问' })).toBeVisible();
-  await expect(app.locator('.message.assistant').filter({ hasText: 'UI 第一答' })).toBeVisible();
-
-  await app.getByRole('button', { name: '搜索会话', exact: true }).click();
-  const search = dialog.getByRole('textbox', { name: '搜索会话名称' });
-  await search.fill(title);
-  await expect(dialog.locator('.search-results button').filter({ hasText: title })).toBeVisible();
-  await search.fill(`不存在的会话 ${stamp()}`);
-  await expect(dialog.locator('.search-results')).toContainText('没有匹配的会话');
-  await dialog.getByRole('button', { name: '关闭' }).click();
-  await expect(dialog).toHaveCount(0);
-
-  await row(title).locator('.session-link').click({ button: 'right' });
-  await app.getByRole('menuitem', { name: '重命名' }).click();
-  await dialog.locator('input').fill(renamed);
-  await dialog.getByRole('button', { name: '保存', exact: true }).click();
-  await expect.poll(async () => (await get(`/api/assistant/sessions/${id}`)).title).toBe(renamed);
-  expect((await get(`/api/assistant/sessions/${id}`)).titleEdited).toBe(true);
-  await expect(row(renamed)).toBeVisible();
-
-  await row(renamed).locator('.session-link').click({ button: 'right' });
-  await app.getByRole('menuitem', { name: '归档' }).click();
-  await expect.poll(async () => (await get(`/api/assistant/sessions/${id}`)).archived).toBe(true);
-  await expect(row(renamed)).toHaveCount(0);
-  await app.getByRole('button', { name: '筛选会话' }).click();
-  await app.getByRole('menuitemradio', { name: '已归档' }).click();
-  await expect(row(renamed)).toBeVisible();
-  // Known defect: when archiving finishes within the menu's 160 ms close
-  // animation, the row unmounts first and its context-menu state survives, so
-  // the menu pops up again over the row in 已归档. Not asserted (it depends on
-  // server latency); dismiss it like a user would.
-  const staleMenu = app.getByRole('menu', { name: '会话操作' });
-  if (await staleMenu.count()) {
-    await page.keyboard.press('Escape');
-    await expect(staleMenu).toHaveCount(0);
-  }
-
-  await row(renamed).locator('.session-link').click({ button: 'right' });
-  await app.getByRole('menuitem', { name: '删除' }).click();
-  await dialog.getByRole('button', { name: '删除', exact: true }).click();
-  await expect.poll(async () => (await api('GET', `/api/assistant/sessions/${id}`, undefined, { expect: [200, 404], raw: true })).status).toBe(404);
-  await expect(row(renamed)).toHaveCount(0);
-  expect(errors).toEqual([]);
-});
 
 test('ZCode reports platform CLI availability before credentials are saved', async ({ page, identity }) => {
   const me = await userById(identity.user.id);
@@ -88,7 +26,7 @@ test('ZCode reports platform CLI availability before credentials are saved', asy
   await page.locator('#credentialPanel').getByRole('button', { name: '新增执行器', exact: true }).click();
   const probe = page.waitForResponse(response => {
     const url = new URL(response.url());
-    return url.pathname === '/api/assistant/cli-install' && url.searchParams.get('engine') === 'zcode';
+    return url.pathname === '/api/model-catalog' && url.searchParams.get('engine') === 'zcode';
   });
   await page.getByRole('listbox', { name: '新增执行器', exact: true }).getByRole('option', { name: 'ZCode', exact: true }).click();
   const response = await probe;

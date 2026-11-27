@@ -258,7 +258,7 @@ type BrowserInspection struct {
 	Label    string                `json:"label"`
 	Rect     ElementRect           `json:"rect"`
 	Viewport ElementRect           `json:"viewport"`
-	Element  *AssistantPageElement `json:"element,omitempty"`
+	Element  *BrowserPageElement `json:"element,omitempty"`
 }
 
 // BrowserHTTPRequest is one proxied request to http://localhost:Port in the
@@ -350,4 +350,28 @@ type WorkspaceArtifactFile struct {
 	Path    string `json:"path"`
 	Content string `json:"content"`
 	SHA256  string `json:"sha256"`
+}
+
+// BrowserPageElement is a page element picked in the native preview.
+type BrowserPageElement struct {
+	URL       string            `json:"url,omitempty"`
+	Title     string            `json:"title,omitempty"`
+	Selector  string            `json:"selector,omitempty"`
+	Tag       string            `json:"tag,omitempty"`
+	Text      string            `json:"text,omitempty"`
+	HTML      string            `json:"html,omitempty"`
+	Rect      *ElementRect      `json:"rect,omitempty"`
+	Viewport  *ElementRect      `json:"viewport,omitempty"`
+	Styles    map[string]string `json:"styles,omitempty"`
+	Component string            `json:"component,omitempty"`
+	Framework string            `json:"framework,omitempty"`
+	Source    string            `json:"source,omitempty"`
+}
+
+// ElementRect is a box in CSS pixels; a viewport only sets its size.
+type ElementRect struct {
+	X      float64 `json:"x,omitempty"`
+	Y      float64 `json:"y,omitempty"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
 }

@@ -95,11 +95,6 @@ test('requirement composer: create and clarify opens the chat with the requireme
   expect(issue.workflowId || '').toBe('');
   expect(issue.automationState).toBe('ignored');
   await expect(page.locator('#requirementModal')).not.toHaveClass(/open/);
-  await expect(page).toHaveURL(/#\/collaboration/);
-  const chat = page.frameLocator('#chatNextFrame');
-  const input = chat.locator('textarea').first();
-  await expect(input).toHaveValue(new RegExp(`^@${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} `), { timeout: 30_000 });
-  await expect(chat.getByText(title).first()).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -360,39 +355,6 @@ test('LOOP designer: Auto layout stays clickable beside the step drawer', async 
 // The reply to "让 AI 分析" must stay between the question and the alert while
 // it streams and after it finishes; it used to stream below the alert and then
 // jump above it, which read as "no answer".
-test('chat: asking AI about a failed run keeps the reply above the run alert', async ({ page }) => {
-  test.skip(!cfg.model, 'AGENTFLOW_E2E_MODEL=0');
-  test.setTimeout(420_000);
-  // A conversation that has never generated answers 404 to the generation
-  // poll; the chat treats that as "nothing running".
-  const errors = watchErrors(page, { allow: [/^HTTP 404 GET \/api\/assistant\/sessions\/[^/]+\/generation\?after=/] });
-  const wf = await createWorkflow('chat-alert', [script('boom', 'exit 3', { name: '会失败的节点' })]);
-  const run = await startRun(wf, 'chat run alert');
-  await waitRun(run.id, r => r.status === 'failed', { timeoutMs: 180_000, label: 'run fails' });
-  const sid = `chat-e2e${Date.now().toString(16)}`;
-  track(`assistant session ${sid}`, () => del(`/api/assistant/sessions/${sid}`));
-  await put(`/api/assistant/sessions/${sid}`, {
-    id: sid, title: `E2E 运行提醒 ${cfg.runTag}`, projectId: cfg.projectId,
-    messages: [
-      { role: 'user', content: '帮我跑一下这个 LOOP' },
-      { role: 'assistant', content: JSON.stringify({ drafts: [], message: `已启动运行 ${run.id}` }) },
-    ],
-  });
-  await page.goto(`/chatbot/?session=${sid}&projectId=${cfg.projectId}`);
-  const alert = page.locator('.message-column > .run-alerts');
-  await expect(alert).toContainText('会失败的节点', { timeout: 60_000 });
-  const tail = () => page.locator('.message-column').evaluate(col => [...col.children]
-    .map(el => el.classList.contains('run-alerts') ? 'alert'
-      : el.classList.contains('live') ? 'live'
-      : el.classList.contains('user') ? 'user'
-      : el.classList.contains('assistant') ? 'assistant' : '')
-    .filter(Boolean).slice(-3).join(' > '));
-  await alert.getByRole('button', { name: '让 AI 分析' }).click();
-  await page.getByRole('button', { name: '发送消息' }).click();
-  await expect.poll(tail).toBe('user > live > alert');
-  await expect.poll(tail, { timeout: 300_000 }).toBe('user > assistant > alert');
-  expect(errors).toEqual([]);
-});
 
 test('settings at ≤1000px: the drawer opens from the rail and closes once a page is picked', async ({ page }) => {
   await page.setViewportSize({ width: 820, height: 1000 });
@@ -401,9 +363,9 @@ test('settings at ≤1000px: the drawer opens from the rail and closes once a pa
   await page.goto('/#/skills');
   await expect(page.locator('#pageTitle')).toHaveText('能力资产');
   expect(await drawerOpen()).toBe(false);
-  // Coming into settings from the workbench offers the navigation…
-  await page.evaluate(() => { location.hash = '#/collaboration'; });
-  await expect(page.locator('#pageTitle')).toHaveText('AI 工作台');
+  // Coming into settings from the requirement list offers the navigation…
+  await page.evaluate(() => { location.hash = '#/issues'; });
+  await expect(page.locator('#pageTitle')).toHaveText('需求列表');
   await page.locator('#railSettingsEntry').click();
   await expect.poll(drawerOpen).toBe(true);
   // …and picking a page closes it.

@@ -6,7 +6,7 @@ import { test, expect, watchErrors } from './fixtures.mjs';
 // Keep in sync with viewTitles() in web/app.js; a renamed or dropped view is
 // a visible product change the suite should notice.
 const TITLES = {
-  collaboration: 'AI 工作台', issues: '需求列表', aiSchedules: '定时任务', bots: '通道管理', assistant: 'AI 助手', runs: '运行记录',
+  issues: '需求列表', aiSchedules: '定时任务', bots: '通道管理', assistant: 'AI 助手', runs: '运行记录',
   approvals: '待我确认', sops: '流程模板', flow: '流程设计', agents: '角色定义', mcp: '能力资产', rules: '能力资产', skills: '能力资产',
   knowledge: '我的知识库', sandboxes: '沙箱管理', observability: '统计', evolution: 'RSI工作台', projects: '项目配置', projectCredentials: '凭据管理',
   platform: '平台管理', runners: '执行机器', settings: '个人配置', guide: '访问密钥',
@@ -19,19 +19,19 @@ const projects = [process.env.AGENTFLOW_E2E_VIEW_PROJECT || 'welcome', null];
 
 test('legacy routes land on their replacements', async ({ page }) => {
   const errors = watchErrors(page);
-  for (const [legacy, view] of [['dashboard', 'collaboration'], ['access', 'guide'], ['assets', 'sandboxes'], ['dockerfiles', 'sandboxes'], ['environments', 'sandboxes'], ['management', 'settings'], ['playbooks', 'sops']]) {
+  for (const [legacy, view] of [['access', 'guide'], ['assets', 'sandboxes'], ['dockerfiles', 'sandboxes'], ['environments', 'sandboxes'], ['management', 'settings'], ['playbooks', 'sops']]) {
     await page.goto(`/#/${legacy}`);
     await expect(page.locator('#pageTitle')).toHaveText(TITLES[view]);
   }
   // An unknown view opened directly (a fresh load, not an in-page hash change)
-  // restores the last view used, and the workbench when there is none.
+  // restores the last view used, and the requirement list when there is none.
   await page.goto('about:blank');
   await page.goto('/#/no-such-view');
   await expect(page.locator('#pageTitle')).toHaveText(TITLES.sops);
   await page.evaluate(() => localStorage.removeItem('agentflow.activeView'));
   await page.goto('about:blank');
   await page.goto('/#/no-such-view');
-  await expect(page.locator('#pageTitle')).toHaveText(TITLES.collaboration);
+  await expect(page.locator('#pageTitle')).toHaveText(TITLES.issues);
   expect(errors).toEqual([]);
 });
 
@@ -84,8 +84,8 @@ for (const project of projects) {
     const projectId = project || identity.projectId;
     await page.addInitScript(id => localStorage.setItem('agentflow.activeProject', id), projectId);
     const errors = watchErrors(page);
-    await page.goto('/#/collaboration');
-    await expect(page.locator('#pageTitle')).toHaveText(TITLES.collaboration);
+    await page.goto('/#/issues');
+    await expect(page.locator('#pageTitle')).toHaveText(TITLES.issues);
     const views = await page.$$eval('[data-view]', els => [...new Set(els.map(e => e.dataset.view))]);
     expect(views.length).toBeGreaterThanOrEqual(15);
     expect(views.filter(v => RETIRED.includes(v)), 'retired modules are not offered').toEqual([]);
@@ -104,9 +104,7 @@ for (const project of projects) {
         await expect(pane).toBeVisible();
         if (TITLES[view]) await expect(page.locator('#pageTitle')).toHaveText(TITLES[view]);
         await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
-        // The AI workbench is the native chat app inside an iframe.
-        const content = view === 'collaboration' ? page.frameLocator('#chatNextFrame').locator('body') : pane;
-        await expect.poll(async () => (await content.innerText()).trim().length, { message: `${view} rendered nothing` }).toBeGreaterThan(10);
+        await expect.poll(async () => (await pane.innerText()).trim().length, { message: `${view} rendered nothing` }).toBeGreaterThan(10);
         await expect(pane.locator('text=/undefined|NaN|\\[object Object\\]/')).toHaveCount(0);
         await page.screenshot({ path: test.info().outputPath(`${projectId}-${view}.png`), fullPage: false });
         expect(errors.slice(before), `errors on ${view}`).toEqual([]);

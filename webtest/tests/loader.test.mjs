@@ -13,7 +13,7 @@ test('loads every index script in document order using absolute filenames', asyn
   // script (flows, agents, bots, sync-schedule, composer, runs) that reads
   // window.AgentFlowAssistantModels; otherwise those pickers silently stop binding.
   assert.equal(app.files[5], path.join(WEB_ROOT, 'app', 'assistant-models.js'));
-  assert.equal(app.files.at(-1), path.join(WEB_ROOT, 'orchestrate.js'));
+  assert.equal(app.files.at(-1), path.join(WEB_ROOT, 'app', 'start.js'));
   assert.equal(typeof app.evaluate('api'), 'function');
   assert.equal(typeof app.window.AgentFlowHarnessIcons.render, 'function');
 });

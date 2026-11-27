@@ -1,6 +1,8 @@
 -- Manual, idempotent MySQL migration. Stop old API/workers, run this SQL,
 -- then start upgraded API/workers/runners together.
 -- Retains all history, snapshots, files and old role collaboration records.
+-- The chat workbench is gone, so no conversation workspace is converted; the
+-- run kind column still exists for the runs that use it.
 SET @workspace_kind_exists = (
   SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'runs' AND COLUMN_NAME = 'kind'
@@ -10,17 +12,6 @@ SET @workspace_kind_ddl = IF(@workspace_kind_exists = 0,
 PREPARE workspace_kind_stmt FROM @workspace_kind_ddl;
 EXECUTE workspace_kind_stmt;
 DEALLOCATE PREPARE workspace_kind_stmt;
-
--- Only bound ordinary chat workspaces are converted. An actual old group with
--- roles or dispatched nodes is cancelled below.
-UPDATE runs AS r
-JOIN assistant_sessions AS s
-  ON JSON_UNQUOTE(JSON_EXTRACT(s.payload, '$.workspaceRunId')) = r.id
-SET r.kind = 'workspace'
-WHERE r.workflow_id = 'free-collaboration'
-  AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(s.payload, '$.runId')), '') = ''
-  AND COALESCE(JSON_LENGTH(JSON_EXTRACT(r.snapshot, '$.groupMembers')), 0) = 0
-  AND NOT EXISTS (SELECT 1 FROM run_nodes AS n WHERE n.run_id = r.id);
 
 -- Every other role group is cancelled. Its shared conversation stays an
 -- ordinary task conversation of a finished run; history is not deleted.

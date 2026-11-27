@@ -1071,19 +1071,6 @@
       return;
     }
 
-    if (sessionId) {
-      const frame = document.getElementById('chatNextFrame');
-      const pid = projectId || (typeof window.currentProject === 'function' ? window.currentProject()?.id || '' : '');
-      if (frame) {
-        frame.dataset.src = 'native';
-        frame.src = `/chatbot/?projectId=${encodeURIComponent(pid)}&session=${encodeURIComponent(sessionId)}`;
-      }
-      if (typeof window.switchView === 'function') {
-        window.switchView('collaboration');
-      }
-      return;
-    }
-
     if (issueId && typeof window.openIssueDetail === 'function') {
       window.openIssueDetail(issueId);
       return;

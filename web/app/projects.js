@@ -614,7 +614,6 @@ async function deleteProjectAdmin(projectId){
     if(state.projectFilter===project.id){
       state.projectFilter=defaultProjectId(state.data.projects,state.currentUser?.id)||'';state.selectedIssue=null;
       localStorage.setItem('agentflow.activeProject',state.projectFilter);
-      $('#chatNextFrame')?.contentWindow?.postMessage({type:'agentflow-project-context',projectId:state.projectFilter},location.origin);
     }
     resetProjectAdminDetail();
     history.replaceState(null,'',projectAdminHash(''));

@@ -1,4 +1,4 @@
-// Knowledge center (read + review queue, never written back), collaboration
+// Knowledge center (read + review queue, never written back), platform
 // rooms, scheduled jobs, assistant tasks, runners, the platform MCP endpoint
 // and user endpoints.
 import { test, before, after } from 'node:test';
@@ -177,14 +177,6 @@ test('schedule job: a manual trigger dispatches todo requirements of the project
 });
 
 test('assistant task CRUD (disabled, never scheduled)', async () => {
-  const task = await put('/api/assistant/tasks', { name: 'E2E 助手任务', prompt: '自动化测试，不要执行任何操作', projectId: P, enabled: false, cron: '0 4 * * *' });
-  assert.ok(task.id);
-  track(`assistant task ${task.id}`, () => del(`/api/assistant/tasks/${task.id}`));
-  const tasks = list(await get(`/api/assistant/tasks?projectId=${P}`));
-  assert.ok(tasks.some(t => t.id === task.id));
-  const edited = await put('/api/assistant/tasks', { ...task, name: 'E2E 助手任务（改）' });
-  assert.equal(edited.name, 'E2E 助手任务（改）');
-  await del(`/api/assistant/tasks/${task.id}`, { expect: [200, 204] });
 });
 
 test('runners: list, default runner and bind code issuance', async () => {

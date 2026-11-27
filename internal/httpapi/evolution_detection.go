@@ -274,9 +274,9 @@ func (h *evolutionHandlers) evaluateSOPTrace(ctx context.Context, projectID stri
 	}
 	evidence := runeval.SOPTraceCandidates(run, tools)
 	system, prompt := runeval.SOPTracePrompt(run.Status, evidence)
-	raw, _, err := runAssistantCLI(ctx, assistantCLIRequest{
-		Prompt: prompt, SystemPrompt: system, Model: model, UserID: user.ID, ReviewOnly: true,
-	}, user, func(assistantStreamEvent) {})
+	raw, err := runModelCall(ctx, modelCallRequest{
+		Prompt: prompt, SystemPrompt: system, Model: model, UserID: user.ID,
+	}, user)
 	if err != nil {
 		return domain.RunEvalResult{}, fmt.Errorf("检测模型调用失败，请检查模型、执行器及账号配置")
 	}

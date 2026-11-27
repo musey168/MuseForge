@@ -109,14 +109,6 @@ func (e *Engine) sopWorkspaceTreeIdle(run domain.Run) bool {
 	}
 	return true
 }
-func (e *Engine) conversationGenerationRunning(run domain.Run) bool {
-	session, ok := e.repo.SharedAssistantSession(repo.RunAssistantSessionID(run.ID))
-	if !ok {
-		return false
-	}
-	job, ok := e.repo.PeekAssistantGeneration(session.UserID, session.ID)
-	return ok && job.Status == "running"
-}
 func (e *Engine) EndConversationWorkspaceUse(ctx context.Context, id, token string) error {
 	now := time.Now().UTC()
 	err := e.saveConversationWorkspaceAfterUse(ctx, id, token)
@@ -443,7 +435,7 @@ func (e *Engine) claimIdleConversationWorkspace(run domain.Run, now time.Time) (
 			return true, false, nil, err
 		}
 	}
-	if !e.conversationWorkspaceIdle(run) || e.conversationGenerationRunning(run) {
+	if !e.conversationWorkspaceIdle(run) {
 		return true, false, nil, nil
 	}
 	cleanupHeld := now.Before(run.WorkspaceCleanupNotBefore)

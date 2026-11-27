@@ -60,7 +60,7 @@ async function signIn(page, { projectId }) {
 // own web/ scripts; e2e/coverage/web-merge.mjs merges it with the webtest/ unit
 // coverage. Third-party bundles are left out.
 const COVERAGE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'test-results', 'web-coverage');
-const THIRD_PARTY = /^\/(vendor|monaco|vscode-web|extensions|native-chat|chatbot)\//;
+const THIRD_PARTY = /^\/(vendor|monaco|vscode-web|extensions)\//;
 
 async function startCoverage(page) {
   if (process.env.AGENTFLOW_E2E_JS_COVERAGE !== '1') return async () => {};

@@ -40,24 +40,12 @@ func TestAnalyticsGroupedDashboardHonorsPersonalAndProjectScope(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, spec := range []struct {
-		id       string
-		owner    int64
-		messages []domain.AssistantMessage
-	}{
-		{"scope-chat-a", 7, []domain.AssistantMessage{{Role: "user", AuthorID: 7}, {Role: "user", AuthorID: 8}}},
-		{"scope-chat-b", 8, []domain.AssistantMessage{{Role: "user", AuthorID: 8}}},
-	} {
-		if err := s.PutAssistantSession(spec.owner, domain.AssistantSession{ID: spec.id, ProjectID: "scope", CreatedAt: at, Messages: spec.messages}); err != nil {
-			t.Fatal(err)
-		}
-	}
 	for _, tc := range []struct {
 		user                   string
 		runs, sessions, spaces int
 		cost                   float64
 	}{
-		{"7", 1, 1, 1, 7.7}, {"8", 1, 2, 1, 15.4}, {"", 2, 2, 2, 23.1},
+		{"7", 1, 0, 0, 7.7}, {"8", 1, 0, 0, 15.4}, {"", 2, 0, 0, 23.1},
 	} {
 		got := s.Analytics(domain.AnalyticsFilter{ProjectID: "scope", UserID: tc.user, Scope: "overview", IncludeDashboard: true, TimeZone: "Asia/Shanghai"})
 		if len(got.DataErrors) > 0 || got.Dashboard == nil {

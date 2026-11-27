@@ -20,7 +20,6 @@ import (
 type scheduleHandlers struct {
 	*deps
 	notifications *notificationHandlers
-	assistant     *assistantHandlers
 }
 
 // 路由: g.GET("/api/schedule-jobs", h.scheduleJobs)
@@ -65,7 +64,7 @@ func (h *scheduleHandlers) scheduleJobs(c *gin.Context) {
 		job.Cron = strings.TrimSpace(job.Cron)
 		job.AssistantPrompt = strings.TrimSpace(job.AssistantPrompt)
 		job.AssistantModel = strings.TrimSpace(job.AssistantModel)
-		job.References = domain.CloneAssistantReferences(job.References)
+		job.References = domain.CloneAssetReferences(job.References)
 		job.WorkflowID = strings.TrimSpace(job.WorkflowID)
 		source, err := domain.NormalizeScheduleSource(job.Source)
 		if err != nil {
@@ -88,18 +87,6 @@ func (h *scheduleHandlers) scheduleJobs(c *gin.Context) {
 			job.IssueStatuses = nil
 			job.MaxDispatch = 0
 			job.Source = ""
-			if len(job.References) > 0 && job.SharedTaskID == "" {
-				if h.assistant == nil {
-					c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "AI 定时任务引用功能未就绪"})
-					return
-				}
-				refs, err := h.assistant.normalizeScheduledReferences(job.ProjectID, job.References)
-				if err != nil {
-					c.JSON(400, map[string]string{"error": err.Error()})
-					return
-				}
-				job.References = refs
-			}
 		} else {
 			job.References = nil
 			if job.MaxDispatch < 0 || job.MaxDispatch > domain.MaxScheduleDispatch {
@@ -381,9 +368,6 @@ func (h *scheduleHandlers) scheduleJob(c *gin.Context) {
 	if err := h.repo.DeleteScheduleJob(c.Param("id")); err != nil {
 		respond(c, err)
 		return
-	}
-	if h.assistant != nil {
-		h.assistant.deleteScheduledSessionsForTask(c.Param("id"))
 	}
 	c.JSON(200, map[string]bool{"ok": true})
 }

@@ -17,7 +17,7 @@ import (
 // Sandbox recipes and credentials stay in the catalog.
 type SOPSandboxSelection struct {
 	Execution           domain.TelemetryContext  `json:"-"`
-	Executor            domain.AssistantDefaults `json:"-"`
+	Executor            domain.ExecutorDefaults `json:"-"`
 	ProjectName         string                   `json:"projectName,omitempty"`
 	ProjectDescription  string                   `json:"projectDescription,omitempty"`
 	WorkflowName        string                   `json:"workflowName"`

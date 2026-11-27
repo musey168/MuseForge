@@ -68,15 +68,6 @@ func TestAnalyticsDashboardCohorts(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, session := range []domain.AssistantSession{
-		{ID: "dashboard-chat", ProjectID: "dashboard", CreatedAt: at, Messages: []domain.AssistantMessage{{Role: "user", AuthorID: 7}, {Role: "user", AuthorID: 8}}},
-		{ID: "dashboard-old-chat", ProjectID: "dashboard", CreatedAt: old, Messages: []domain.AssistantMessage{{Role: "user", AuthorID: 9}}},
-		{ID: "sop-dashboard", ProjectID: "dashboard", CreatedAt: at, Shared: true, RunID: "current", Messages: []domain.AssistantMessage{{Role: "user", AuthorID: 10}}},
-	} {
-		if err := s.PutAssistantSession(7, session); err != nil {
-			t.Fatal(err)
-		}
-	}
 	filter := domain.AnalyticsFilter{Scope: "dashboard", ProjectID: "dashboard", From: at.Add(-30 * time.Minute), To: at.Add(8 * time.Hour), TimeZone: "Asia/Shanghai"}
 	got := s.Analytics(filter)
 	if len(got.DataErrors) > 0 || got.Dashboard == nil {
@@ -92,8 +83,8 @@ func TestAnalyticsDashboardCohorts(t *testing.T) {
 	if d.DeliveredIssues != 4 || d.SOPDeliveredIssues != 3 || d.VibeDeliveredIssues != 1 {
 		t.Fatalf("merge deduplication / routes: %+v", d)
 	}
-	if d.ActiveMembers != 2 || got.Activity.Sessions != 1 || got.Activity.CollaborativeSessions != 1 {
-		t.Fatalf("members/sessions: %+v, %+v", d, got.Activity)
+	if d.ActiveMembers != 0 {
+		t.Fatalf("active members: %+v", d)
 	}
 	if len(d.Trend) != 1 || d.Trend[0].Date != "2026-11-23" || len(got.ActivityTrend) != 1 || got.ActivityTrend[0].Date != "2026-11-23" {
 		t.Fatalf("time zone: %+v / %+v", d.Trend, got.ActivityTrend)

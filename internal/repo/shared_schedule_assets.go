@@ -14,7 +14,7 @@ var ErrSharedScheduleReferences = errors.New("共享任务引用资产不可用"
 // sharedScheduleAssets resolves only the direct references of a shared
 // schedule. Nested dependencies remain owned by the referenced asset's
 // existing resolver and are intentionally not pinned into the schedule.
-func (r *CatalogRepo) sharedScheduleAssets(refs []domain.AssistantReference) ([]domain.SharedScheduleAsset, error) {
+func (r *CatalogRepo) sharedScheduleAssets(refs []domain.AssetReference) ([]domain.SharedScheduleAsset, error) {
 	refs, err := r.directScheduleReferences(refs)
 	if err != nil {
 		return nil, err
@@ -30,14 +30,14 @@ func (r *CatalogRepo) sharedScheduleAssets(refs []domain.AssistantReference) ([]
 	return out, nil
 }
 
-func (r *CatalogRepo) directScheduleReferences(refs []domain.AssistantReference) ([]domain.AssistantReference, error) {
+func (r *CatalogRepo) directScheduleReferences(refs []domain.AssetReference) ([]domain.AssetReference, error) {
 	if len(refs) > 12 {
 		return nil, fmt.Errorf("%w：最多引用 12 个资产", ErrSharedScheduleReferences)
 	}
-	out := make([]domain.AssistantReference, 0, len(refs))
+	out := make([]domain.AssetReference, 0, len(refs))
 	seen := map[string]bool{}
 	for _, raw := range refs {
-		ref := domain.AssistantReference{Type: strings.TrimSpace(raw.Type), ID: strings.TrimSpace(raw.ID)}
+		ref := domain.AssetReference{Type: strings.TrimSpace(raw.Type), ID: strings.TrimSpace(raw.ID)}
 		if ref.Type != "agent" && ref.Type != "skill" && ref.Type != "sop" {
 			return nil, fmt.Errorf("%w：%s 不支持随 AI 定时任务共享", ErrSharedScheduleReferences, ref.Type)
 		}
@@ -57,7 +57,7 @@ func (r *CatalogRepo) directScheduleReferences(refs []domain.AssistantReference)
 
 // shareScheduleReference delegates the next dependency boundary to the
 // referenced asset's sharing path. The caller supplies the publish transaction.
-func (r *CatalogRepo) shareScheduleReference(ref domain.AssistantReference, projectID string) error {
+func (r *CatalogRepo) shareScheduleReference(ref domain.AssetReference, projectID string) error {
 	canonical, shared, found := r.sharedScheduleReference(ref)
 	if !found {
 		return fmt.Errorf("%w：%s/%s 不存在", ErrSharedScheduleReferences, ref.Type, ref.ID)
@@ -87,8 +87,8 @@ func (r *CatalogRepo) shareScheduleReference(ref domain.AssistantReference, proj
 
 // Resolve direct references through the same catalog records used by chat.
 // Template-internal roles and skills are resolved by the LOOP engine, not here.
-func (r *CatalogRepo) sharedScheduleReference(ref domain.AssistantReference) (domain.AssistantReference, bool, bool) {
-	ref = domain.AssistantReference{Type: strings.TrimSpace(ref.Type), ID: strings.TrimSpace(ref.ID)}
+func (r *CatalogRepo) sharedScheduleReference(ref domain.AssetReference) (domain.AssetReference, bool, bool) {
+	ref = domain.AssetReference{Type: strings.TrimSpace(ref.Type), ID: strings.TrimSpace(ref.ID)}
 	switch ref.Type {
 	case "agent":
 		v, ok := r.Agent(ref.ID)

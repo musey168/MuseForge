@@ -1,7 +1,6 @@
 package web
 
 import (
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -59,7 +58,7 @@ func TestHuiControlsStylesheet(t *testing.T) {
 }
 
 // Browser confirm/prompt/alert block the page and ignore the Harness theme;
-// use afConfirm / afPrompt / afAlert (web) or an in-app dialog (chatbot).
+// use afConfirm / afPrompt / afAlert.
 func TestNoNativeDialogs(t *testing.T) {
 	call := regexp.MustCompile(`(^|[^.\w$])(window\.)?(confirm|prompt|alert)\(`)
 	var files []string
@@ -69,18 +68,6 @@ func TestNoNativeDialogs(t *testing.T) {
 			t.Fatal(err)
 		}
 		files = append(files, matches...)
-	}
-	err := filepath.WalkDir("../chatbot/src", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if ext := filepath.Ext(path); !d.IsDir() && (ext == ".js" || ext == ".jsx" || ext == ".mjs") {
-			files = append(files, path)
-		}
-		return nil
-	})
-	if err != nil && !os.IsNotExist(err) {
-		t.Fatal(err)
 	}
 	for _, name := range files {
 		if strings.HasSuffix(name, "_test.js") || strings.HasSuffix(name, ".test.mjs") || filepath.Base(name) == "hui_fake_dom.js" {

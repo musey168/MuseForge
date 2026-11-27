@@ -487,9 +487,9 @@ func TestGenericTemplateRunsDirectlyByReference(t *testing.T) {
 			t.Fatalf("node %s should defer executor selection: %+v", node.ID, choice)
 		}
 	}
-	defaults := domain.AssistantDefaults{Executor: "codex", Model: "fixture-model", Effort: "low"}
+	defaults := domain.ExecutorDefaults{Executor: "codex", Model: "fixture-model", Effort: "low"}
 	baseURL := "http://127.0.0.1:1/v1"
-	if _, err := s.UpdateUserCredentials(1, repo.UserCredentialUpdate{CodexAPIKey: "fixture-key", CodexBaseURL: &baseURL, AssistantDefaults: &defaults}); err != nil {
+	if _, err := s.UpdateUserCredentials(1, repo.UserCredentialUpdate{CodexAPIKey: "fixture-key", CodexBaseURL: &baseURL, ExecutorDefaults: &defaults}); err != nil {
 		t.Fatal(err)
 	}
 	requirements = requestEmptyJSON[[]engine.SOPExecutorRequirement](t, h, http.MethodGet, path, http.StatusOK)

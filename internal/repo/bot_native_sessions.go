@@ -43,7 +43,7 @@ type BotNativeSession struct {
 
 // StartBotNativeSession records the mapping before the CLI process starts.
 // A failure must stop the turn: an unmapped Bot log could not be cleaned.
-func (r *AssistantRepo) StartBotNativeSession(in BotNativeSession) (string, error) {
+func (r *BotInteractionsRepo) StartBotNativeSession(in BotNativeSession) (string, error) {
 	row := botNativeSessionRow{ID: "bns-" + randomHex(12), ConfigID: in.ConfigID, ProjectID: in.ProjectID, UserID: in.UserID, ConversationID: in.ConversationID, BotSessionID: in.BotSessionID, InteractionID: in.InteractionID, Engine: in.Engine, RequestedSessionID: in.RequestedSessionID, StorageScope: in.StorageScope, Status: "started", CreatedAt: time.Now().UTC()}
 	return row.ID, r.DB.Create(&row).Error
 }
@@ -51,7 +51,7 @@ func (r *AssistantRepo) StartBotNativeSession(in BotNativeSession) (string, erro
 // FinishBotNativeSession stores the native session ID the CLI reported and the
 // terminal state. When the CLI created a different session than the mapping
 // already records, a new mapping row is added so both stay traceable.
-func (r *AssistantRepo) FinishBotNativeSession(id, nativeSessionID, status string) (string, error) {
+func (r *BotInteractionsRepo) FinishBotNativeSession(id, nativeSessionID, status string) (string, error) {
 	err := r.DB.Transaction(func(tx *gorm.DB) error {
 		var row botNativeSessionRow
 		if err := r.locking(tx).First(&row, "id = ?", id).Error; err != nil {
@@ -74,7 +74,7 @@ func (r *AssistantRepo) FinishBotNativeSession(id, nativeSessionID, status strin
 }
 
 // BotNativeSessions lists mappings of one interaction (diagnostics, tests).
-func (r *AssistantRepo) BotNativeSessions(interactionID string) ([]BotNativeSession, []string, error) {
+func (r *BotInteractionsRepo) BotNativeSessions(interactionID string) ([]BotNativeSession, []string, error) {
 	var rows []botNativeSessionRow
 	if err := r.DB.Where("interaction_id = ?", interactionID).Order("created_at, id").Find(&rows).Error; err != nil {
 		return nil, nil, err

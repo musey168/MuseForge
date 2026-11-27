@@ -15,7 +15,7 @@ import (
 
 type AutoAssignPlan struct {
 	ExecutionContext domain.TelemetryContext
-	ExecutorDefaults map[string]domain.AssistantDefaults
+	ExecutorDefaults map[string]domain.ExecutorDefaults
 	EventMessage     string
 }
 

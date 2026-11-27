@@ -192,7 +192,7 @@ type WorkflowDefinition struct {
 	// ExecutorDefaults is populated on a run snapshot for roles
 	// that inherit the responsible user's executor. An empty entry defers
 	// selection until the role starts on the bound machine.
-	ExecutorDefaults map[string]AssistantDefaults `json:"executorDefaults,omitempty"`
+	ExecutorDefaults map[string]ExecutorDefaults `json:"executorDefaults,omitempty"`
 }
 
 // UnmarshalJSON migrates the pre-workflow-sandbox shape while the legacy node

@@ -20,7 +20,7 @@ func TestProbeCLIModelsUsesOfficialEndpointWithoutBaseURL(t *testing.T) {
 	h, owner := workbenchFixture(t)
 	original := assistantEngineDiscover
 	t.Cleanup(func() { assistantEngineDiscover = original })
-	handlers := &usersHandlers{deps: h.deps}
+	handlers := &usersHandlers{deps: h}
 	for _, check := range []struct {
 		engine, url string
 		anthropic   bool
@@ -67,7 +67,7 @@ func TestProbeCodeBuddyIOAModelsReportsMissingCLI(t *testing.T) {
 	payload := bytes.NewBufferString(`{"engine":"codebuddy","environment":"ioa"}`)
 	c, w := workbenchContext(owner, http.MethodPost, "/", payload)
 	c.Params = gin.Params{{Key: "id", Value: strconv.FormatInt(owner.ID, 10)}}
-	(&usersHandlers{deps: h.deps}).probeCLIModels(c)
+	(&usersHandlers{deps: h}).probeCLIModels(c)
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "没有安装") {
 		t.Fatalf("missing CodeBuddy CLI: %d %s", w.Code, w.Body.String())
 	}

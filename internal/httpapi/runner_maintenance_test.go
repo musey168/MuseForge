@@ -26,7 +26,7 @@ func TestRunnerMaintenanceRequiresOwnerAndDispatchesToBoundRunner(t *testing.T) 
 	conn := testRunnerConn(row.ID)
 	registerTestConn(hub, conn)
 	t.Cleanup(conn.close)
-	handlers := &runnersHandlers{deps: h.deps, runnerControls: hub}
+	handlers := &runnersHandlers{deps: h, runnerControls: hub}
 
 	peer := domain.User{ID: owner.ID + 100, LoginName: "maintenance-peer"}
 	c, w := workbenchContext(peer, http.MethodPost, "/", bytes.NewBuffer(nil))

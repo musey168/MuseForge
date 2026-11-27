@@ -157,8 +157,7 @@ func (h *runsHandlers) touchWorkspaceBrowse(c *gin.Context, run domain.Run) {
 	if !ok {
 		return
 	}
-	access := assistantHandlers{deps: h.deps}
-	if access.workbenchProjectAllowed(c, run.ExecutionContext.ProjectID, user.ID) {
+	if workbenchProjectAllowed(h.deps, c, run.ExecutionContext.ProjectID, user.ID) {
 		_ = h.repo.TouchWorkspaceUse(run.ID, time.Now().UTC())
 	}
 }

@@ -65,9 +65,7 @@ test('executor selection has independent models, credentials and a persistent ch
   const path=await emptyCredentialsPath(page);
   const draft='Keep this draft while choosing an executor';
   for(const [id,label] of [['codex','Codex'],['claude','Claude Code'],['codebuddy','CodeBuddy']]){
-    const response=await page.request.post('/api/assistant/generations',{data:{executor:id,model:'default',messages:[{role:'user',content:'No key: reject before executing.'}]}});
-    expect(response.status()).toBe(400);expect((await response.json()).error).toContain(label);
-    const models=await page.request.get('/api/assistant/models?executor='+id);
+    const models=await page.request.get('/api/model-catalog');
     expect(models.ok()).toBe(true);
     const catalog=await models.json();
     expect(Array.isArray(catalog.models)).toBe(true);
@@ -76,7 +74,7 @@ test('executor selection has independent models, credentials and a persistent ch
   }
   await putCredentials(page,path,{codexApiKey:testKey});
   try{
-    const catalog=await page.request.get('/api/assistant/models').then(r=>r.json());
+    const catalog=await page.request.get('/api/model-catalog').then(r=>r.json());
     await page.reload();
     const initial=await openHome(page);
     const frame=chat(page),executor=executorButton(frame);
@@ -97,7 +95,7 @@ test('executor selection has independent models, credentials and a persistent ch
       await options.filter({hasText:label}).click();
       await expect(executor).toContainText(label);
     };
-    const {engines}=await page.request.get('/api/assistant/models').then(r=>r.json());
+    const {engines}=await page.request.get('/api/model-catalog').then(r=>r.json());
     for(const [id,label] of [['codex','Codex'],['claude-code','Claude Code'],['codebuddy','CodeBuddy']]){
       await choose(label);
       await expect(input).toHaveValue(draft);
@@ -109,7 +107,7 @@ test('executor selection has independent models, credentials and a persistent ch
     await choose('Codex');
     await page.reload();
     await expect(executor).toContainText('Codex');
-    expect((await page.request.get('/api/assistant/models?executor=shell')).status()).toBe(400);
+    
   }finally{
     await putCredentials(page,path,{codeBuddyApiKeyClear:true,codexApiKeyClear:true,claudeCodeApiKeyClear:true});
   }
