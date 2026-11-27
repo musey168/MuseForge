@@ -1,8 +1,8 @@
 package httpapi
 
 import (
-	"errors"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"strconv"

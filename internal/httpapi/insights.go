@@ -146,6 +146,7 @@ func decodeInsightJSON(c *gin.Context, dst any) bool {
 	}
 	return true
 }
+
 // countRejectedReport records one refused report against its credential, so
 // the console can show that reports arrived but were not usable. A refused
 // report is counted, never stored, and never affects the reports after it.

@@ -51,7 +51,7 @@ func TestScheduleJobsRequireProjectAccess(t *testing.T) {
 	member, _ := st.UserByLoginName("sched-member")
 	viewer, _ := st.UserByLoginName("sched-viewer")
 	outsider, _ := st.UserByLoginName("sched-outsider")
-	if err := st.PutProject(domain.Project{ID: "sched-victim", Name: "Victim", OwnerID: owner.ID, }); err != nil {
+	if err := st.PutProject(domain.Project{ID: "sched-victim", Name: "Victim", OwnerID: owner.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.PutProject(domain.Project{ID: "sched-own", Name: "Outsider own", OwnerID: outsider.ID}); err != nil {
@@ -128,7 +128,7 @@ func TestScheduleJobsRequireProjectAccess(t *testing.T) {
 	if edited.AssistantPrompt != "orphan edit" || edited.OwnerUserID != member.ID {
 		t.Fatalf("orphan edit must keep the stored owner, not the requested one: %+v", edited)
 	}
-	if err := st.PutProject(domain.Project{ID: "sched-ownerless", Name: "No owner", }); err != nil {
+	if err := st.PutProject(domain.Project{ID: "sched-ownerless", Name: "No owner"}); err != nil {
 		t.Fatal(err)
 	}
 	spoofed := aiJob("", "sched-ownerless", "spoof")

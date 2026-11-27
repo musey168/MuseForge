@@ -17,10 +17,10 @@ import (
 	"time"
 	"unicode"
 
+	"agentflow/internal/agentcli"
 	"agentflow/internal/domain"
 	"agentflow/internal/managedcli"
 	"agentflow/internal/repo"
-	"agentflow/internal/agentcli"
 
 	"github.com/gin-gonic/gin"
 
@@ -169,7 +169,6 @@ func scheduleLoginRunner(r *repo.Store, userID int64, projectID, engine string) 
 	}
 	return machine
 }
-
 
 func scheduleCredentialUser(r *repo.Store, user domain.User, projectID, engine string) (domain.User, []string, bool) {
 	if scheduleHasPersonalCredential(r, user, projectID, engine) {
@@ -391,7 +390,6 @@ func assistantExecutor(id string) string {
 	}
 }
 
-
 // dropNativeArg removes a flag and its value from an argument list.
 func dropNativeArg(argv []string, flag string) []string {
 	out := make([]string, 0, len(argv))
@@ -429,7 +427,9 @@ func assistantImageMIME(mime string) bool {
 	}
 	return false
 }
+
 const workbenchAttachmentLimit = 10 << 20
+
 func readAssistantImage(file io.Reader) ([]byte, string, error) {
 	data, err := io.ReadAll(io.LimitReader(file, workbenchAttachmentLimit+1))
 	if err != nil || len(data) > workbenchAttachmentLimit {

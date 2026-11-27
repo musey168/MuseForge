@@ -7,61 +7,45 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"agentflow/internal/runner"
-	"agentflow/internal/runtime"
 )
 
-// agentflow-runner is the CLI Runner daemon (cli-connect.md). It runs on a
-// user machine or CVM, connects to the AgentFlow control plane over outbound
-// HTTPS only, and executes Agent CLI tasks on that machine. Agent CLI
-// credentials stay on this machine.
+// agentflow-runner is the machine inventory daemon (cli-connect.md). It runs
+// on a user machine, connects to the AgentFlow control plane over outbound
+// HTTPS only, and registers the machine with the Agent CLIs it found. It
+// never receives work: no task dispatch, no workspace, no sandbox. The
+// credentials of those CLIs stay on this machine.
 func main() {
-	if runtime.RunMCPCallCLI(os.Args[1:]) {
-		return
-	}
-	if runtime.RunGitHelperCLI(os.Args[1:]) {
-		return
-	}
 	server := flag.String("server", "", "LoopForge server URL, e.g. https://workflow.example.com (or AGENTFLOW_SERVER_URL)")
 	token := flag.String("token", "", "runner bootstrap token (or AGENTFLOW_RUNNER_BOOTSTRAP_TOKEN)")
 	name := flag.String("name", "", "runner display name (default: hostname)")
 	statePath := flag.String("state", "", "state file path (default: ~/.agentflow-runner/state.json)")
-	workspace := flag.String("workspace", "", "default workspace root for tasks without their own path")
-	concurrency := flag.Int("concurrency", 1, "maximum concurrent tasks")
 	heartbeat := flag.Duration("heartbeat", 30*time.Second, "heartbeat interval")
-	longPoll := flag.Duration("long-poll", 35*time.Second, "client-side long-poll timeout; must exceed the server's")
-	autoUpdate := flag.Bool("auto-update", true, "check for platform updates before claiming queued work")
+	autoUpdate := flag.Bool("auto-update", true, "check for platform updates")
 	labels := flag.String("labels", "", "comma-separated runner labels")
-	reuseSandbox := flag.Bool("reuse-run-sandbox", true, "run all nodes of a run in one sandbox per definition instead of one per task")
 	flag.Parse()
 	loadDotEnv()
 
 	cfg := runner.Config{
-		ServerURL:              firstNonEmpty(*server, os.Getenv("AGENTFLOW_SERVER_URL")),
-		BootstrapToken:         firstNonEmpty(*token, os.Getenv("AGENTFLOW_RUNNER_BOOTSTRAP_TOKEN")),
-		StatePath:              firstNonEmpty(*statePath, os.Getenv("AGENTFLOW_RUNNER_STATE_PATH")),
-		Name:                   firstNonEmpty(*name, os.Getenv("AGENTFLOW_RUNNER_NAME")),
-		DefaultWorkspaceRoot:   firstNonEmpty(*workspace, os.Getenv("AGENTFLOW_RUNNER_WORKSPACE")),
-		MaxConcurrency:         *concurrency,
-		HeartbeatInterval:      *heartbeat,
-		LongPollTimeout:        *longPoll,
-		DisableAutoUpdate:      !*autoUpdate,
-		ManagedCLIRoot:         strings.TrimSpace(os.Getenv("AGENTFLOW_MANAGED_CLI_ROOT")),
-		DisableRunSandboxReuse: !*reuseSandbox,
+		ServerURL:         firstNonEmpty(*server, os.Getenv("AGENTFLOW_SERVER_URL")),
+		BootstrapToken:    firstNonEmpty(*token, os.Getenv("AGENTFLOW_RUNNER_BOOTSTRAP_TOKEN")),
+		StatePath:         firstNonEmpty(*statePath, os.Getenv("AGENTFLOW_RUNNER_STATE_PATH")),
+		Name:              firstNonEmpty(*name, os.Getenv("AGENTFLOW_RUNNER_NAME")),
+		HeartbeatInterval: *heartbeat,
+		DisableAutoUpdate: !*autoUpdate,
+		ManagedCLIRoot:    strings.TrimSpace(os.Getenv("AGENTFLOW_MANAGED_CLI_ROOT")),
 	}
-	cfg.MaxConcurrency = concurrencyFromEnv(cfg.MaxConcurrency)
 	cfg.Labels = parseLabels(*labels)
 
 	daemon, err := runner.New(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("agentflow-runner %s connecting to %s (concurrency=%d)", runner.Version(), cfg.ServerURL, cfg.MaxConcurrency)
+	log.Printf("agentflow-runner %s connecting to %s", runner.Version(), cfg.ServerURL)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -78,17 +62,6 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Printf("runner stopped")
-}
-
-// concurrencyFromEnv lets AGENTFLOW_RUNNER_CONCURRENCY override the flag value
-// when it holds a positive integer; anything else keeps fallback.
-func concurrencyFromEnv(fallback int) int {
-	if raw := strings.TrimSpace(os.Getenv("AGENTFLOW_RUNNER_CONCURRENCY")); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
-			return parsed
-		}
-	}
-	return fallback
 }
 
 // parseLabels splits the comma-separated -labels flag, trimming blanks and

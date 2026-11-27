@@ -98,7 +98,6 @@ func TestStudioStylesheetChangesInvalidateURLWithoutEditingIndex(t *testing.T) {
 	}
 }
 
-
 func TestStudioVscodePageStampsAssetsWithContentHash(t *testing.T) {
 	static, err := fs.Sub(webassets.Files, ".")
 	if err != nil {

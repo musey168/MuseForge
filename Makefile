@@ -1,4 +1,4 @@
-.PHONY: run test test-mysql clean-mysql build build-gate-mcp coverage coverage-go coverage-web coverage-e2e
+.PHONY: run test test-mysql clean-mysql build coverage coverage-go coverage-web coverage-e2e
 
 GOCACHE ?= /tmp/agentflow-gocache
 # Use the local toolchain; go.mod requires go >= 1.26.11.
@@ -55,11 +55,4 @@ build:
 	GOCACHE=$(GOCACHE) go build -o bin/agentflow ./cmd/agentflow
 	GOCACHE=$(GOCACHE) go build -o bin/agentflow-mcp ./cmd/agentflow-mcp
 	GOCACHE=$(GOCACHE) go build -o bin/agentflow-runner ./cmd/agentflow-runner
-	$(MAKE) build-gate-mcp
 
-build-gate-mcp:
-	mkdir -p bin
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 GOCACHE=$(GOCACHE) go build -o bin/agentflow-gate-mcp-darwin-amd64 ./cmd/agentflow-gate-mcp
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 GOCACHE=$(GOCACHE) go build -o bin/agentflow-gate-mcp-darwin-arm64 ./cmd/agentflow-gate-mcp
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOCACHE=$(GOCACHE) go build -o bin/agentflow-gate-mcp-linux-amd64 ./cmd/agentflow-gate-mcp
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 GOCACHE=$(GOCACHE) go build -o bin/agentflow-gate-mcp-linux-arm64 ./cmd/agentflow-gate-mcp

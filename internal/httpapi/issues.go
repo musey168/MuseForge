@@ -149,7 +149,6 @@ func (h issuesHandlers) applyTAPDImportRepositories(issue *domain.Issue, previou
 func (h issuesHandlers) issues(c *gin.Context) {
 	r := c.Request
 	if r.Method == http.MethodGet {
-		h.tasks.syncTasks()
 		items := filterIssues(h.repo.Issues(), issueListQuery{
 			ProjectID: strings.TrimSpace(c.Query("projectId")),
 			Status:    strings.TrimSpace(c.Query("status")),
@@ -455,11 +454,11 @@ type issueRoute struct {
 }
 
 var issueRoutes = map[string]issueRoute{
-	"/api/issues/:id":                     {handle: issuesHandlers.issueDetail, methods: []string{http.MethodGet, http.MethodDelete}},
-	"/api/issues/:id/images/:imageId":     {handle: issuesHandlers.issueImage, methods: []string{http.MethodGet}},
-	"/api/issues/:id/comments":            {handle: issuesHandlers.addIssueComment, methods: []string{http.MethodPost}},
-	"/api/issues/:id/reopen":              {handle: issuesHandlers.reopenIssue, methods: []string{http.MethodPost}},
-	"/api/issues/:id/close":               {handle: issuesHandlers.closeIssue, methods: []string{http.MethodPost}},
+	"/api/issues/:id":                 {handle: issuesHandlers.issueDetail, methods: []string{http.MethodGet, http.MethodDelete}},
+	"/api/issues/:id/images/:imageId": {handle: issuesHandlers.issueImage, methods: []string{http.MethodGet}},
+	"/api/issues/:id/comments":        {handle: issuesHandlers.addIssueComment, methods: []string{http.MethodPost}},
+	"/api/issues/:id/reopen":          {handle: issuesHandlers.reopenIssue, methods: []string{http.MethodPost}},
+	"/api/issues/:id/close":           {handle: issuesHandlers.closeIssue, methods: []string{http.MethodPost}},
 }
 
 func (h issuesHandlers) issue(c *gin.Context) {

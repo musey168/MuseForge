@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"agentflow/internal/domain"
 	"agentflow/internal/agentcli"
+	"agentflow/internal/domain"
 )
 
 // The assistant stores CLI-prefixed model IDs. Bare concrete IDs from older

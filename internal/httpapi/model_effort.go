@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"agentflow/internal/domain"
 	"agentflow/internal/agentcli"
+	"agentflow/internal/domain"
 )
 
 // assistantModelEfforts resolves the same capabilities as the picker for

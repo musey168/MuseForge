@@ -39,7 +39,7 @@ func TestNotificationBotAPIAuthBindingAndSecrets(t *testing.T) {
 		}
 		users[name], _ = s.UserByLoginName(name)
 	}
-	project := domain.Project{ID: "notify-project", Name: "测试项目", OwnerID: users["owner"].ID, }
+	project := domain.Project{ID: "notify-project", Name: "测试项目", OwnerID: users["owner"].ID}
 	if err = s.PutProject(project); err != nil {
 		t.Fatal(err)
 	}

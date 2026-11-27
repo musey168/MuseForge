@@ -6,79 +6,57 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
-	"os/exec"
-	"path"
 	"path/filepath"
 	goruntime "runtime"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/gitwork"
-	"agentflow/internal/procwatch"
-	"agentflow/internal/runtime"
 )
 
-// Daemon is the long-running runner process on a user machine or CVM. It
-// only makes outbound connections: HTTPS for durable task data and one WSS
-// control channel for low-latency server push (cli-connect.md).
-type Daemon struct {
-	conversationProcesses runtime.ConversationProcessPool
-	conversationMu        sync.Mutex
-	conversationForward   runtime.ConversationToolForward
-	conversationReplies   map[string]chan domain.RunnerToolResponse
-	conversationToolSeq   atomic.Uint64
-	cfg                   Config
-	client                *Client
-	executor              *runtime.ExecutorRunner
+// runnerVersion is reported at registration and at every heartbeat. It is the
+// build that understands the current control protocol.
+const runnerVersion = "0.13.2"
 
-	mu                   sync.Mutex
-	state                daemonState
-	runtimes             []domain.RunnerRuntime
-	running              int32
-	registerMu           sync.Mutex
-	controlMu            sync.RWMutex
-	controls             map[string]chan string
-	pendingControls      map[string]string
-	wsOnline             atomic.Bool
-	updateMu             sync.RWMutex
-	updateReady          atomic.Bool
-	updateDownloadMu     sync.Mutex
-	dockerHelperSyncDone chan struct{} // closed after the initial macOS helper sync
-	cancelClaimLoop      context.CancelFunc
-	heartbeatWake        chan struct{}
-	maintenance          runnerMaintenanceState
-	runSandboxMu         sync.Mutex
-	runSandboxes         map[string]*runSandbox
-	managedTasks         map[string]*managedTask
-	workspacePreparing   sync.Map // run ID -> active environment preflight, not historical file stamp
-	workspacePreparation sync.Map
-	workspaceTerminals   runtime.TerminalPool
-	checkpointTransfers  runtime.CheckpointTransfers
-	workspaceGates       sync.Map // run ID -> *sync.RWMutex; fences manual writes locally
+// Daemon is the long-running runner process on a user machine. It is a
+// registration client: it connects to the control plane, registers the
+// machine, heartbeats the CLIs it found and answers the two control
+// operations the platform still has (CLI maintenance and the CLI model
+// probe). It never receives work.
+type Daemon struct {
+	cfg    Config
+	client *Client
+
+	mu         sync.Mutex
+	state      daemonState
+	runtimes   []domain.RunnerRuntime
+	registerMu sync.Mutex
+	wsOnline   atomic.Bool
+
+	updateMu         sync.RWMutex
+	updateReady      atomic.Bool
+	updateDownloadMu sync.Mutex
+
+	heartbeatWake chan struct{}
+	maintenance   runnerMaintenanceState
+
+	restartOnce sync.Once
+	restart     chan struct{}
 }
 
 type Config struct {
-	ServerURL      string
-	BootstrapToken string
-	StatePath      string
-	Name           string
-	Labels         []string
-	MaxConcurrency int
-	// DefaultWorkspaceRoot is where per-task workspaces are created when a
-	// task does not carry its own absolute workspace path.
-	DefaultWorkspaceRoot string
-	HeartbeatInterval    time.Duration
-	LongPollTimeout      time.Duration
-	DisableAutoUpdate    bool
-	// DisableRunSandboxReuse gives every task its own sandbox instead of one
-	// per run and sandbox definition.
-	DisableRunSandboxReuse bool
+	ServerURL         string
+	BootstrapToken    string
+	StatePath         string
+	Name              string
+	Labels            []string
+	HeartbeatInterval time.Duration
+	// DisableAutoUpdate keeps the daemon from fetching a newer runner build
+	// on its own. A maintenance request can still update it explicitly.
+	DisableAutoUpdate bool
 	// ExtraBinaries maps a provider kind to a non-default binary name.
 	ExtraBinaries map[string]string
 	// ManagedCLIRoot explicitly opts platform runners into managed CLI coordination.
@@ -116,31 +94,19 @@ func New(cfg Config) (*Daemon, error) {
 		}
 		cfg.StatePath = path
 	}
-	if cfg.MaxConcurrency < 1 {
-		cfg.MaxConcurrency = 1
-	}
-	if cfg.MaxConcurrency > 32 {
-		cfg.MaxConcurrency = 32
-	}
 	if cfg.HeartbeatInterval <= 0 {
 		cfg.HeartbeatInterval = 30 * time.Second
-	}
-	if cfg.LongPollTimeout <= 0 {
-		cfg.LongPollTimeout = 35 * time.Second
-	}
-	if cfg.DefaultWorkspaceRoot == "" {
-		home, _ := os.UserHomeDir()
-		cfg.DefaultWorkspaceRoot = filepath.Join(home, ".agentflow-runner", "workspace")
 	}
 	if cfg.Name == "" {
 		host, _ := os.Hostname()
 		cfg.Name = host
 	}
-	if err := runtime.SetRepositoryCacheRoot(cfg.DefaultWorkspaceRoot); err != nil {
-		log.Printf("repository cache disabled: %v", err)
-	}
-	return &Daemon{cfg: cfg, client: NewClient(cfg.ServerURL), executor: runtime.NewExecutorRunner(),
-		controls: map[string]chan string{}, pendingControls: map[string]string{}, heartbeatWake: make(chan struct{}, 1)}, nil
+	return &Daemon{
+		cfg:           cfg,
+		client:        NewClient(cfg.ServerURL),
+		heartbeatWake: make(chan struct{}, 1),
+		restart:       make(chan struct{}),
+	}, nil
 }
 
 func trimTrailingSlash(s string) string {
@@ -150,8 +116,9 @@ func trimTrailingSlash(s string) string {
 	return s
 }
 
-// Run blocks until ctx is canceled. It registers (or re-registers) the
-// machine, starts heartbeat/control loops, and then long-polls for tasks.
+// Run blocks until the context is canceled or the runner has installed a
+// newer build of itself. It registers the machine, keeps the heartbeat alive
+// and rescans the installed CLIs.
 func (d *Daemon) Run(ctx context.Context) error {
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
@@ -159,35 +126,30 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return err
 	}
 	d.refreshRuntimes(ctx)
-	claimCtx, cancelClaim := context.WithCancel(ctx)
-	defer cancelClaim()
-	d.cancelClaimLoop = cancelClaim
-	if goruntime.GOOS == "darwin" && !d.cfg.DisableAutoUpdate {
-		d.dockerHelperSyncDone = make(chan struct{})
-	}
 	go d.rescanLoop(ctx, 5*time.Minute)
 	heartbeatDone := make(chan struct{})
 	go func() { defer close(heartbeatDone); d.heartbeatLoop(ctx) }()
 	controlDone := make(chan struct{})
 	go func() { defer close(controlDone); d.controlLoop(ctx) }()
-	err := d.claimLoop(claimCtx)
-	if d.updateReady.Load() {
-		err = ErrUpdateReady
+	select {
+	case <-ctx.Done():
+	case <-d.restart:
 	}
-	// Workspace preparation runs on the control connection. Cancel and join it
-	// before closing shared sandboxes, including on an automatic-update exit.
 	stop()
 	<-controlDone
 	d.maintenance.jobs.Wait()
 	<-heartbeatDone
-	if d.dockerHelperSyncDone != nil {
-		<-d.dockerHelperSyncDone
-	}
-	closeCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	d.closeAllRunSandboxes(closeCtx)
-	cancel()
 	d.disconnect(context.Background())
-	return err
+	if d.updateReady.Load() {
+		return ErrUpdateReady
+	}
+	return nil
+}
+
+// requestRestart asks the daemon to exit so the entry point can exec the
+// freshly installed runner build.
+func (d *Daemon) requestRestart() {
+	d.restartOnce.Do(func() { close(d.restart) })
 }
 
 // disconnect updates presence immediately on graceful shutdown but retains
@@ -305,15 +267,13 @@ func (d *Daemon) registerLocked(ctx context.Context, runnerID string) error {
 		name = "runner"
 	}
 	resp, err := d.client.Register(ctx, d.cfg.BootstrapToken, RegisterRequest{
-		RunnerID:               runnerID,
-		Name:                   name,
-		OS:                     goruntime.GOOS,
-		Arch:                   goruntime.GOARCH,
-		Version:                runnerVersion,
-		Labels:                 d.cfg.Labels,
-		MaxConcurrency:         d.cfg.MaxConcurrency,
-		Runtimes:               d.currentRuntimes(),
-		NativeSandboxAvailable: runtime.NativeSandboxAvailable(domain.SandboxDriverNative),
+		RunnerID: runnerID,
+		Name:     name,
+		OS:       goruntime.GOOS,
+		Arch:     goruntime.GOARCH,
+		Version:  runnerVersion,
+		Labels:   d.cfg.Labels,
+		Runtimes: d.currentRuntimes(),
 	})
 	if err != nil {
 		return fmt.Errorf("register: %w", err)
@@ -348,7 +308,7 @@ func (d *Daemon) reregister(ctx context.Context) error {
 	return d.registerLocked(ctx, runnerID)
 }
 
-// ---------- runtime discovery ----------
+// ---------- CLI discovery ----------
 
 func (d *Daemon) refreshRuntimes(ctx context.Context) {
 	var runtimes []domain.RunnerRuntime
@@ -373,22 +333,9 @@ func (d *Daemon) currentRuntimes() []domain.RunnerRuntime {
 	return append([]domain.RunnerRuntime(nil), d.runtimes...)
 }
 
-func (d *Daemon) availableProviders() []string {
-	providers := make([]string, 0)
-	for _, rt := range d.currentRuntimes() {
-		if rt.Status != domain.RuntimeStatusDisabled {
-			providers = append(providers, rt.Provider)
-		}
-	}
-	return providers
-}
-
+// rescanLoop refreshes the CLI inventory and, unless auto-update is off,
+// keeps the runner build itself current.
 func (d *Daemon) rescanLoop(ctx context.Context, interval time.Duration) {
-	helperSynced := false
-	if d.dockerHelperSyncDone != nil {
-		helperSynced = d.refreshDockerRunnerHelper(ctx, false)
-		close(d.dockerHelperSyncDone)
-	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -397,10 +344,7 @@ func (d *Daemon) rescanLoop(ctx context.Context, interval time.Duration) {
 			return
 		case <-ticker.C:
 			d.refreshRuntimes(ctx)
-			if d.dockerHelperSyncDone != nil {
-				helperSynced = d.refreshDockerRunnerHelper(ctx, helperSynced)
-			}
-			d.reapIdleRunSandboxes(ctx, runSandboxIdleTTL)
+			d.checkRunnerUpdate(ctx)
 		}
 	}
 }
@@ -412,17 +356,12 @@ func (d *Daemon) heartbeatLoop(ctx context.Context) {
 	defer ticker.Stop()
 	// A restart reuses the persisted session without registering again. Publish
 	// presence immediately so the machine does not remain offline for a full
-	// heartbeat interval while the worker resumes its runs.
+	// heartbeat interval.
 	for ctx.Err() == nil {
 		req := HeartbeatRequest{
-			Status:                 "idle",
-			RunningTasks:           int(atomic.LoadInt32(&d.running)),
-			Version:                runnerVersion,
-			Runtimes:               d.currentRuntimes(),
-			NativeSandboxAvailable: runtime.NativeSandboxAvailable(domain.SandboxDriverNative),
-		}
-		if req.RunningTasks > 0 {
-			req.Status = "busy"
+			Status:   "idle",
+			Version:  runnerVersion,
+			Runtimes: d.currentRuntimes(),
 		}
 		hbCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		response, err := d.client.Heartbeat(hbCtx, req)
@@ -444,1039 +383,6 @@ func (d *Daemon) heartbeatLoop(ctx context.Context) {
 		}
 	}
 }
-
-// ---------- claim loop ----------
-
-func (d *Daemon) claimLoop(ctx context.Context) error {
-	for {
-		if d.updateReady.Load() {
-			return ErrUpdateReady
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-		}
-		providers := d.availableProviders()
-		if len(providers) == 0 {
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(10 * time.Second):
-			}
-			continue
-		}
-		capacity := d.cfg.MaxConcurrency - int(atomic.LoadInt32(&d.running))
-		if capacity <= 0 {
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(500 * time.Millisecond):
-			}
-			continue
-		}
-		task, found, err := d.claimTask(ctx, providers, capacity)
-		if errors.Is(err, ErrUpdateReady) {
-			return err
-		}
-		if err == ErrUnauthorized {
-			if regErr := d.reregister(ctx); regErr != nil {
-				log.Printf("re-register failed: %v", regErr)
-				select {
-				case <-ctx.Done():
-					return nil
-				case <-time.After(5 * time.Second):
-				}
-			}
-			continue
-		}
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			log.Printf("claim: %v", err)
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(3 * time.Second):
-			}
-			continue
-		}
-		if !found || task == nil {
-			continue
-		}
-		go d.executeTask(ctx, *task)
-	}
-}
-
-// Wait for real work before checking artifacts. The follow-up claim is
-// non-blocking: if another runner takes that task, wait for a fresh signal
-// before claiming a different task.
-func (d *Daemon) claimTaskUncoordinated(ctx context.Context, providers []string, capacity int) (*domain.RunnerTask, bool, error) {
-	if !d.cfg.DisableAutoUpdate {
-		waitCtx, cancel := context.WithTimeout(ctx, d.cfg.LongPollTimeout+15*time.Second)
-		ready, legacyTask, err := d.client.WaitForTask(waitCtx, ClaimRequest{AvailableRuntimes: providers, Capacity: capacity})
-		cancel()
-		if err != nil || !ready {
-			return nil, false, err
-		}
-		if legacyTask != nil {
-			atomic.AddInt32(&d.running, 1)
-			return legacyTask, true, nil
-		}
-		d.checkUpdatesBeforeClaim(ctx)
-		if d.updateReady.Load() {
-			return nil, false, ErrUpdateReady
-		}
-	}
-	d.updateMu.RLock()
-	defer d.updateMu.RUnlock()
-	if d.updateReady.Load() {
-		return nil, false, ErrUpdateReady
-	}
-	claimCtx, cancel := context.WithTimeout(ctx, d.cfg.LongPollTimeout+15*time.Second)
-	defer cancel()
-	task, found, err := d.client.Claim(claimCtx, ClaimRequest{AvailableRuntimes: providers, Capacity: capacity, NoWait: !d.cfg.DisableAutoUpdate})
-	if found && task != nil && err == nil {
-		atomic.AddInt32(&d.running, 1)
-	}
-	return task, found, err
-}
-
-// ---------- task execution ----------
-
-func (d *Daemon) executeTask(ctx context.Context, task domain.RunnerTask) {
-	defer atomic.AddInt32(&d.running, -1)
-	defer d.releaseManagedTask(task.ID)
-	// A claim already owns a lease. Keep it alive while waiting for workspace
-	// locks, cloning repositories, creating sandboxes and collecting outputs too.
-	ctx, stopLease := d.keepTaskLease(ctx, task, leaseRenewInterval)
-	defer stopLease()
-	ctx = runtime.WithProjectCredentialEnv(ctx, task.ProjectCredentialEnv)
-	ctx = d.withDockerRunnerHelperWait(ctx)
-	ctx = gitwork.WithSSHKnownHosts(ctx, task.GitSSHKnownHosts)
-	// The read fence ends before the completion report: once the control plane
-	// sees this task terminal (and lets a paused run continue), a follow-up
-	// preparation or snapshot must not still find the gate held.
-	releaseGate := func() {}
-	if task.RunID != "" {
-		gate := d.workspaceGate(d.taskGateKey(task))
-		gate.RLock()
-		releaseGate = onceRelease(gate.RUnlock)
-	}
-	defer releaseGate()
-	d.registerTaskControl(task.ID)
-	defer d.unregisterTaskControl(task.ID)
-	log.Printf("task %s claimed (provider=%s attempt=%d)", task.ID, task.Provider, task.Attempt)
-
-	var result execResult
-	var artifacts map[string]string
-	managed := d.managedTaskState(task.ID)
-	switch {
-	case len(task.ProjectCredentialIDs) > 0 && len(task.ProjectCredentialEnv) == 0:
-		result = execResult{status: domain.RunnerTaskFailed, errMsg: "未收到任务绑定的项目凭据"}
-	case managed != nil && managed.err != nil:
-		result = execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("pin managed CLI inventory: %v", managed.err)}
-	case task.Action == domain.RunnerTaskActionCleanupRun:
-		result = d.executeRunCleanup(ctx, task)
-	case task.Action == domain.RunnerTaskActionArchivePreview:
-		result = d.executePreviewArchive(ctx, task)
-	case task.Action == domain.RunnerTaskActionPullWorkBranch, task.Action == domain.RunnerTaskActionPushWorkBranch:
-		result = d.executeWorkBranchSync(ctx, task)
-	case task.Action == domain.RunnerTaskActionIntegrate:
-		result = d.executeIntegrate(ctx, task)
-	case task.Action == domain.RunnerTaskActionAlignBaseline:
-		result = d.executeAlignBaseline(ctx, task)
-	case task.Action != "":
-		// Never fall through to the shell/Agent paths for an action this
-		// build does not know.
-		result = execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("unsupported runner action %q; update the runner", task.Action)}
-	case task.Command != "":
-		// Terminal task (verification gate / sandbox-side command).
-		result = d.executeTerminal(ctx, task)
-		if result.status == domain.RunnerTaskSuccess {
-			artifacts = collectRunnerInvocationArtifacts(d.taskWorkspace(task), task.Invocation)
-		}
-	case task.Invocation != nil:
-		// Workflow-dispatched Agent invocation: reconstruct the same
-		// materialized asset view the control plane builds locally, then run
-		// the Agent CLI in the workflow workspace on this machine.
-		result, artifacts = d.executeInvocation(ctx, task)
-	case task.Provider == mockProviderKind:
-		result = d.executeMock(ctx, task)
-	default:
-		binary, ok := d.taskProviderBinary(task)
-		if !ok {
-			result = execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("provider %s is no longer available on this runner", task.Provider)}
-		} else {
-			argv, err := providerArgv(task.Provider, binary, task.Prompt, task.Args)
-			if err != nil {
-				result = execResult{status: domain.RunnerTaskFailed, errMsg: err.Error()}
-			} else {
-				result = d.executeProcess(ctx, task, argv, d.taskManagedEnvironment(task))
-			}
-		}
-	}
-
-	d.uploadTaskOutputs(ctx, task, result.outputs)
-	releaseGate()
-	completeCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	req := CompleteRequest{Status: result.status, Result: result.result, Error: result.errMsg, Artifacts: artifacts, Outputs: result.outputs}
-	if result.status == domain.RunnerTaskFailed || result.status == domain.RunnerTaskSuccess {
-		exit := result.exitCode
-		req.ExitCode = &exit
-	}
-	if err := d.reportTaskCompletion(completeCtx, task.ID, req); err != nil {
-		log.Printf("task %s complete report: %v", task.ID, err)
-		if !errors.Is(err, ErrTaskLeaseLost) && !errors.Is(err, ErrUnauthorized) {
-			reportCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
-			defer stop()
-			report := CompleteRequest{Status: domain.RunnerTaskFailed, Error: fmt.Sprintf("%s：%.512s", domain.RunnerResultReportError, err.Error())}
-			if reportErr := retryTaskTransfer(reportCtx, func() error { return d.client.Complete(reportCtx, task.ID, report) }); reportErr != nil && !errors.Is(reportErr, ErrTaskLeaseLost) {
-				log.Printf("task %s report completion failure: %v", task.ID, reportErr)
-			}
-		}
-	}
-	log.Printf("task %s finished (%s)", task.ID, result.status)
-}
-
-func (d *Daemon) reportTaskCompletion(ctx context.Context, taskID string, req CompleteRequest) error {
-	err := retryTaskTransfer(ctx, func() error { return d.client.Complete(ctx, taskID, req) })
-	var response *runnerHTTPError
-	if req.Outputs == nil || len(req.Outputs.Patches)+len(req.Outputs.Recovered) == 0 ||
-		!errors.As(err, &response) || (response.status != http.StatusBadRequest && response.status != http.StatusRequestEntityTooLarge) {
-		return err
-	}
-	// Repository inventories and recovery notes are optional diagnostics.
-	// Preserve the terminal status and declared files if their report is too large.
-	log.Printf("task %s retrying completion without optional diagnostics: %v", taskID, err)
-	outputs := *req.Outputs
-	outputs.Patches, outputs.Recovered = nil, nil
-	req.Outputs = &outputs
-	return retryTaskTransfer(ctx, func() error { return d.client.Complete(ctx, taskID, req) })
-}
-
-func (d *Daemon) executeRunCleanup(ctx context.Context, task domain.RunnerTask) execResult {
-	if err := d.client.StartTask(ctx, task.ID); err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("start cleanup: %v", err)}
-	}
-	root, err := filepath.Abs(d.cfg.DefaultWorkspaceRoot)
-	if err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("resolve workspace root: %v", err)}
-	}
-	target, err := filepath.Abs(d.taskWorkspace(task))
-	if err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("resolve cleanup workspace: %v", err)}
-	}
-	rel, err := filepath.Rel(root, target)
-	expected := filepath.Join("runs", task.RunID)
-	if err != nil || task.RunID == "" || filepath.Clean(rel) != filepath.Clean(expected) || rel == "." || strings.HasPrefix(rel, "..") {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("refusing unsafe runner workspace cleanup %q", target)}
-	}
-	d.closeRunSandboxes(ctx, task.RunID)
-	if task.Sandbox != nil && strings.EqualFold(task.Sandbox.Profile.Driver, "docker") {
-		if err := cleanupDockerWorkspace(ctx, target); err != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("cleanup docker sandbox: %v", err)}
-		}
-	}
-	if err := runtime.RemoveWorkspaceTree(target); err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("remove runner workspace: %v", err)}
-	}
-	_ = d.client.SendEvents(ctx, task.ID, []domain.RunnerTaskEvent{{Seq: 1, Type: "system", Data: "run sandbox and workspace removed", Ts: time.Now().UTC()}})
-	return execResult{status: domain.RunnerTaskSuccess, exitCode: 0, result: "run sandbox and workspace removed"}
-}
-
-func cleanupDockerWorkspace(ctx context.Context, workspace string) error {
-	if _, err := exec.LookPath("docker"); err != nil {
-		return nil
-	}
-	// A task container mounts runs/<run>/<node>, while this cleanup targets
-	// runs/<run>. Enumerate only runner-owned containers, then match their bind
-	// mount sources against the run directory so crash-orphaned node containers
-	// are removed as well.
-	out, err := exec.CommandContext(ctx, "docker", "ps", "-aq", "--filter", "name=^/agentflow-rt-").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("list containers: %w: %s", err, strings.TrimSpace(string(out)))
-	}
-	for _, id := range strings.Fields(string(out)) {
-		mountOut, mountErr := exec.CommandContext(ctx, "docker", "inspect", "-f", "{{range .Mounts}}{{println .Source}}{{end}}", id).CombinedOutput()
-		if mountErr != nil {
-			// The container can exit between ps and inspect: closeRunSandboxes
-			// removes it, or the daemon already reaped it. A missing container
-			// has nothing left to clean.
-			if dockerObjectGone(string(mountOut), mountErr) {
-				continue
-			}
-			return fmt.Errorf("inspect container %s mounts: %w: %s", id, mountErr, strings.TrimSpace(string(mountOut)))
-		}
-		belongsToRun := false
-		for _, source := range strings.Fields(string(mountOut)) {
-			if workspaceContainsPath(workspace, source) {
-				belongsToRun = true
-				break
-			}
-		}
-		if !belongsToRun {
-			continue
-		}
-		imageOut, _ := exec.CommandContext(ctx, "docker", "inspect", "-f", "{{.Config.Image}}", id).Output()
-		image := strings.TrimSpace(string(imageOut))
-		if removeOut, removeErr := exec.CommandContext(ctx, "docker", "rm", "-f", id).CombinedOutput(); removeErr != nil {
-			if dockerObjectGone(string(removeOut), removeErr) {
-				continue
-			}
-			return fmt.Errorf("remove container %s: %w: %s", id, removeErr, strings.TrimSpace(string(removeOut)))
-		}
-		if strings.HasPrefix(image, "agentflow-tmp-rt-") {
-			_ = exec.CommandContext(ctx, "docker", "rmi", "-f", image).Run()
-		}
-	}
-	return nil
-}
-
-// dockerObjectGone reports that id disappeared after docker ps listed it.
-func dockerObjectGone(output string, err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(output + "\n" + err.Error())
-	return strings.Contains(msg, "no such object") ||
-		strings.Contains(msg, "no such container") ||
-		strings.Contains(msg, "container not found")
-}
-
-func workspaceContainsPath(workspace, candidate string) bool {
-	root, err := filepath.Abs(workspace)
-	if err != nil {
-		return false
-	}
-	path, err := filepath.Abs(candidate)
-	if err != nil {
-		return false
-	}
-	rel, err := filepath.Rel(root, path)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-}
-
-// taskWorkspace resolves the task's workspace. Workflow tasks carry a
-// relative path shared by the node's CLI runs and gate commands; manual
-// tasks fall back to a per-task directory.
-func (d *Daemon) taskWorkspace(task domain.RunnerTask) string {
-	ws := strings.TrimSpace(task.Workspace)
-	if ws == "" {
-		return d.defaultWorkspace(task.ID)
-	}
-	if filepath.IsAbs(ws) {
-		return ws
-	}
-	return filepath.Join(d.cfg.DefaultWorkspaceRoot, filepath.FromSlash(ws))
-}
-
-// executeTerminal runs a command task (`sh -lc <command>`) in the task
-// workspace. This is the remote-terminal capability used by workflow scripts
-// and verification gates.
-func (d *Daemon) executeTerminal(ctx context.Context, task domain.RunnerTask) execResult {
-	workspace := d.taskWorkspace(task)
-	if err := os.MkdirAll(workspace, 0o755); err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("workspace %s: %v", workspace, err)}
-	}
-	sandbox, release, err := d.acquireExecutionTaskSandbox(ctx, task)
-	if err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("create runner sandbox: %v", err)}
-	}
-	defer release()
-	if task.Invocation != nil {
-		checkoutCtx := taskRepositoryContext(ctx, task, sandbox, task.Invocation)
-		if err := checkoutInvocationRepositories(checkoutCtx, workspace, task.Invocation); err != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("repository checkout: %v", err)}
-		}
-		if err := writeRunnerHumanContext(workspace, task.Invocation.HumanContext); err != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("write human context: %v", err)}
-		}
-		if err := d.prepareTaskInvocation(ctx, workspace, task); err != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: err.Error()}
-		}
-	}
-	command := runtime.CommandSpec{Argv: []string{"sh", "-lc", task.Command}, Provider: "script"}
-	if task.Invocation != nil {
-		servers := task.Invocation.MCPCallServers
-		if len(servers) == 0 {
-			servers = task.Invocation.Assets.MCPServers
-		}
-		bound, _, _ := runtime.PrepareMCPServers(domain.AgentAssetBundle{MCPServers: servers, MCPFiles: task.Invocation.Assets.MCPFiles}, d.mcpTarget(false, task.Invocation.GitHTTPCredentials))
-		if err := runtime.ProvisionMCPAssets(ctx, sandbox, workspace, bound, nil); err != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("provision MCP: %v", err)}
-		}
-		env, err := runtime.ScriptMCPEnvironment(ctx, sandbox, workspace, bound.MCPServers)
-		if err != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("prepare mcp call: %v", err)}
-		}
-		command = runtime.WithCommandEnvironment(command, env)
-		command.Argv = runtime.BindMCPCallArgv(sandbox, command.Argv)
-		gitEnv, closeGit, err := runtime.RunGitEnvironment(ctx, sandbox, workspace, invocationGitCredentials(task.Invocation))
-		if err != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("prepare git credentials: %v", err)}
-		}
-		defer closeGit()
-		cleanup, err := runtime.BindGitSSH(ctx, sandbox, workspace, gitEnv, task.Invocation.GitSSHKeys)
-		if err != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("prepare git credentials: %v", err)}
-		}
-		defer cleanup()
-		command = runtime.WithCommandEnvironment(command, gitEnv)
-	}
-	var result execResult
-	if sandbox != nil {
-		result = d.executeSandboxProcess(ctx, task, sandbox, command)
-	} else {
-		result = d.executeProcess(ctx, task, command.Argv, runtime.CommandEnvironment(command))
-	}
-	result.outputs = collectTaskOutputs(workspace, task.Invocation)
-	return result
-}
-
-// mcpTarget addresses platform-served MCP servers through this runner's own
-// server URL, the one platform address known to be reachable from here.
-func (d *Daemon) mcpTarget(requireCredentials bool, hostCredentials ...map[string]domain.GitHTTPExecutionCredential) runtime.MCPTarget {
-	var credentials map[string]domain.GitHTTPExecutionCredential
-	if len(hostCredentials) > 0 {
-		credentials = hostCredentials[0]
-	}
-	return runtime.MCPTarget{ServerURL: d.cfg.ServerURL, GitHTTPCredentials: credentials, RequireCredentials: requireCredentials}
-}
-
-// executeInvocation runs a workflow Agent node locally: it materializes the
-// Agent asset view (rules/skills/MCP, provider configuration, task prompt)
-// in the task workspace, checks out the run's repository when the task
-// carries one (the sandbox and workspace live on this machine), and spawns
-// the CLI through the same closed command contract the control plane uses.
-// On success it uploads the declared artifact files so the engine can
-// continue its verification pipeline.
-func (d *Daemon) executeInvocation(ctx context.Context, task domain.RunnerTask) (execResult, map[string]string) {
-	inv := task.Invocation
-	workspace := d.taskWorkspace(task)
-	if err := os.MkdirAll(workspace, 0o755); err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("workspace %s: %v", workspace, err)}, nil
-	}
-	sandbox, release, err := d.acquireExecutionTaskSandbox(ctx, task)
-	if err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("create runner sandbox: %v", err)}, nil
-	}
-	defer release()
-	checkoutCtx := taskRepositoryContext(ctx, task, sandbox, inv)
-	checkoutErr := checkoutInvocationRepositories(checkoutCtx, workspace, inv)
-	repositoryFallback := checkoutErr != nil && !errors.Is(checkoutErr, gitwork.ErrWorkBranchExists) && inv.RepositoryPreparationFallback && ctx.Err() == nil
-	if checkoutErr != nil {
-		if !repositoryFallback {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("repository checkout: %v", checkoutErr)}, nil
-		}
-		task.Prompt = runtime.GitPreparationFallbackPrompt(invocationRepositoryContexts(inv), checkoutErr.Error()) + task.Prompt
-	}
-	if err := writeRunnerHumanContext(workspace, inv.HumanContext); err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("write human context: %v", err)}, nil
-	}
-	if err := d.prepareTaskInvocation(ctx, workspace, task); err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: err.Error()}, nil
-	}
-	driver := "runner"
-	if task.Sandbox != nil {
-		driver = task.Sandbox.Profile.Driver
-	}
-	target := d.mcpTarget(true, inv.GitHTTPCredentials)
-	sshRepoCount := len(inv.GitSSHRemotes())
-	target.SSHRepositoriesOnly = sshRepoCount > 0 && sshRepoCount == max(len(inv.Repositories), 1)
-	boundAssets, _, err := runtime.PrepareMCPServers(inv.Assets, target)
-	if err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("bind MCP credentials: %v", err)}, nil
-	}
-	if err := runtime.ProvisionMCPAssets(ctx, sandbox, workspace, boundAssets, nil); err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("provision MCP: %v", err)}, nil
-	}
-	executor := d.invocationExecutor(task)
-	var browserMCP *domain.MCPServerDefinition
-	if !inv.DisableBrowser && runtime.BrowserWantedForExecutor(executor.Kind) {
-		browserMCP = runtime.EnsureSandboxBrowser(ctx, sandbox, workspace, inv.RunID, nil)
-	}
-	prepared, err := d.executor.PrepareRemote(workspace, runtime.RemoteInvocation{
-		InvocationID: inv.InvocationID,
-		Executor:     executor,
-		Agent:        inv.Agent,
-		Assets:       boundAssets,
-		Prompt:       task.Prompt,
-		Options: runtime.InvocationOptions{
-			RunID: inv.RunID, NodeID: inv.NodeID, ResumeSessionID: inv.ResumeSessionID,
-			GateResultPath: inv.GateResultPath, Repositories: invocationRepositoryContexts(inv),
-			BrowserMCP: browserMCP, RunnerLogin: inv.CredentialSource == domain.RuntimeAuthLocal,
-			DisableBrowser: inv.DisableBrowser,
-		},
-		Driver: driver,
-	})
-	if err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("prepare invocation: %v", err)}, nil
-	}
-	if prepared.Builtin {
-		if repositoryFallback {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: "builtin executor cannot recover a failed repository checkout"}, nil
-		}
-		// Builtin executors (mock) need no CLI process.
-		if err := d.client.StartTask(ctx, task.ID); err != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("start: %v", err)}, nil
-		}
-		_ = d.client.SendEvents(ctx, task.ID, []domain.RunnerTaskEvent{{Seq: 1, Type: "system", Data: "builtin executor completed in-process", Ts: time.Now().UTC()}})
-		return execResult{status: domain.RunnerTaskSuccess, exitCode: 0, result: prepared.BuiltinResult, outputs: collectTaskOutputs(workspace, inv)}, collectRunnerInvocationArtifacts(workspace, inv)
-	}
-	argv := prepared.Command.Argv
-	if sandbox == nil || !strings.EqualFold(task.Sandbox.Profile.Driver, "docker") {
-		argv = resolveCommandPath(argv)
-	}
-	argv, credentialEnv, err := bindInvocationCredentials(inv, prepared.Command.CredentialBindings, argv)
-	if err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: err.Error()}, nil
-	}
-	if runtime.IsAgentCLI(prepared.Command.Provider) {
-		var agentEnv map[string]string
-		if inv.CredentialSource == domain.RuntimeAuthLocal && domain.SupportsRunnerLogin(prepared.Command.Provider) {
-			var cleanup func() error
-			agentEnv, cleanup, err = runtime.PrepareRunnerAgentCLILogin(sandbox, prepared.Command)
-			if cleanup != nil {
-				defer func() {
-					if err := cleanup(); err != nil {
-						log.Printf("task %s: clean sandbox CLI login: %v", task.ID, err)
-					}
-				}()
-			}
-		} else {
-			cred := runtime.ProviderCredential{APIKey: inv.AgentCLIAPIKey, BaseURL: inv.AgentCLIBaseURL, Protocol: inv.AgentCLIProtocol, Models: inv.AgentCLIModels}
-			argv, agentEnv, err = runtime.BindAgentCLICommand(sandbox, workspace, prepared.Command, cred, argv)
-		}
-		if err != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: err.Error()}, nil
-		}
-		for key, value := range agentEnv {
-			credentialEnv[key] = value
-		}
-	} else if sandbox != nil && inv.CredentialSource == domain.RuntimeAuthPersonal && prepared.Command.PrivateHome {
-		credentialEnv, err = bindSandboxPrivateHome(workspace, task.Sandbox.Profile.Driver, task.Provider, credentialEnv)
-		if err != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: err.Error()}, nil
-		}
-	} else if sandbox != nil && inv.CredentialSource == domain.RuntimeAuthLocal && prepared.Command.PrivateHome {
-		loginEnv, cleanup, err := runtime.PrepareRunnerSandboxLogin(sandbox, prepared.Command.Provider, inv.RunID, inv.NodeID)
-		if err != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: err.Error()}, nil
-		}
-		if cleanup != nil {
-			defer func() {
-				if err := cleanup(); err != nil {
-					log.Printf("task %s: clean sandbox CLI login: %v", task.ID, err)
-				}
-			}()
-		}
-		for key, value := range loginEnv {
-			credentialEnv[key] = value
-		}
-	}
-	commandEnv := runtime.CommandEnvironment(prepared.Command)
-	for key, value := range d.taskManagedEnvironment(task) {
-		commandEnv[key] = value
-	}
-	if prepared.Command.HookOutput != "" {
-		commandEnv["AGENTFLOW_HOOK_OUTPUT"] = prepared.Command.HookOutput
-	}
-	for key, value := range credentialEnv {
-		commandEnv[key] = value
-	}
-	if slices.Contains(prepared.Command.CredentialBindings, runtime.BindGit) {
-		gitEnv, closeGit, gitErr := runtime.RunGitEnvironment(ctx, sandbox, workspace, invocationGitCredentials(inv))
-		if gitErr != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("prepare git credentials: %v", gitErr)}, nil
-		}
-		defer closeGit()
-		cleanup, gitErr := runtime.BindGitSSH(ctx, sandbox, workspace, gitEnv, inv.GitSSHKeys)
-		if gitErr != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("prepare git credentials: %v", gitErr)}, nil
-		}
-		defer cleanup()
-		for key, value := range gitEnv {
-			commandEnv[key] = value
-		}
-	}
-	if slices.Contains(prepared.Command.CredentialBindings, runtime.BindMCP) {
-		servers := inv.MCPCallServers
-		if len(servers) == 0 {
-			servers = boundAssets.MCPServers
-		} else {
-			gateAssets, _, _ := runtime.PrepareMCPServers(domain.AgentAssetBundle{MCPServers: servers}, d.mcpTarget(false, inv.GitHTTPCredentials))
-			servers = gateAssets.MCPServers
-		}
-		mcpEnv, mcpErr := runtime.ScriptMCPEnvironment(ctx, sandbox, workspace, servers)
-		if mcpErr != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("prepare mcp call: %v", mcpErr)}, nil
-		}
-		for key, value := range mcpEnv {
-			commandEnv[key] = value
-		}
-		argv = runtime.BindMCPCallArgv(sandbox, argv)
-	}
-	var result execResult
-	command := prepared.Command
-	command.Argv = argv
-	if sandbox != nil {
-		command = runtime.WithCommandEnvironment(command, commandEnv)
-		result = d.executeSandboxProcess(ctx, task, sandbox, command)
-	} else {
-		result = d.executeHostCommand(ctx, task, command, commandEnv)
-	}
-	result.outputs = collectTaskOutputs(workspace, inv)
-	if result.status != domain.RunnerTaskSuccess {
-		return result, nil
-	}
-	if repositoryFallback {
-		if err := runtime.VerifyGitPreparation(invocationGitHTTPContext(checkoutCtx, inv), workspace, invocationRepositoryContexts(inv)); err != nil {
-			return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("Agent repository preparation failed validation: %v", err)}, nil
-		}
-	}
-	artifacts := collectRunnerInvocationArtifacts(workspace, inv)
-	return result, artifacts
-}
-
-func writeRunnerHumanContext(workspace, context string) error {
-	path := filepath.Join(workspace, "human-context.md")
-	context = strings.TrimSpace(context)
-	if context == "" {
-		return nil
-	}
-	return os.WriteFile(path, []byte("# 人工补充上下文\n\n"+context+"\n"), 0o644)
-}
-
-func collectRunnerInvocationArtifacts(workspace string, inv *domain.RunnerInvocation) map[string]string {
-	if inv == nil {
-		return nil
-	}
-	base := workspace
-	if dir := safeRunnerRepoDir(inv.ArtifactDirectory); dir != "" {
-		base = filepath.Join(workspace, dir)
-	}
-	artifacts := map[string]string{}
-	for _, contract := range inv.Artifacts {
-		if strings.TrimSpace(contract.Path) == "" {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(base, filepath.FromSlash(contract.Path)))
-		if err != nil || len(data) > maxArtifactUploadBytes {
-			continue
-		}
-		artifacts[contract.Name] = string(data)
-	}
-	if len(artifacts) == 0 {
-		return nil
-	}
-	return artifacts
-}
-
-// invocationRepositories returns the repositories an invocation carries:
-// Repositories when set, otherwise the persisted legacy single Repository.
-func invocationRepositories(inv *domain.RunnerInvocation) []domain.RunnerRepository {
-	if inv == nil {
-		return nil
-	}
-	if len(inv.Repositories) == 0 && inv.Repository != nil {
-		return []domain.RunnerRepository{*inv.Repository}
-	}
-	return inv.Repositories
-}
-
-func invocationRepositoryContexts(inv *domain.RunnerInvocation) []domain.RepositoryContext {
-	if inv == nil {
-		return nil
-	}
-	repositories := invocationRepositories(inv)
-	out := make([]domain.RepositoryContext, 0, len(repositories))
-	for _, repository := range repositories {
-		out = append(out, domain.RepositoryContext{
-			RepositoryID:              repository.RepositoryID,
-			Name:                      repository.Name,
-			WorkspaceDir:              repository.Dir,
-			CloneURL:                  repository.CloneURL,
-			BaseBranch:                repository.Ref,
-			WorkBranch:                repository.WorkBranch,
-			RequireExistingWorkBranch: repository.RequireExistingWorkBranch,
-			CreateNewWorkBranch:       repository.CreateNewWorkBranch,
-		})
-	}
-	return out
-}
-
-func bindSandboxPrivateHome(workspace, driver, provider string, env map[string]string) (map[string]string, error) {
-	home := filepath.Join(workspace, ".agentflow", "private-home", provider)
-	tmp := filepath.Join(workspace, ".agentflow", "tmp", provider)
-	if err := os.MkdirAll(home, 0o700); err != nil {
-		return nil, fmt.Errorf("create sandbox private home: %w", err)
-	}
-	if err := os.MkdirAll(tmp, 0o700); err != nil {
-		return nil, fmt.Errorf("create sandbox private temp: %w", err)
-	}
-	if env == nil {
-		env = map[string]string{}
-	}
-	if strings.EqualFold(driver, "docker") {
-		env["HOME"] = filepath.ToSlash(filepath.Join("/workspace", ".agentflow", "private-home", provider))
-		env["TMPDIR"] = filepath.ToSlash(filepath.Join("/workspace", ".agentflow", "tmp", provider))
-	} else {
-		env["HOME"] = home
-		env["TMPDIR"] = tmp
-	}
-	switch provider {
-	case "codex":
-		if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o700); err != nil {
-			return nil, err
-		}
-		env["CODEX_HOME"] = filepath.ToSlash(filepath.Join(env["HOME"], ".codex"))
-	case "claude-code":
-		if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o700); err != nil {
-			return nil, err
-		}
-		env["CLAUDE_CONFIG_DIR"] = filepath.ToSlash(filepath.Join(env["HOME"], ".claude"))
-	}
-	return env, nil
-}
-
-// bindInvocationCredentials maps the closed credential bindings onto the
-// task process. Local mode leaves the CLI login state untouched; personal
-// mode injects only the selected provider's saved credential.
-func bindInvocationCredentials(inv *domain.RunnerInvocation, bindings []runtime.CredentialBinding, argv []string) ([]string, map[string]string, error) {
-	env := map[string]string{}
-	personal := inv.CredentialSource == domain.RuntimeAuthPersonal
-	for _, binding := range bindings {
-		switch binding {
-		case runtime.BindCodeBuddy:
-			key := strings.TrimSpace(inv.CodeBuddyAPIKey)
-			if key == "" {
-				return nil, nil, errors.New("CodeBuddy 个人 API Key 未配置")
-			}
-			env["CODEBUDDY_API_KEY"] = key
-			env["CODEBUDDY_BASE_URL"] = strings.TrimSpace(inv.CodeBuddyBaseURL)
-			if net := strings.TrimSpace(inv.CodeBuddyInternetEnvironment); net != "" {
-				env["CODEBUDDY_INTERNET_ENVIRONMENT"] = net
-			}
-		case runtime.BindCodex:
-			if !personal {
-				continue
-			}
-			key := strings.TrimSpace(inv.CodexAPIKey)
-			if key == "" {
-				return nil, nil, errors.New("Codex 个人 API Key 未配置")
-			}
-			env["CODEX_API_KEY"] = key
-			withProvider, err := runtime.CodexUserProviderArgv(argv, inv.CodexBaseURL)
-			if err != nil {
-				return nil, nil, err
-			}
-			argv = withProvider
-		case runtime.BindClaudeCode:
-			if !personal {
-				continue
-			}
-			key := strings.TrimSpace(inv.ClaudeCodeAPIKey)
-			if key == "" {
-				return nil, nil, errors.New("Claude Code 个人 API Key 未配置")
-			}
-			env["ANTHROPIC_API_KEY"] = key
-			runtime.BindClaudeCodeEndpoint(env, inv.ClaudeCodeBaseURL)
-		case runtime.BindGit, runtime.BindMCP, runtime.BindAgentCLI:
-			continue
-		}
-	}
-	return argv, env, nil
-}
-
-// checkoutInvocationRepositories checks out every repository the invocation
-// carries: each into its Dir under the task workspace. Empty Dir is only
-// kept for persisted legacy invocations that already checked out at the
-// workspace root. Later invocations and gates reuse the existing checkout
-// (once per workspace).
-func checkoutInvocationRepositories(ctx context.Context, workspace string, inv *domain.RunnerInvocation, refreshClean ...bool) error {
-	if inv == nil {
-		return nil
-	}
-	ctx = gitwork.WithSSHKeys(ctx, inv.GitSSHKeys)
-	ctx = invocationGitHTTPContext(ctx, inv)
-	repos := invocationRepositories(inv)
-	for i := range repos {
-		repo := repos[i]
-		if strings.TrimSpace(repo.CloneURL) == "" {
-			continue
-		}
-		target := workspace
-		if dir := safeRunnerRepoDir(repo.Dir); dir != "" {
-			target = filepath.Join(workspace, dir)
-			if err := os.MkdirAll(target, 0o755); err != nil {
-				return fmt.Errorf("create repository directory %s: %w", dir, err)
-			}
-		}
-		refresh := len(refreshClean) > 0 && refreshClean[0]
-		if err := checkoutRepositoryForPreparation(ctx, target, &repo, refresh); err != nil {
-			return err
-		}
-		if err := gitwork.RecordBaselineContext(ctx, target, repo.Ref); err != nil {
-			return err
-		}
-		if err := configureRepositoryGitIdentity(ctx, target, inv.GitUserName, inv.GitUserEmail); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func configureRepositoryGitIdentity(ctx context.Context, workspace, name, email string) error {
-	name = strings.TrimSpace(name)
-	email = strings.TrimSpace(email)
-	if name == "" || email == "" {
-		return nil
-	}
-	for _, item := range []struct {
-		key, value string
-	}{
-		{key: "user.name", value: name},
-		{key: "user.email", value: email},
-	} {
-		if _, err := gitwork.C(ctx, workspace, "config", "--local", item.key, item.value); err != nil {
-			return fmt.Errorf("configure git %s: %w", item.key, err)
-		}
-	}
-	return nil
-}
-
-func runnerTaskSandboxDriver(task domain.RunnerTask) string {
-	if task.Sandbox == nil || strings.TrimSpace(task.Sandbox.Profile.Driver) == "" {
-		return "local"
-	}
-	return strings.TrimSpace(task.Sandbox.Profile.Driver)
-}
-
-// safeRunnerRepoDir normalizes a repository workspace dir and rejects path
-// traversal, absolute paths and the workspace root itself.
-func safeRunnerRepoDir(dir string) string {
-	clean := filepath.Clean(filepath.FromSlash(strings.TrimSpace(dir)))
-	if clean == "." || clean == ".." || filepath.IsAbs(clean) || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
-		return ""
-	}
-	return clean
-}
-
-// checkoutRepository clones the run's repository into the task workspace
-// (once per workspace; later invocations and gates reuse the checkout). The
-// token, when present, authenticates private HTTPS remotes.
-func checkoutRepository(ctx context.Context, workspace string, repo *domain.RunnerRepository) error {
-	return checkoutRepositoryForPreparation(ctx, workspace, repo, false)
-}
-
-func cloneRepository(ctx context.Context, workspace string, repo *domain.RunnerRepository) error {
-	if repo.RequireExistingWorkBranch && strings.TrimSpace(repo.WorkBranch) == "" {
-		return fmt.Errorf("继续已有分支时必须指定工作分支")
-	}
-	if info, err := os.Stat(workspace); err != nil || !info.IsDir() {
-		return fmt.Errorf("clone workspace is not a directory: %s", workspace)
-	}
-	url := strings.TrimSpace(repo.CloneURL)
-	if err := gitwork.ValidateRemoteURL(url, true); err != nil {
-		return fmt.Errorf("git clone: %w", err)
-	}
-	// `-c` auth is scoped to this command, so origin stays the clean URL and
-	// the token never lands in .git/config. --progress: without a terminal git
-	// prints nothing until it finishes, so a slow clone looked hung.
-	args := []string{"clone", "--progress"}
-	if ref := strings.TrimSpace(repo.Ref); ref != "" {
-		args = append(args, "--branch", ref)
-	}
-	args = append(args, "--", url, ".")
-	watch := runnerCloneWatch(repo)
-	// The platform cannot see this host's output yet; the operator can.
-	ctx = procwatch.WithObserver(ctx, func(event procwatch.Event) { log.Printf("runner checkout: %s", event.Message) })
-	gitCtx := repositoryGitContext(ctx, *repo)
-	cached, err := cloneFromRepositoryCache(gitCtx, workspace, repo, watch)
-	if err != nil {
-		return err
-	}
-	if !cached {
-		tail, err := gitwork.Watch(gitCtx, workspace, watch, args...)
-		if err != nil {
-			return fmt.Errorf("git clone %s: %w (%s)", domain.StripURLCredentials(repo.CloneURL), err, cloneOutput([]byte(tail), repo.GitToken))
-		}
-	}
-	// The branch steps below keep the bound they always had.
-	cloneCtx := ctx
-	if watch.Timeout > 0 {
-		var cancel context.CancelFunc
-		cloneCtx, cancel = context.WithTimeout(ctx, watch.Timeout)
-		defer cancel()
-	}
-	if repo.RequireExistingWorkBranch {
-		return checkoutExistingRepositoryBranch(cloneCtx, workspace, repo)
-	}
-	if repo.CreateNewWorkBranch {
-		return createNewRepositoryBranch(cloneCtx, workspace, repo)
-	}
-	if workBranch := strings.TrimSpace(repo.WorkBranch); workBranch != "" && workBranch != strings.TrimSpace(repo.Ref) {
-		remoteRef := "refs/remotes/origin/" + workBranch
-		if _, err := gitwork.C(cloneCtx, workspace, "show-ref", "--verify", "--quiet", remoteRef); err == nil {
-			if _, err := gitwork.C(cloneCtx, workspace, "checkout", "--quiet", "-b", workBranch, "--track", "origin/"+workBranch); err != nil {
-				return fmt.Errorf("git checkout work branch %s: %w", workBranch, err)
-			}
-		} else if _, err := gitwork.C(cloneCtx, workspace, "checkout", "--quiet", "-b", workBranch); err != nil {
-			return fmt.Errorf("git create work branch %s: %w", workBranch, err)
-		}
-	}
-	return nil
-}
-
-func repositoryGitContext(ctx context.Context, repo domain.RunnerRepository) context.Context {
-	if repo.UseSSH {
-		return gitwork.WithSSHRemote(ctx, repo.CloneURL)
-	}
-	return gitwork.WithHTTPRemote(ctx, repo.CloneURL)
-}
-
-// checkoutExistingRepositoryBranch validates the remote head even when the
-// run reuses a checkout. A normal tracking checkout may create a local ref;
-// it never invents a remote branch or resets existing local work.
-func checkoutExistingRepositoryBranch(ctx context.Context, workspace string, repo *domain.RunnerRepository) error {
-	branch := strings.TrimSpace(repo.WorkBranch)
-	if branch == "" {
-		return fmt.Errorf("继续已有分支时必须指定工作分支")
-	}
-	repoCtx := repositoryGitContext(ctx, *repo)
-	trackingRef := "refs/remotes/origin/" + branch
-	if _, err := gitwork.C(repoCtx, workspace, "fetch", "--no-tags", "origin", "+refs/heads/"+branch+":"+trackingRef); err != nil {
-		return fmt.Errorf("无法读取已有远端分支 %s，请确认分支存在且有访问权限: %w", branch, err)
-	}
-	if _, ok := gitwork.RevParse(repoCtx, workspace, trackingRef); !ok {
-		return fmt.Errorf("找不到已有远端分支 %s", branch)
-	}
-	if current, _ := gitwork.C(repoCtx, workspace, "branch", "--show-current"); strings.TrimSpace(current) == branch {
-		return nil
-	}
-	args := []string{"checkout", "--quiet", branch}
-	if _, ok := gitwork.RevParse(repoCtx, workspace, "refs/heads/"+branch); !ok {
-		args = []string{"checkout", "--quiet", "-b", branch, "--track", "origin/" + branch}
-	}
-	if _, err := gitwork.C(repoCtx, workspace, args...); err != nil {
-		return fmt.Errorf("检出已有工作分支 %s: %w", branch, err)
-	}
-	return nil
-}
-
-// createNewRepositoryBranch creates the caller-named branch on a fresh clone.
-// The name must not exist remotely: the caller asked for a new branch, so a
-// same-named head belongs to other work and must not be resumed silently.
-func createNewRepositoryBranch(ctx context.Context, workspace string, repo *domain.RunnerRepository) error {
-	branch := strings.TrimSpace(repo.WorkBranch)
-	if branch == "" {
-		return fmt.Errorf("新建分支时必须指定工作分支")
-	}
-	repoCtx := repositoryGitContext(ctx, *repo)
-	if err := gitwork.RequireNewRemoteWorkBranch(repoCtx, workspace, branch); err != nil {
-		return err
-	}
-	if _, err := gitwork.C(ctx, workspace, "checkout", "--quiet", "-b", branch); err != nil {
-		return fmt.Errorf("git create work branch %s: %w", branch, err)
-	}
-	return nil
-}
-
-// checkoutCreatedRepositoryBranch reuses a checkout that already created its
-// named branch: only the local ref matters, because the remote copy is ours.
-func checkoutCreatedRepositoryBranch(ctx context.Context, workspace string, repo *domain.RunnerRepository) error {
-	branch := strings.TrimSpace(repo.WorkBranch)
-	if branch == "" {
-		return fmt.Errorf("新建分支时必须指定工作分支")
-	}
-	repoCtx := repositoryGitContext(ctx, *repo)
-	if current, _ := gitwork.C(repoCtx, workspace, "branch", "--show-current"); strings.TrimSpace(current) == branch {
-		return nil
-	}
-	if _, ok := gitwork.RevParse(repoCtx, workspace, "refs/heads/"+branch); ok {
-		if _, err := gitwork.C(repoCtx, workspace, "checkout", "--quiet", branch); err != nil {
-			return fmt.Errorf("检出工作分支 %s: %w", branch, err)
-		}
-		return nil
-	}
-	if err := gitwork.RequireNewRemoteWorkBranch(repoCtx, workspace, branch); err != nil {
-		return err
-	}
-	base := strings.TrimSpace(repo.Ref)
-	if base == "" {
-		base = "HEAD"
-	} else if _, ok := gitwork.RevParse(repoCtx, workspace, "refs/remotes/origin/"+base); ok {
-		base = "origin/" + base
-	}
-	if _, err := gitwork.C(ctx, workspace, "checkout", "--quiet", "-b", branch, base); err != nil {
-		return fmt.Errorf("git create work branch %s: %w", branch, err)
-	}
-	return nil
-}
-
-// cloneOutput keeps a git failure short and strips the token before the text
-// can be stored on the task or shown in the run timeline.
-// runnerCloneWatch bounds a clone on the execution machine. The total keeps
-// the runner's long-standing 10 minute default, because a task checkout has no
-// other bound here; the stall window ends a hung transfer well before that.
-func runnerCloneWatch(repo *domain.RunnerRepository) procwatch.Options {
-	name := strings.TrimSpace(repo.Name)
-	if name == "" {
-		name = strings.TrimSuffix(path.Base(strings.TrimSpace(repo.CloneURL)), ".git")
-	}
-	return procwatch.Options{
-		Stage: "clone", Label: "克隆仓库 " + name,
-		Stall: procwatch.DurationEnv(gitwork.CloneStallEnv, 5*time.Minute), StallEnv: gitwork.CloneStallEnv,
-		Timeout: procwatch.DurationEnv(gitwork.CloneTimeoutEnv, 10*time.Minute), TimeoutEnv: gitwork.CloneTimeoutEnv,
-		Redact: func(line string) string { return gitwork.Redact(line, repo.GitToken) },
-	}
-}
-
-func cloneOutput(out []byte, token string) string {
-	detail := gitwork.Redact(strings.TrimSpace(string(out)), token)
-	if len(detail) > 300 {
-		detail = detail[len(detail)-300:]
-	}
-	return detail
-}
-
-// maxArtifactUploadBytes bounds one uploaded artifact; the complete endpoint
-// enforces the same limit server-side.
-const maxArtifactUploadBytes = 1 << 20
-
-// resolveCommandPath turns a bare binary name into an absolute path so the
-// spawn cannot accidentally resolve against the daemon's own directory.
-func resolveCommandPath(argv []string) []string {
-	if len(argv) == 0 || argv[0] == "" || strings.ContainsRune(argv[0], os.PathSeparator) {
-		return argv
-	}
-	if resolved, err := exec.LookPath(argv[0]); err == nil {
-		argv[0] = resolved
-	}
-	return argv
-}
-
-// executeMock serves the built-in mock provider: it echoes the prompt so the
-// full register/claim/execute/complete loop works without a real Agent CLI.
-func (d *Daemon) executeMock(ctx context.Context, task domain.RunnerTask) execResult {
-	batcher := newEventBatcher(task, d.client)
-	if err := d.client.StartTask(ctx, task.ID); err != nil {
-		return execResult{status: domain.RunnerTaskFailed, errMsg: fmt.Sprintf("start: %v", err)}
-	}
-	batcher.addLine("stdout", "MOCK "+task.Prompt)
-	batcher.flush(ctx)
-	return execResult{status: domain.RunnerTaskSuccess, exitCode: 0, result: "MOCK " + task.Prompt}
-}
-
-func (d *Daemon) defaultWorkspace(taskID string) string {
-	return filepath.Join(d.cfg.DefaultWorkspaceRoot, taskID)
-}
-
-// runnerVersion is reported at registration; it matches the module build.
-var runnerVersion = domain.RunnerVersionPrivilegedSandbox
 
 // Version returns the runner build version reported at registration.
 func Version() string { return runnerVersion }

@@ -247,7 +247,6 @@ func TestTrailingSlashAndMiddlewareBranches(t *testing.T) {
 	}
 }
 
-
 func TestRunnerOutputAndServerEndpointBranches(t *testing.T) {
 	if validateRunnerTaskOutputs(nil) != "" || validateRunnerTaskOutputs(&domain.RunnerTaskOutputs{}) != "" {
 		t.Fatal("empty outputs rejected")

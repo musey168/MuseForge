@@ -250,4 +250,3 @@ func TestDispatchRepositoryBranches(t *testing.T) {
 		t.Fatalf("invalid stored branch selection must fail before task creation: %v", err)
 	}
 }
-

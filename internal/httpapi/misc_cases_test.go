@@ -338,4 +338,3 @@ func TestMiscProjectPlaybooksPermissionsAndAssignments(t *testing.T) {
 		t.Fatalf("new TAPD clear project = %d: %s", rec.Code, rec.Body.String())
 	}
 }
-
