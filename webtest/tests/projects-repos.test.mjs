@@ -9,18 +9,16 @@ test('project identity, filtering, payload validation, and project form behavior
   const values = app.evaluate(`({
     identity:generateProjectIdentity('Web Console',[{id:'web-console',key:'WC'}],'seed'),
     chinese:generateProjectIdentity('控制台',[],'a1b2'),
-    route:parseProjectAdminRoute('#/projects/project%201/members'),
+    route:parseProjectAdminRoute('#/projects/project%201/tapd'),
     hash:projectAdminHash('project 1','repos'),
-    people:projectPeopleIds({ownerId:1,members:[{userId:1},{userId:2},{userId:2}]}),
     filtered:filterAdminProjects(
-      [{id:'p1',name:'Alpha',ownerId:1,members:[]},{id:'p2',name:'Beta',ownerId:2,members:[]}],
-      [{id:'r1',projectId:'p1',name:'frontend'}],'front','all',1).map(p=>p.id)
+      [{id:'p1',name:'Alpha',ownerId:1},{id:'p2',name:'Beta',ownerId:2}],
+      [{id:'r1',projectId:'p1',name:'frontend'}],'front','all').map(p=>p.id)
   })`);
   assert.equal(JSON.stringify(values.identity), JSON.stringify({ id: 'web-console-2', key: 'WCA' }));
   assert.equal(JSON.stringify(values.chinese), JSON.stringify({ id: 'proj-a1b2', key: 'PRJ' }));
-  assert.equal(JSON.stringify(values.route), JSON.stringify({ id: 'project 1', tab: 'members' }));
+  assert.equal(JSON.stringify(values.route), JSON.stringify({ id: 'project 1', tab: 'tapd' }));
   assert.equal(values.hash, '#/projects/project%201/repos');
-  assert.equal(JSON.stringify(values.people), JSON.stringify([1, 2]));
   assert.equal(JSON.stringify(values.filtered), JSON.stringify(['p1']));
 
   app.evaluate(`
@@ -42,9 +40,9 @@ test('project identity, filtering, payload validation, and project form behavior
     (() => {
       state.data.repositories=[{id:'repo-x',projectId:'payments-api'}];
       const payload=buildProjectPayload({id:'payments-api',name:' Payments ',key:'pay',ownerId:1,
-        workflowId:'generic-backend-delivery',members:[{userId:1},{userId:2}],defaultRepositoryId:'repo-x'});
+        workflowId:'generic-backend-delivery',defaultRepositoryId:'repo-x'});
       const valid=validateProjectPayload(payload,{creating:true,projects:[],workflows:state.data.workflows});
-      const duplicate=validateProjectPayload({...payload,members:[{userId:2},{userId:2}]},
+      const noOwner=validateProjectPayload({...payload,ownerId:0},
         {creating:true,projects:[],workflows:state.data.workflows});
       // The id is a path segment of /api/projects/:id: a slash or an over-long
       // id would create a project nobody can open or delete.
@@ -52,14 +50,16 @@ test('project identity, filtering, payload validation, and project form behavior
       const long=validateProjectPayload({...payload,id:'p'.repeat(65)},{creating:true,projects:[],workflows:state.data.workflows});
       const legacy=validateProjectPayload({...payload,id:'old id'},{creating:false,saved:true,projects:[],workflows:state.data.workflows});
       const longName=generateProjectIdentity('Alpha '.repeat(20),[],'seed').id;
-      return {payload,valid,duplicate,slash,long,legacy,longName};
+      return {payload,valid,noOwner,slash,long,legacy,longName};
     })()
   `);
   assert.equal(payloadResult.payload.name, 'Payments');
   assert.equal(payloadResult.payload.key, 'PAY');
-  assert.equal(payloadResult.payload.members.length, 1);
+  assert.ok(!('members' in payloadResult.payload), 'a project write carries no roster');
+  assert.ok(!('membersVersion' in payloadResult.payload), 'a project write carries no roster token');
+  assert.ok(!('businessDomainId' in payloadResult.payload), 'a project write carries no business domain');
   assert.equal(payloadResult.valid, null);
-  assert.match(payloadResult.duplicate.message, /不能重复/);
+  assert.equal(payloadResult.noOwner.field, 'ownerId');
   assert.equal(payloadResult.slash.field, 'id');
   assert.match(payloadResult.slash.message, /不能包含空格/);
   assert.match(payloadResult.long.message, /64/);
@@ -221,7 +221,7 @@ test('project owner deletes a project from its danger zone and the list moves on
     state.authRequired=true;
     state.currentUser={id:7,loginName:'owner'};
     state.data.users=[state.currentUser];
-    state.data.projects=[...state.data.projects,{id:'okr-system',name:'OKR系统',ownerId:7,members:[]}];
+    state.data.projects=[...state.data.projects,{id:'okr-system',name:'OKR系统',ownerId:7}];
     state.projectFilter='okr-system';
   `);
   const values = app.evaluate(`({
@@ -239,4 +239,36 @@ test('project owner deletes a project from its danger zone and the list moves on
   assert.notEqual(app.evaluate(`state.projectFilter`), 'okr-system');
   assert.equal(app.evaluate(`localStorage.getItem('agentflow.activeProject')`), app.evaluate(`state.projectFilter`));
   assert.equal(app.evaluate(`state.projectAdminDetailId||''`), '');
+});
+
+test('the project view exposes no membership controls', async (t) => {
+  const app = await loadApp();
+  t.after(app.close);
+  app.router.put('/api/projects', (call) => call.body);
+  app.evaluate(`
+    state.authRequired=true;
+    state.currentUser={id:1,loginName:'owner'};
+    state.data.users=[state.currentUser,{id:2,loginName:'member'}];
+    state.data.projects=[{...state.data.projects[0],key:'ATL',workflowId:'flow-1',ownerId:1}];
+    state.projectAdminDetailId='project-1';state.projectAdminTab='basic';state.projectDraft=null;
+    renderProjectDetail({force:true});
+    renderProjectList();
+  `);
+  const form = app.document.querySelector('#projectAdminForm');
+  assert.ok(form, 'the project settings form is rendered');
+  for (const marker of ['data-member-row', 'member-role', 'data-remove-member', 'data-pa-join-box', '加入申请', '项目成员']) {
+    assert.equal(form.innerHTML.includes(marker), false, `the settings page has no ${marker}`);
+  }
+  assert.equal(form.querySelector('[data-pa-panel="members"]'), null, 'there is no members panel');
+  assert.deepEqual(
+    [...app.document.querySelectorAll('#projectAdminTabs [data-pa-tab]')].map((b) => b.dataset.paTab),
+    ['basic', 'repos', 'tapd'],
+    'the settings page has no members tab',
+  );
+  const list = app.document.querySelector('#projectAdminList');
+  assert.equal(list.innerHTML.includes('data-project-join'), false, 'the project card offers no join request');
+  assert.equal(list.innerHTML.includes('pa-av'), false, 'the project card shows no member avatars');
+  assert.equal(list.innerHTML.includes('位成员'), false, 'the project card shows no member count');
+  const filters = [...app.document.querySelectorAll('#projectAdminFilters [data-project-filter]')].map((b) => b.dataset.projectFilter);
+  assert.deepEqual(filters, ['all', 'setup'], 'the toolbar has no membership filter');
 });

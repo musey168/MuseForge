@@ -125,11 +125,5 @@ func ProjectCredentialAccess(project Project, userID int64, platformAdmin bool) 
 	if platformAdmin || project.OwnerID == userID {
 		return true, true
 	}
-	for _, member := range project.Members {
-		if member.UserID == userID {
-			role := strings.ToLower(strings.TrimSpace(member.Role))
-			return role == "member" || role == "maintainer", role == "maintainer"
-		}
-	}
 	return false, false
 }

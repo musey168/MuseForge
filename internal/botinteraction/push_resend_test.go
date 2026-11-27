@@ -30,7 +30,7 @@ func TestDingTalkExpiredReplyResentAsPush(t *testing.T) {
 	}
 	defer store.Close()
 	store.PutUser(domain.User{ID: 43, LoginName: "member"})
-	store.PutProject(domain.Project{ID: "p", OwnerID: 42, Members: []domain.ProjectMember{{UserID: 43, Role: "member"}}})
+	store.PutProject(domain.Project{ID: "p", OwnerID: 42, })
 	bot := domain.NotificationBot{ID: "cfg-dt-push", Channel: domain.BotChannelDingTalk, BotID: "ding-app", ProjectID: "p", OwnerID: 42, Enabled: true, InteractionEnabled: true, TenantKey: "ding-corp", TenantState: domain.BotTenantLocked}
 	if _, err := store.SaveNotificationBotChecked(bot, "secret", nil); err != nil {
 		t.Fatal(err)

@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -156,15 +155,7 @@ func (h *runsHandlers) workspaceEditAllowed(r *http.Request, run domain.Run, use
 	if !ok {
 		return false
 	}
-	if project.OwnerID == userID || project.OwnerID == 0 && len(project.Members) == 0 {
-		return true
-	}
-	for _, member := range project.Members {
-		if member.UserID == userID && !strings.EqualFold(member.Role, "viewer") {
-			return true
-		}
-	}
-	return false
+	return project.AccountOwns(userID)
 }
 
 func (h *runsHandlers) workspaceWritable(c *gin.Context, run domain.Run) bool {

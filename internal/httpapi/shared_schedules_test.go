@@ -37,7 +37,7 @@ func TestSharedScheduleSubscriptionUsesPinnedVersionAndTargetOwner(t *testing.T)
 	owner, _ := st.UserByLoginName("subscriber")
 	outsider, _ := st.UserByLoginName("outsider")
 	viewer, _ := st.UserByLoginName("viewer")
-	if err := st.PutProject(domain.Project{ID: "subscriber", Name: "Target", OwnerID: owner.ID, Members: []domain.ProjectMember{{UserID: viewer.ID, Role: "viewer"}}}); err != nil {
+	if err := st.PutProject(domain.Project{ID: "subscriber", Name: "Target", OwnerID: owner.ID, }); err != nil {
 		t.Fatal(err)
 	}
 	source := domain.ScheduleJob{ID: "publish-source", ProjectID: "workbench", Name: "巡检", SkipDispatch: true, AssistantPrompt: "Source prompt", IntervalSec: 3600, AssistantModel: "glm-5.3-flash-ioa", OwnerUserID: sourceOwner.ID}

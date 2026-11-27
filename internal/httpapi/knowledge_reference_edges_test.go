@@ -315,7 +315,6 @@ func TestSessionUpdateAllowsDisabledOrDeletedHistoricalKnowledgeRefs(t *testing.
 		ID:      "p-receipt",
 		Name:    "Receipt Project",
 		OwnerID: alice.ID,
-		Members: []domain.ProjectMember{{UserID: bob.ID, Role: "member"}},
 	})
 
 	createRec := doJSONAsUser(t, h, alice, http.MethodPost, "/api/knowledge/connectors", `{"name":"Alice Docs","type":"mcp","endpoint":"`+mcpURL+`"}`)
@@ -418,7 +417,6 @@ func TestProjectSharedSessionHidesCreatorKnowledgeRefsFromMembers(t *testing.T) 
 		ID:      "p-shared-kb",
 		Name:    "Shared KB Project",
 		OwnerID: alice.ID,
-		Members: []domain.ProjectMember{{UserID: bob.ID, Role: "member"}},
 	})
 	_ = s.PutIssue(domain.Issue{ID: "iss-shared-1", ProjectID: "p-shared-kb", Title: "Shared Issue"})
 

@@ -395,13 +395,6 @@ func TestMiscRoomAuthorizationRosterAndSuccessHTTP(t *testing.T) {
 	}
 	project := domain.Project{
 		ID: "cvb-room-project", Key: "CRP", Name: "rooms", OwnerID: owner.ID,
-		Members: []domain.ProjectMember{
-			{UserID: owner.ID, Role: "member"},
-			{UserID: viewer.ID, Role: "viewer"},
-			{UserID: member.ID, Role: "member"},
-			{UserID: chineseOnly.ID, Role: "member"},
-			{UserID: 999999, Role: "member"},
-		},
 	}
 	if err := f.s.PutProject(project); err != nil {
 		t.Fatal(err)

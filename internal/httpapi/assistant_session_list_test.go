@@ -76,10 +76,10 @@ func TestAssistantSessionListPreservesVisibilityAndMetadata(t *testing.T) {
 	h, owner, viewer, prefix := sessionListFixture(t)
 	projects := []domain.Project{
 		{ID: prefix + "owned", OwnerID: viewer.ID},
-		{ID: prefix + "member", OwnerID: owner.ID, Members: []domain.ProjectMember{{UserID: viewer.ID, Role: "member"}}},
+		{ID: prefix + "member", OwnerID: owner.ID, },
 		{ID: prefix + "private", OwnerID: owner.ID},
 		{ID: prefix + "open"},
-		{ID: prefix + "members-only", Members: []domain.ProjectMember{{UserID: owner.ID, Role: "member"}}},
+		{ID: prefix + "members-only", },
 	}
 	ids := map[string]string{}
 	for _, project := range projects {
@@ -185,7 +185,7 @@ func TestAssistantSessionListPreservesVisibilityAndMetadata(t *testing.T) {
 func TestAssistantSessionListMarksUnreadRepliesUntilOpened(t *testing.T) {
 	h, owner, viewer, prefix := sessionListFixture(t)
 	project := prefix + "team"
-	putSessionListProject(t, h, domain.Project{ID: project, OwnerID: owner.ID, Members: []domain.ProjectMember{{UserID: viewer.ID, Role: "member"}}})
+	putSessionListProject(t, h, domain.Project{ID: project, OwnerID: owner.ID, })
 	question := []domain.AssistantMessage{{Role: "user", Content: "question", AuthorID: owner.ID}}
 	for _, key := range []string{"done", "legacy", "failed", "busy", "team-chat"} {
 		session := domain.AssistantSession{ID: prefix + key, Title: key, Messages: question}
@@ -291,7 +291,7 @@ func (l *sessionListQueryLog) Trace(_ context.Context, _ time.Time, query func()
 
 func TestAssistantSessionListQueryCountIsBounded(t *testing.T) {
 	h, owner, viewer, prefix := sessionListFixture(t)
-	putSessionListProject(t, h, domain.Project{ID: prefix, OwnerID: owner.ID, Members: []domain.ProjectMember{{UserID: viewer.ID, Role: "member"}}})
+	putSessionListProject(t, h, domain.Project{ID: prefix, OwnerID: owner.ID, })
 	originalLogger := h.repo.DB.Logger
 	counts := []int{}
 	for i := 0; i < 27; i++ {

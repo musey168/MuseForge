@@ -85,7 +85,7 @@ func TestScheduleJobExecutionsFollowJobAccess(t *testing.T) {
 	owner, _ := st.UserByLoginName("exec-owner")
 	viewer, _ := st.UserByLoginName("exec-viewer")
 	outsider, _ := st.UserByLoginName("exec-outsider")
-	if err := st.PutProject(domain.Project{ID: "exec-proj", Name: "Exec", OwnerID: owner.ID, Members: []domain.ProjectMember{{UserID: viewer.ID, Role: "viewer"}}}); err != nil {
+	if err := st.PutProject(domain.Project{ID: "exec-proj", Name: "Exec", OwnerID: owner.ID, }); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.PutScheduleJob(domain.ScheduleJob{ID: "exec-job", ProjectID: "exec-proj", Name: "巡检", SkipDispatch: true, AssistantPrompt: "p", IntervalSec: 3600, OwnerUserID: owner.ID}); err != nil {

@@ -112,7 +112,7 @@ func TestProjectListBatchesMembers(t *testing.T) {
 	prefix := fmt.Sprintf("project-query-%d-", time.Now().UnixNano())
 	for i := 0; i < 8; i++ {
 		id := fmt.Sprintf("%s%d", prefix, i)
-		if err := s.PutProject(domain.Project{ID: id, Name: id, Members: []domain.ProjectMember{{UserID: 1, Role: "maintainer"}}}); err != nil {
+		if err := s.PutProject(domain.Project{ID: id, Name: id, }); err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() {

@@ -148,7 +148,7 @@ func TestWorkbenchReferencesAndUploads(t *testing.T) {
 	_ = st.PutUser(domain.User{LoginName: "cva-wb-viewer"})
 	viewer, _ := st.UserByLoginName("cva-wb-viewer")
 	projectID := "cva-wb-p"
-	_ = st.PutProject(domain.Project{ID: projectID, Name: "Workbench P", OwnerID: owner.ID, Members: []domain.ProjectMember{{UserID: viewer.ID, Role: "viewer"}}})
+	_ = st.PutProject(domain.Project{ID: projectID, Name: "Workbench P", OwnerID: owner.ID, })
 	_ = st.PutIssue(domain.Issue{ID: "cva-wb-i", ProjectID: projectID, Title: "Issue", Description: "D"})
 	_ = st.PutAgent(domain.AgentDefinition{ID: "cva-wb-a", ProjectID: projectID, Name: "Agent", Prompt: "Do"})
 	_ = st.PutWorkflow(domain.WorkflowDefinition{ID: "cva-wb-w", ProjectID: projectID, Name: "Workflow", Status: "published"})

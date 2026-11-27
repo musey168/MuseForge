@@ -9,13 +9,12 @@ import (
 )
 
 type Project struct {
-	BusinessDomainID string `json:"businessDomainId,omitempty"`
-	ID               string `json:"id"`
-	Key              string `json:"key"`
-	Name             string `json:"name"`
-	Description      string `json:"description"`
-	Color            string `json:"color"`
-	WorkflowID       string `json:"workflowId,omitempty"`
+	ID          string `json:"id"`
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Color       string `json:"color"`
+	WorkflowID  string `json:"workflowId,omitempty"`
 	// SOPPlaybooks are named requirement combos (e.g. 完整需求 / 仅后端).
 	// A requirement picks one; it does not inherit a single project-wide chain.
 	SOPPlaybooks []SOPPlaybook `json:"sopPlaybooks,omitempty"`
@@ -24,11 +23,8 @@ type Project struct {
 	SOPBindings         []IssueSOPBinding `json:"sopBindings,omitempty"`
 	DefaultRepositoryID string            `json:"defaultRepositoryId,omitempty"`
 	OwnerID             int64             `json:"ownerId,omitempty"`
-	Members             []ProjectMember   `json:"members,omitempty"`
-	// MembersVersion is an opaque snapshot token for replacing the member list.
-	MembersVersion string              `json:"membersVersion,omitempty"`
-	RunEval        RunEvalPolicy       `json:"runEval,omitempty"`
-	SOPDetection   *SOPDetectionConfig `json:"sopDetection,omitempty"`
+	RunEval             RunEvalPolicy     `json:"runEval,omitempty"`
+	SOPDetection        *SOPDetectionConfig `json:"sopDetection,omitempty"`
 	// Deprecated project-level credential fields are kept only so old payloads
 	// can be decoded and scrubbed by the schema migration.
 	GitToken                     string    `json:"-"`
@@ -64,44 +60,17 @@ func PublicProjects(items []Project) []Project {
 	return out
 }
 
-type ProjectMember struct {
-	UserID int64  `json:"userId"`
-	Role   string `json:"role"` // maintainer, member, viewer
-}
-
-const (
-	ProjectRoleMaintainer = "maintainer"
-	ProjectRoleMember     = "member"
-	ProjectRoleViewer     = "viewer"
-)
-
-// NormalizeProjectMemberRole maps an empty role to member and reports whether
-// the role is one of maintainer, member or viewer.
-func NormalizeProjectMemberRole(role string) (string, bool) {
-	switch r := strings.ToLower(strings.TrimSpace(role)); r {
-	case "":
-		return ProjectRoleMember, true
-	case ProjectRoleMaintainer, ProjectRoleMember, ProjectRoleViewer:
-		return r, true
-	default:
-		return r, false
-	}
-}
-
-// HasWritableMember checks explicit project membership, including the owner.
-func (p Project) HasWritableMember(userID int64) bool {
+// AccountOwns reports whether the platform's single account owns the project.
+//
+// A personal deployment runs one account, so the owner of a project is that
+// account; there is no member roster and no role to check. A project without
+// an owner was never claimed by anyone, so it stays open to the account that
+// signs in.
+func (p Project) AccountOwns(userID int64) bool {
 	if userID <= 0 {
 		return false
 	}
-	if p.OwnerID == userID {
-		return true
-	}
-	for _, member := range p.Members {
-		if member.UserID == userID && !strings.EqualFold(strings.TrimSpace(member.Role), ProjectRoleViewer) {
-			return true
-		}
-	}
-	return false
+	return p.OwnerID == 0 || p.OwnerID == userID
 }
 
 // RepositoryProviderSSH uses Git transport only; it has no hosting API adapter.

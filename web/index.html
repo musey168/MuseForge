@@ -672,13 +672,13 @@
     <section id="projectsView" class="view page-view">
       <div id="projectListView" class="pa-level">
         <header class="pa-ph">
-          <div><h1>项目配置</h1><p>项目是需求、仓库、团队和默认 LOOP 的统一边界。点击项目进入详情配置。</p></div>
+          <div><h1>项目配置</h1><p>项目是需求与代码仓库的统一边界。点击项目进入详情配置。</p></div>
           <div class="pa-ph-act">
             <label class="pa-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="projectAdminSearch" type="search" placeholder="搜索项目名称、标识、Key 或仓库" autocomplete="off" aria-label="搜索项目"></label>
             <button id="newProject" class="button primary" type="button">＋ 新建项目</button>
           </div>
         </header>
-        <div class="pa-toolbar"><span>共 <b id="projectAdminCount">0</b> 个项目</span><div class="pa-seg" id="projectAdminFilters" role="tablist" aria-label="项目筛选"><button type="button" role="tab" data-project-filter="all">全部</button><button type="button" role="tab" data-project-filter="mine">我参与的</button><button type="button" role="tab" data-project-filter="setup">待完善</button></div></div>
+        <div class="pa-toolbar"><span>共 <b id="projectAdminCount">0</b> 个项目</span><div class="pa-seg" id="projectAdminFilters" role="tablist" aria-label="项目筛选"><button type="button" role="tab" data-project-filter="all">全部</button><button type="button" role="tab" data-project-filter="setup">待完善</button></div></div>
         <div id="projectAdminList"></div>
       </div>
       <div id="projectDetailView" class="pa-level" hidden>

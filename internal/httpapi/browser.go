@@ -147,13 +147,5 @@ func (h *browserHandlers) canControl(r *http.Request, run domain.Run, userID int
 	if !ok {
 		return false
 	}
-	if project.OwnerID == userID || project.OwnerID == 0 && len(project.Members) == 0 {
-		return true
-	}
-	for _, member := range project.Members {
-		if member.UserID == userID && !strings.EqualFold(member.Role, "viewer") {
-			return true
-		}
-	}
-	return false
+	return project.AccountOwns(userID)
 }

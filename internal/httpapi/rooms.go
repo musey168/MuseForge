@@ -399,23 +399,11 @@ func (h *roomsHandlers) roomAccess(c *gin.Context, projectID string, write bool)
 		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
 		return false
 	}
-	if project.OwnerID <= 0 && len(project.Members) == 0 {
-		return true
-	}
 	_, userID := actorLabel(current)
-	if userID > 0 && project.OwnerID == userID {
+	if userID > 0 && project.AccountOwns(userID) {
 		return true
 	}
-	for _, member := range project.Members {
-		if userID > 0 && member.UserID == userID {
-			if write && strings.EqualFold(strings.TrimSpace(member.Role), "viewer") {
-				c.JSON(http.StatusForbidden, gin.H{"error": "只读成员不能在群里发言或派单"})
-				return false
-			}
-			return true
-		}
-	}
-	c.JSON(http.StatusForbidden, gin.H{"error": "你不是该项目成员，不能访问协作群"})
+	c.JSON(http.StatusForbidden, gin.H{"error": "你不是该项目负责人，不能访问协作群"})
 	return false
 }
 
@@ -481,9 +469,6 @@ func (h *roomsHandlers) projectRoster(projectID string) []domain.ChatMember {
 		members = append(members, domain.ChatMember{UserID: id, Name: name, Role: role})
 	}
 	add(project.OwnerID, "owner")
-	for _, member := range project.Members {
-		add(member.UserID, member.Role)
-	}
 	return members
 }
 

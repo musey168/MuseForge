@@ -36,7 +36,7 @@ func TestProjectDeleteArchivesAndRestores(t *testing.T) {
 		users[login], _ = s.UserByLoginName(login)
 	}
 	admin, owner, member := users["pd-admin"], users["pd-owner"], users["pd-member"]
-	if err := s.PutProject(domain.Project{ID: "okr-system", Name: "OKR系统", OwnerID: owner.ID, Members: []domain.ProjectMember{{UserID: member.ID}}}); err != nil {
+	if err := s.PutProject(domain.Project{ID: "okr-system", Name: "OKR系统", OwnerID: owner.ID, }); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.PutProject(domain.Project{ID: "keep", Name: "保留", OwnerID: owner.ID}); err != nil {

@@ -28,18 +28,18 @@ func (r *RunnersRepo) writableRunnerProject(projectID string, userID int64) (dom
 	if projectID == "" || userID <= 0 {
 		return domain.Project{}, false
 	}
-	project, err := r.projects.projectWithMembersInTx(r.DB, projectID)
+	project, err := r.projects.projectWithOwnerInTx(r.DB, projectID)
 	return project, err == nil && writableRunnerProject(project, projectID, userID)
 }
 
 func writableRunnerProject(project domain.Project, projectID string, userID int64) bool {
-	return project.ID == projectID && project.ArchivedAt == nil && project.HasWritableMember(userID)
+	return project.ID == projectID && project.ArchivedAt == nil && project.AccountOwns(userID)
 }
 
 // canAssignProjectRun checks current membership and sharing on the admission
 // transaction's own connection. A nil runner represents the platform.
 func (r *RunnersRepo) canAssignProjectRun(tx *gorm.DB, ec domain.TelemetryContext, runner *domain.Runner) (bool, error) {
-	project, err := r.projects.projectWithMembersInTx(tx, ec.ProjectID)
+	project, err := r.projects.projectWithOwnerInTx(tx, ec.ProjectID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
@@ -66,7 +66,7 @@ func (r *RunnersRepo) canAssignProjectRun(tx *gorm.DB, ec domain.TelemetryContex
 }
 
 func runnerSharedByWritableOwner(runner domain.Runner, project domain.Project) bool {
-	return runner.SharedWithProject(project.ID) && project.HasWritableMember(runner.OwnerUserID)
+	return runner.SharedWithProject(project.ID) && project.AccountOwns(runner.OwnerUserID)
 }
 
 func (r *RunnersRepo) CanUseRunner(runner domain.Runner, projectID string, userID int64) bool {

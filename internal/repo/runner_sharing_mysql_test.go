@@ -30,7 +30,7 @@ func TestMySQLRunnerSharingPreservesGrantsAndClearsRevokedDefaults(t *testing.T)
 	})
 	for _, id := range projects {
 		if err := store.PutProject(domain.Project{ID: id, Name: id, OwnerID: 1,
-			Members: []domain.ProjectMember{{UserID: 2, Role: "member"}}}); err != nil {
+}); err != nil {
 			t.Fatal(err)
 		}
 	}

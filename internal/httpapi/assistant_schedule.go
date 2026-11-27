@@ -388,5 +388,5 @@ func scheduleProjectWriter(r interface {
 		return true
 	}
 	project, ok := r.Project(projectID)
-	return ok && project.HasWritableMember(user.ID)
+	return ok && project.AccountOwns(user.ID)
 }

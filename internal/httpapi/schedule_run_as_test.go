@@ -35,9 +35,7 @@ func TestScheduleJobRunsWithTheSaversKey(t *testing.T) {
 	member, _ := st.UserByLoginName("runas-member")
 	other, _ := st.UserByLoginName("runas-other")
 	nokey, _ := st.UserByLoginName("runas-nokey")
-	project := domain.Project{ID: "runas-proj", Name: "RunAs", OwnerID: owner.ID, Members: []domain.ProjectMember{
-		{UserID: member.ID, Role: "member"}, {UserID: other.ID, Role: "member"}, {UserID: nokey.ID, Role: "member"},
-	}}
+	project := domain.Project{ID: "runas-proj", Name: "RunAs", OwnerID: owner.ID, }
 	if err := st.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +185,7 @@ func TestScheduleJobMemberWithoutKeyCanStopIt(t *testing.T) {
 	}
 	owner, _ := st.UserByLoginName("stop-owner")
 	nokey, _ := st.UserByLoginName("stop-nokey")
-	if err := st.PutProject(domain.Project{ID: "stop-proj", Name: "Stop", OwnerID: owner.ID, Members: []domain.ProjectMember{{UserID: nokey.ID, Role: "member"}}}); err != nil {
+	if err := st.PutProject(domain.Project{ID: "stop-proj", Name: "Stop", OwnerID: owner.ID, }); err != nil {
 		t.Fatal(err)
 	}
 	server := New(st, engine.New(st, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
@@ -270,7 +268,7 @@ func TestScheduleJobEnabledTogglesOnlyTheFlag(t *testing.T) {
 	owner, _ := st.UserByLoginName("toggle-owner")
 	member, _ := st.UserByLoginName("toggle-member")
 	viewer, _ := st.UserByLoginName("toggle-viewer")
-	if err := st.PutProject(domain.Project{ID: "toggle-proj", Name: "T", OwnerID: owner.ID, Members: []domain.ProjectMember{{UserID: member.ID, Role: "member"}, {UserID: viewer.ID, Role: "viewer"}}}); err != nil {
+	if err := st.PutProject(domain.Project{ID: "toggle-proj", Name: "T", OwnerID: owner.ID, }); err != nil {
 		t.Fatal(err)
 	}
 	job := domain.ScheduleJob{ID: "toggle-job", ProjectID: "toggle-proj", Name: "巡检", SkipDispatch: true, AssistantPrompt: "p", IntervalSec: 3600, Enabled: true,

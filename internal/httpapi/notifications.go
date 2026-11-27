@@ -33,13 +33,8 @@ func (h *notificationHandlers) access(c *gin.Context, projectID string, write bo
 		c.JSON(401, gin.H{"error": "请先登录"})
 		return false
 	}
-	if h.isPlatformAdmin(c.Request) || project.OwnerID == user.ID {
+	if h.isPlatformAdmin(c.Request) || project.AccountOwns(user.ID) {
 		return true
-	}
-	for _, member := range project.Members {
-		if member.UserID == user.ID && (!write || !strings.EqualFold(strings.TrimSpace(member.Role), "viewer")) {
-			return true
-		}
 	}
 	c.JSON(403, gin.H{"error": "你没有该项目的通知管理权限"})
 	return false
@@ -56,15 +51,10 @@ func (h *notificationHandlers) managed(c *gin.Context, bot domain.NotificationBo
 		return false
 	}
 	project, _ := h.repo.Project(bot.ProjectID)
-	if bot.OwnerID == user.ID || project.OwnerID == user.ID {
+	if bot.OwnerID == user.ID || project.AccountOwns(user.ID) {
 		return true
 	}
-	for _, m := range project.Members {
-		if m.UserID == user.ID && strings.EqualFold(strings.TrimSpace(m.Role), "maintainer") {
-			return true
-		}
-	}
-	c.JSON(403, gin.H{"error": "只有创建者或项目管理员可以修改机器人和发送测试通知"})
+	c.JSON(403, gin.H{"error": "只有创建者或项目负责人可以修改机器人和发送测试通知"})
 	return false
 }
 func (h *notificationHandlers) find(c *gin.Context, write bool) (domain.NotificationBot, bool) {

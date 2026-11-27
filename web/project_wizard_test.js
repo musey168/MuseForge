@@ -14,7 +14,7 @@ function extract(source, name) {
 const requests = [], notices = [], confirms = [], views = [], switcherEvents = [];
 const users = [{id:1,loginName:"alice"},{id:2,loginName:"bob"},{id:3,loginName:"carol"}];
 const projects = [
-  {id:"agentflow",key:"AF",name:"AgentFlow",ownerId:1,members:[{userId:2}],workflowId:"wf",defaultRepositoryId:""},
+  {id:"agentflow",key:"AF",name:"AgentFlow",ownerId:1,workflowId:"wf",defaultRepositoryId:""},
 ];
 const repositories = [];
 let confirmAnswer = true, failNext = "", pending = null;
@@ -119,13 +119,13 @@ function assertFooterLayout(step){
   assert.equal(W().step,"basic");
   const basic=html();
   assert.match(basic,/role="dialog" aria-modal="true"/);
-  assert.match(basic,/第 1 步，共 4 步/);
+  assert.match(basic,/第 1 步，共 3 步/);
   assert.match(basic,/name="name"/);
   assert.match(basic,/name="workflowId"[^]*value="generic-backend-delivery" selected/);
   for(const bad of ['name="id"','name="key"',"自定义","标识与 Key","data-pa-ident"])assert.ok(!basic.includes(bad),"step 1 has no "+bad);
   assert.ok(!basic.includes('name="ownerId"'),"signed-in users own the project without a picker");
-  assert.equal((basic.match(/class="pw-step[ "]/g)||[]).length,5);
-  assert.ok(!/<span class="pw-step-mark">5</.test(basic),"the closing 完成 item is not numbered as a fifth step");
+  assert.equal((basic.match(/class="pw-step[ "]/g)||[]).length,4);
+  assert.ok(!/<span class="pw-step-mark">4/.test(basic),"the closing 完成 item is not numbered as a fourth step");
   assert.match(basic,/pw-step is-active" aria-current="step"><span class="pw-step-mark">1/);
   assert.match(basic,/所有配置之后都能在项目设置里修改/);
   assertFooterLayout("basic");
@@ -170,7 +170,7 @@ function assertFooterLayout(step){
   assert.ok(!("businessDomainId" in requests[0].body));
   assert.equal(W().step,"repos");assert.equal(W().projectId,"web-console");
   assert.ok(projects.some(p=>p.id==="web-console"),"project list includes the new project");
-  assert.match(html(),/第 2 步，共 4 步/);
+  assert.match(html(),/第 2 步，共 3 步/);
   assert.match(html(),/项目「Web Console」已创建/);
   assert.match(html(),/pw-step is-done"><span class="pw-step-mark"><svg/);
   assertFooterLayout("repos");
@@ -206,38 +206,23 @@ function assertFooterLayout(step){
   requests.length=0;
   await ctx.projectWizardNext();
   assert.equal(requests.length,0);
-  assert.equal(W().step,"members");assert.ok(W().done.repos);
-  assertFooterLayout("members");
-  assert.match(html(),/第 3 步，共 4 步/);
-
-  // Members: no change → no request; back to repos is allowed, never to step 1.
-  await ctx.projectWizardNext();
-  assert.equal(requests.length,0);assert.equal(W().step,"tapd");assert.ok(W().skipped.members);
-  assert.match(html(),/<i>已跳过<\/i>/);
+  assert.equal(W().step,"tapd");assert.ok(W().done.repos);
   assertFooterLayout("tapd");
-  await ctx.projectWizardBack();
-  assert.equal(W().step,"members");
+  assert.match(html(),/第 3 步，共 3 步/);
+
+  // Back from TAPD returns to the repositories; step 1 is not reachable after creation.
   await ctx.projectWizardBack();
   assert.equal(W().step,"repos");
   await ctx.projectWizardBack();
   assert.equal(W().step,"repos","step 1 is not reachable after creation");
   await ctx.projectWizardNext();
-  assert.equal(W().step,"members");
-
-  // Duplicate or empty members are rejected without a request.
-  W().draft.members=[{userId:2,role:"member"},{userId:2,role:"member"}];
-  await ctx.projectWizardNext();
-  assert.equal(requests.length,0);assert.equal(W().step,"members");
-  assert.match(html(),/项目成员不能重复/);
-  W().draft.members=[{userId:0,role:"member"}];
-  await ctx.projectWizardNext();
-  assert.equal(requests.length,0);
-  assert.match(html(),/请选择有效的项目成员/);
+  assert.equal(W().step,"tapd");
 
   // Skip with unsaved changes asks; declining stays.
+  W().draft.tapdWorkspaceId="1";
   confirmAnswer=false;confirms.length=0;
   await ctx.projectWizardSkip();
-  assert.equal(confirms.length,1);assert.equal(W().step,"members");
+  assert.equal(confirms.length,1);assert.equal(W().step,"tapd");
   confirmAnswer=true;
 
   // Closing mid-way with unsaved changes asks too.
@@ -246,15 +231,6 @@ function assertFooterLayout(step){
   assert.match(confirms[0],/项目已创建并保留/);
   confirmAnswer=true;
 
-  // A real change PUTs the members.
-  W().draft.members=[{userId:2,role:"member"},{userId:3,role:"member"}];
-  await ctx.projectWizardNext();
-  assert.equal(requests.length,1);
-  assert.equal(requests[0].method,"PUT");
-  assert.deepEqual(requests[0].body.members.map(m=>m.userId),[2,3]);
-  assert.equal(requests[0].body.defaultRepositoryId,"r9","default repository survives the member save");
-  assert.equal(requests[0].body.key,"WC");
-  assert.equal(W().step,"tapd");assert.ok(W().done.members);
   requests.length=0;
 
   // TAPD: PUT failure stays; success opens the summary.
@@ -270,11 +246,11 @@ function assertFooterLayout(step){
   assert.match(done,/项目「Web Console」已创建/);
   assert.match(done,/data-pw-summary="project">[^]*Web Console · <code>web-console<\/code> · <code>WC<\/code>/);
   assert.match(done,/is-ok" data-pw-summary="repos">[^]*2 个，默认 web-console/);
-  assert.match(done,/is-ok" data-pw-summary="members">[^]*3 位（含 Owner）/);
   assert.match(done,/is-ok" data-pw-summary="tapd">[^]*20375341/);
+  assert.ok(!done.includes('data-pw-summary="members"'),"the summary lists no member roster");
   assert.match(done,/开始第一条需求[^]*进入项目设置/);
   sameList(actions(footer()),["close"]);
-  assert.ok(!done.includes("第 5 步"));
+  assert.ok(!done.includes("第 4 步"));
   assert.equal(mounts,1,"errors, saves and step changes never remount the dialog (no replayed entrance animation)");
 
   // Start first requirement: closes, switches the workbench project and opens issues.
@@ -306,16 +282,16 @@ function assertFooterLayout(step){
   await ctx.projectWizardRemoveRepo("r12");
   assert.equal(ctx.projectWizardRepos().length,0);
   requests.length=0;confirms.length=0;
-  await ctx.projectWizardSkip();await ctx.projectWizardSkip();
+  await ctx.projectWizardSkip();
   W().draft.tapdWorkspaceId="1";
   confirms.length=0;
   await ctx.projectWizardSkip();
   assert.equal(confirms.length,1,"skip with typed TAPD asks first");
   assert.equal(requests.length,0,"skipping never writes");
   assert.equal(W().step,"done");
-  assert.ok(W().skipped.repos&&W().skipped.members&&W().skipped.tapd);
+  assert.ok(W().skipped.repos&&W().skipped.tapd);
   assert.match(html(),/is-warn" data-pw-summary="repos">[^]*未配置，可稍后在项目设置补充/);
-  assert.match(html(),/is-warn" data-pw-summary="members">[^]*仅 Owner/);
+  assert.ok(!html().includes('data-pw-summary="members"'),"the summary lists no member roster");
   assert.match(html(),/is-warn" data-pw-summary="tapd">/);
 
   // "进入项目设置" opens the tabbed editor for the new project.
@@ -354,11 +330,11 @@ function assertFooterLayout(step){
   await ctx.closeProjectWizard();
 
   // Editing an existing project still uses the tabbed page.
-  ctx.openProjectAdminDetail("agentflow","members");
+  ctx.openProjectAdminDetail("agentflow","tapd");
   assert.equal(W(),null);
   assert.equal(ctx.state.projectAdminDetailId,"agentflow");
-  assert.equal(ctx.state.projectAdminTab,"members");
-  assert.equal(ctx.location.hash,"#/projects/agentflow/members");
+  assert.equal(ctx.state.projectAdminTab,"tapd");
+  assert.equal(ctx.location.hash,"#/projects/agentflow/tapd");
 
   // Leaving the hash the wizard was opened on (back button, another view) closes it.
   ctx.resetProjectAdminDetail();ctx.location.hash="#/projects";
@@ -376,18 +352,16 @@ function assertFooterLayout(step){
   W().draft.name="Guest Project";requests.length=0;
   await ctx.projectWizardNext();
   assert.equal(requests.length,0);assert.match(html(),/请选择项目 Owner/);
-  // Without a TAPD integration the wizard goes from members straight to the summary.
+  // Without a TAPD integration the wizard goes from the repositories straight to the summary.
   await ctx.closeProjectWizard({force:true});
   ctx.state.currentUser={id:1};ctx.state.data.mcpServers=[];
   ctx.resetProjectAdminDetail();ctx.location.hash="#/projects";
   ctx.openProjectWizard();
   assert.doesNotMatch(html(),/TAPD/,"no TAPD step is listed");
-  assert.match(html(),/第 1 步，共 3 步/);
+  assert.match(html(),/第 1 步，共 2 步/);
   W().draft.name="No Tracker";requests.length=0;
   await ctx.projectWizardNext();
   await ctx.projectWizardSkip();
-  assert.equal(W().step,"members");
-  await ctx.projectWizardNext();
   assert.equal(W().step,"done");
   assert.doesNotMatch(html(),/data-pw-summary="tapd"/);
   await ctx.closeProjectWizard({force:true});

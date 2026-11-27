@@ -136,10 +136,10 @@ func TestMCPImportRollbackAndUnsharedRoleCloneHTTP(t *testing.T) {
 	if !ok {
 		t.Fatal("outsider missing")
 	}
-	if err := f.s.PutProject(domain.Project{ID: "source", Name: "Source", Members: []domain.ProjectMember{{UserID: f.user.ID, Role: "member"}}}); err != nil {
+	if err := f.s.PutProject(domain.Project{ID: "source", Name: "Source", }); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.s.PutProject(domain.Project{ID: "target", Name: "Target", Members: []domain.ProjectMember{{UserID: outsider.ID, Role: "member"}}}); err != nil {
+	if err := f.s.PutProject(domain.Project{ID: "target", Name: "Target", }); err != nil {
 		t.Fatal(err)
 	}
 	owned := domain.MCPServerDefinition{ID: "owned-personal", Name: "Owned", Scope: "personal", OwnerUserID: f.user.ID, Transport: "http", URL: "https://example.test/owned"}

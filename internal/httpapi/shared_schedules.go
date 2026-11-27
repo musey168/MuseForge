@@ -26,13 +26,8 @@ func (h *scheduleHandlers) scheduleProjectAllowed(r *http.Request, id string, wr
 		// only platform admins manage those.
 		return h.isPlatformAdmin(r)
 	}
-	if h.isPlatformAdmin(r) || project.OwnerID == user.ID {
+	if h.isPlatformAdmin(r) || project.AccountOwns(user.ID) {
 		return true
-	}
-	for _, member := range project.Members {
-		if member.UserID == user.ID && (!write || !strings.EqualFold(member.Role, "viewer")) {
-			return true
-		}
 	}
 	return false
 }

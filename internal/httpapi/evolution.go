@@ -106,15 +106,10 @@ func (h *evolutionHandlers) requireProjectReader(c *gin.Context, projectID strin
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
 		return false
 	}
-	if p.OwnerID == 0 || p.OwnerID == user.ID {
+	if p.AccountOwns(user.ID) {
 		return true
 	}
-	for _, member := range p.Members {
-		if member.UserID == user.ID {
-			return true
-		}
-	}
-	c.JSON(http.StatusForbidden, gin.H{"error": "只有项目成员可以查看该项目的RSI工作台"})
+	c.JSON(http.StatusForbidden, gin.H{"error": "只有项目负责人可以查看该项目的RSI工作台"})
 	return false
 }
 
@@ -124,7 +119,7 @@ func (h *evolutionHandlers) requireAssetWriter(c *gin.Context, asset evoAsset) b
 	if asset.Global {
 		return h.requirePlatformAdmin(c)
 	}
-	return h.requireProjectWriter(c, asset.ProjectID)
+	return h.requireAccountWrite(c, asset.ProjectID)
 }
 
 func (h *evolutionHandlers) currentUserID(c *gin.Context) int64 {
@@ -243,7 +238,7 @@ func (h *evolutionHandlers) dismissFinding(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "问题不存在"})
 		return
 	}
-	if !h.requireProjectWriter(c, finding.ProjectID) {
+	if !h.requireAccountWrite(c, finding.ProjectID) {
 		return
 	}
 	finding.Status = domain.EvoFindingDismissed
@@ -269,7 +264,7 @@ func (h *evolutionHandlers) snoozeFinding(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "问题不存在"})
 		return
 	}
-	if !h.requireProjectWriter(c, finding.ProjectID) {
+	if !h.requireAccountWrite(c, finding.ProjectID) {
 		return
 	}
 	if finding.Status != domain.EvoFindingOpen {
@@ -338,7 +333,7 @@ func (h *evolutionHandlers) diagnose(c *gin.Context) {
 		return
 	}
 	req.ProjectID = strings.TrimSpace(req.ProjectID)
-	if !h.requireProjectReader(c, req.ProjectID) || !h.requireProjectWriter(c, req.ProjectID) {
+	if !h.requireProjectReader(c, req.ProjectID) || !h.requireAccountWrite(c, req.ProjectID) {
 		return
 	}
 	h.findingsM.Lock()
@@ -650,7 +645,7 @@ func (h *evolutionHandlers) createProposal(c *gin.Context) {
 		req.ProjectID, req.AssetKind, req.AssetID = f.ProjectID, f.AssetKind, f.AssetID
 	}
 	req.ProjectID = strings.TrimSpace(req.ProjectID)
-	if !h.requireProjectReader(c, req.ProjectID) || !h.requireProjectWriter(c, req.ProjectID) {
+	if !h.requireProjectReader(c, req.ProjectID) || !h.requireAccountWrite(c, req.ProjectID) {
 		return
 	}
 	asset, ok := h.loadAsset(req.AssetKind, req.AssetID)
@@ -743,7 +738,7 @@ func (h *evolutionHandlers) approveProposal(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "资产已删除"})
 		return
 	}
-	if !h.requireProjectWriter(c, p.ProjectID) || !h.requireAssetWriter(c, asset) {
+	if !h.requireAccountWrite(c, p.ProjectID) || !h.requireAssetWriter(c, asset) {
 		return
 	}
 	var (
@@ -779,7 +774,7 @@ func (h *evolutionHandlers) rejectProposal(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "提案不存在"})
 		return
 	}
-	if !h.requireProjectWriter(c, p.ProjectID) {
+	if !h.requireAccountWrite(c, p.ProjectID) {
 		return
 	}
 	if !p.Open() {
@@ -809,7 +804,7 @@ func (h *evolutionHandlers) startQueue(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "待处理项不存在"})
 		return
 	}
-	if !h.requireProjectReader(c, item.ProjectID) || !h.requireProjectWriter(c, item.ProjectID) {
+	if !h.requireProjectReader(c, item.ProjectID) || !h.requireAccountWrite(c, item.ProjectID) {
 		return
 	}
 	c.Set("evoQueueStartID", item.ID)
@@ -822,7 +817,7 @@ func (h *evolutionHandlers) rejectQueue(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "待处理项不存在"})
 		return
 	}
-	if !h.requireProjectReader(c, item.ProjectID) || !h.requireProjectWriter(c, item.ProjectID) {
+	if !h.requireProjectReader(c, item.ProjectID) || !h.requireAccountWrite(c, item.ProjectID) {
 		return
 	}
 	out, err := h.repo.RejectEvoQueue(item.ID)
@@ -1016,7 +1011,7 @@ func (h *evolutionHandlers) pinSample(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "该运行没有所属项目"})
 		return
 	}
-	if !h.requireProjectReader(c, projectID) || !h.requireProjectWriter(c, projectID) {
+	if !h.requireProjectReader(c, projectID) || !h.requireAccountWrite(c, projectID) {
 		return
 	}
 	if c.Request.Method == http.MethodDelete {

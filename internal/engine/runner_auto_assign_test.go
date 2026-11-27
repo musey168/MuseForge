@@ -73,7 +73,7 @@ func newAutoAssignFixture(t *testing.T) autoAssignFixture {
 func (f autoAssignFixture) project(id string) {
 	f.t.Helper()
 	if err := f.s.PutProject(domain.Project{ID: id, Name: id, OwnerID: 1,
-		Members: []domain.ProjectMember{{UserID: 2, Role: domain.ProjectRoleMember}}}); err != nil {
+}); err != nil {
 		f.t.Fatal(err)
 	}
 	if err := f.s.SetProjectRunnerPreference(1, id, "", domain.RunnerSelectionModeAuto); err != nil {

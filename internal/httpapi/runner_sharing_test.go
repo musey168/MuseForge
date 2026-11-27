@@ -250,10 +250,10 @@ func TestRunnerProjectSharing(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, project := range []domain.Project{
-		{ID: "one", Name: "One", OwnerID: owner.user.ID, Members: []domain.ProjectMember{{UserID: member.user.ID, Role: "member"}}},
-		{ID: "two", Name: "Two", OwnerID: member.user.ID, Members: []domain.ProjectMember{{UserID: owner.user.ID, Role: "maintainer"}}},
+		{ID: "one", Name: "One", OwnerID: owner.user.ID, },
+		{ID: "two", Name: "Two", OwnerID: member.user.ID, },
 		{ID: "other", Name: "Other", OwnerID: member.user.ID},
-		{ID: "read-only", Name: "Read only", OwnerID: owner.user.ID, Members: []domain.ProjectMember{{UserID: member.user.ID, Role: "viewer"}}},
+		{ID: "read-only", Name: "Read only", OwnerID: owner.user.ID, },
 		{ID: "unassigned", Name: "Unassigned", OwnerID: owner.user.ID},
 	} {
 		if err := owner.s.PutProject(project); err != nil {

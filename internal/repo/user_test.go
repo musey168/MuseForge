@@ -109,7 +109,7 @@ func TestIssueResponsibilityFallsBackToProjectOwner(t *testing.T) {
 	if err := st.PutUser(domain.User{ID: 42, LoginName: "zhangsan", ChineseName: "张三", GitToken: "git-user", CodeBuddyAPIKey: "ck-user"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.PutProject(domain.Project{ID: "owned", Name: "Owned", OwnerID: 42, Members: []domain.ProjectMember{{UserID: 42, Role: "maintainer"}}}); err != nil {
+	if err := st.PutProject(domain.Project{ID: "owned", Name: "Owned", OwnerID: 42, }); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.PutIssue(domain.Issue{ID: "req-owner", ProjectID: "owned", Title: "fallback"}); err != nil {
@@ -220,7 +220,7 @@ func TestMySQLUserOwnershipRelations(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner, _ := st.UserByLoginName(login)
-	if err := st.PutProject(domain.Project{ID: projectID, Name: "Owned", OwnerID: owner.ID, Members: []domain.ProjectMember{{UserID: owner.ID, Role: "maintainer"}}}); err != nil {
+	if err := st.PutProject(domain.Project{ID: projectID, Name: "Owned", OwnerID: owner.ID, }); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.PutIssue(domain.Issue{ID: issueID, ProjectID: projectID, Title: "Fallback"}); err != nil {

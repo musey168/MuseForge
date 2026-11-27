@@ -113,7 +113,7 @@ func TestSharedRunnerSOPUsesProjectDefaultAndResponsibleUserCredentials(t *testi
 	}
 	t.Cleanup(st.Close)
 	if err := st.PutProject(domain.Project{ID: "shared-compute", Name: "Shared compute", OwnerID: 1,
-		Members: []domain.ProjectMember{{UserID: 42, Role: "member"}}}); err != nil {
+}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.PutProject(domain.Project{ID: "unshared-compute", Name: "Unshared compute", OwnerID: 42}); err != nil {
@@ -219,7 +219,7 @@ func TestSOPDefaultSnapshotFollowsRunnerAuthMode(t *testing.T) {
 				t.Fatal(err)
 			}
 			project := domain.Project{ID: "sop-auth", Name: "SOP auth", OwnerID: 1,
-				Members: []domain.ProjectMember{{UserID: 42, Role: "member"}}}
+}
 			if err := st.PutProject(project); err != nil {
 				t.Fatal(err)
 			}

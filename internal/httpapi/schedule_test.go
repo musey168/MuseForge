@@ -625,7 +625,6 @@ func TestScheduleUIDemoServer(t *testing.T) {
 	if err := st.PutProject(domain.Project{
 		ID: "dp", Key: "DP", Name: "DemoDNS", Description: "本地预分诊验收", Color: "#3867f4",
 		WorkflowID: "demodns-feature-dev", OwnerID: 1,
-		Members:   []domain.ProjectMember{{UserID: 1, Role: "maintainer"}},
 		CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
 		t.Fatal(err)

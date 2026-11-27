@@ -13,25 +13,46 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// requireProjectWriter limits changes to a project's requirements, roles and
-// LOOPs to platform administrators, the project owner and non-viewer members.
-// Projects with neither an owner nor members are shared. Authenticated
-// requests without a user identity (service tokens) are allowed.
-func (d deps) requireProjectWriter(c *gin.Context, projectIDs ...string) bool {
+// requireAccountWrite admits a write that comes from the platform's single
+// account.
+//
+// The personal build runs as one person. There is no project membership, no
+// member role and no join request any more, so the guard no longer asks "is
+// this user a member of this project" — it asks "is this the account that
+// holds this project", and it is asked here, in one place, for every caller.
+// Ticket #7 reuses this guard for platform-wide writes; ticket #12 removes it
+// together with the login machinery.
+func (d deps) requireAccountWrite(c *gin.Context, projectIDs ...string) bool {
 	if !authRequired() {
 		return true
 	}
 	user, ok := d.requestUser(c.Request, true)
-	if !ok || d.isPlatformAdmin(c.Request) {
+	if !ok {
+		// A request without a user identity carries its own authorization
+		// (service tokens, the ingestion endpoint).
 		return true
 	}
 	for _, id := range projectIDs {
-		if !d.projectWriterAllowed(c, id, user.ID) {
-			c.JSON(403, gin.H{"error": "只有项目成员、项目 Owner 或平台管理员可以修改该项目的内容"})
+		if !d.accountHoldsProject(id, user.ID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "只有项目负责人可以修改该项目的内容"})
 			return false
 		}
 	}
 	return true
+}
+
+// accountHoldsProject reports whether the platform's single account holds the
+// project. A project nobody owns stays open to the account: there is no other
+// account it could belong to.
+func (d deps) accountHoldsProject(projectID string, userID int64) bool {
+	if projectID == "" || userID <= 0 {
+		return true
+	}
+	p, found := d.repo.Project(projectID)
+	if !found {
+		return true
+	}
+	return p.AccountOwns(userID)
 }
 
 // Read access does not grant permission to execute agents in a run workspace.
@@ -40,24 +61,19 @@ func (d deps) projectWriterAllowed(c *gin.Context, projectID string, userID int6
 	if !authRequired() || projectID == "" || d.isPlatformAdmin(c.Request) {
 		return true
 	}
-	return d.projectMemberWrites(projectID, userID)
+	return d.accountHoldsProject(projectID, userID)
 }
 
-// speakerProjectWriter applies projectWriterAllowed to the speaker of an agent
-// tool session, which carries the user instead of an HTTP request.
-func (d deps) speakerProjectWriter(projectID string, user domain.User, userID int64) bool {
+// speakerAccountWriter applies the project write predicate to the speaker of an
+// agent tool session, which carries the user instead of an HTTP request.
+func (d deps) speakerAccountWriter(projectID string, user domain.User, userID int64) bool {
 	if !authRequired() || projectID == "" {
 		return true
 	}
 	if login := strings.TrimSpace(user.LoginName); login != "" && d.repo.IsPlatformAdmin(login) {
 		return true
 	}
-	return d.projectMemberWrites(projectID, userID)
-}
-
-func (d deps) projectMemberWrites(projectID string, userID int64) bool {
-	p, found := d.repo.Project(projectID)
-	return !found || (p.OwnerID == 0 && len(p.Members) == 0) || p.HasWritableMember(userID)
+	return d.accountHoldsProject(projectID, userID)
 }
 
 var guardedRunWrites = map[string]bool{
@@ -112,7 +128,7 @@ func (d deps) runWriteGuard() gin.HandlerFunc {
 		if issue, found := d.repo.Issue(run.ExecutionContext.IssueID); found {
 			issueProject = issue.ProjectID
 		}
-		if !d.requireProjectWriter(c, domain.RunProjectID(run, issueProject)) {
+		if !d.requireAccountWrite(c, domain.RunProjectID(run, issueProject)) {
 			c.Abort()
 			return
 		}
@@ -189,7 +205,7 @@ func (d deps) allowAssetWrite(c *gin.Context, path string) bool {
 		}
 		peekJSON(c, &body)
 		issue, _ := d.repo.Issue(strings.TrimSpace(body.IssueID))
-		return d.requireProjectWriter(c, issue.ProjectID)
+		return d.requireAccountWrite(c, issue.ProjectID)
 	case "/api/mcp-market/install", "/api/mcp-servers/custom":
 		var body struct {
 			Scope     string `json:"scope"`
@@ -202,20 +218,20 @@ func (d deps) allowAssetWrite(c *gin.Context, path string) bool {
 		if strings.TrimSpace(body.Scope) != "project" {
 			return d.requirePlatformAdmin(c)
 		}
-		return d.requireProjectWriter(c, strings.TrimSpace(body.ProjectID))
+		return d.requireAccountWrite(c, strings.TrimSpace(body.ProjectID))
 	case "/api/schedule-jobs/:id", "/api/schedule-jobs/:id/run":
 		project, _, _ := d.assetOwner("schedule-jobs", c.Param("id"))
-		return d.requireProjectWriter(c, project)
+		return d.requireAccountWrite(c, project)
 	// TODO(knowledge-legacy-compat): remove with legacy /api/knowledge/submissions routes.
 	case "/api/knowledge/submissions":
 		var body struct {
 			ProjectID string `json:"projectId"`
 		}
 		peekJSON(c, &body)
-		return d.requireProjectWriter(c, strings.TrimSpace(body.ProjectID))
+		return d.requireAccountWrite(c, strings.TrimSpace(body.ProjectID))
 	case "/api/knowledge/submissions/:id", "/api/knowledge/submissions/:id/publish", "/api/knowledge/submissions/:id/reject":
 		project, _, _ := d.assetOwner("knowledge", c.Param("id"))
-		return d.requireProjectWriter(c, project)
+		return d.requireAccountWrite(c, project)
 	case "/api/skills/:id/files", "/api/skills/:id/files/*path":
 		return d.allowStoredAsset(c, "skills", c.Param("id"))
 	}
@@ -253,7 +269,7 @@ func (d deps) allowAssetWrite(c *gin.Context, path string) bool {
 		}
 		return d.requirePlatformAdmin(c)
 	}
-	return d.requireProjectWriter(c, project)
+	return d.requireAccountWrite(c, project)
 }
 
 func (d deps) allowStoredAsset(c *gin.Context, kind, id string) bool {
@@ -264,7 +280,7 @@ func (d deps) allowStoredAsset(c *gin.Context, kind, id string) bool {
 	if global {
 		return d.requirePlatformAdmin(c)
 	}
-	return d.requireProjectWriter(c, project)
+	return d.requireAccountWrite(c, project)
 }
 
 // peekJSON decodes the request body without consuming it for the handler.

@@ -162,7 +162,6 @@ func TestMySQLImportTAPDAndSanitizeClarifyOptions(t *testing.T) {
 	projectID := "clarify-opt"
 	if err := st.PutProject(domain.Project{
 		ID: projectID, Key: "COP", Name: "clarify options", OwnerID: user.ID,
-		Members: []domain.ProjectMember{{UserID: user.ID, Role: "maintainer"}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +273,6 @@ func TestSeedLocalClarifyPreview(t *testing.T) {
 	user, _ = st.UserByLoginName("example-maintainer")
 	if err := st.PutProject(domain.Project{
 		ID: "dp", Key: "DP", Name: "DemoDNS", Color: "#536dfe", OwnerID: user.ID,
-		Members: []domain.ProjectMember{{UserID: user.ID, Role: "maintainer"}},
 	}); err != nil {
 		t.Fatal(err)
 	}

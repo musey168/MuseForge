@@ -162,19 +162,14 @@ func QuestionLabels(ns []int) string {
 // ClarifySaveAllowed reports whether a platform user may save a chat
 // clarification into the requirement (and write it back to the external
 // tracker): the requirement's responsible person (the assignee, or the
-// project owner when nobody is assigned), the member who started the
-// clarification, and project maintainers (the owner included).
+// project owner when nobody is assigned) and the member who started the
+// clarification.
 func ClarifySaveAllowed(project Project, issue Issue, s BotClarifySession, userID int64) bool {
 	if userID <= 0 {
 		return false
 	}
 	if userID == s.StarterUserID || userID == project.OwnerID || (issue.AssigneeUserID != 0 && issue.AssigneeUserID == userID) {
 		return true
-	}
-	for _, m := range project.Members {
-		if m.UserID == userID && strings.EqualFold(strings.TrimSpace(m.Role), "maintainer") {
-			return true
-		}
 	}
 	return false
 }

@@ -5,7 +5,7 @@ const vm = require("node:vm");
 const source = fs.readFileSync(process.argv[2], "utf8");
 const requests = [];
 const notices = [];
-const project = {id:"pay",key:"PAY",name:"Payments",workflowId:"deleted-sop",members:[],ownerId:1};
+const project = {id:"pay",key:"PAY",name:"Payments",workflowId:"deleted-sop",ownerId:1};
 const ctx = {
   projectCacheRevisions:new Map(),
   state:{projectFilter:"pay",projectDraft:null,data:{projects:[project],repositories:[],workflows:[
@@ -14,7 +14,7 @@ const ctx = {
     {id:"generic-backend-delivery",name:"Backend",generic:true},
   ]}},
   escapeHTML:s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])),
-  clone:v=>JSON.parse(JSON.stringify(v)),captureRepoRows:()=>{},invalidateProjectJoinMembers:()=>{},
+  clone:v=>JSON.parse(JSON.stringify(v)),captureRepoRows:()=>{},invalidateProjectCache:()=>{},
   toast:s=>notices.push(s),renderAll:()=>{},localStorage:{setItem:()=>{}},
   api:async(url,init)=>{const body=JSON.parse(init.body);requests.push({url,body});return body;},
 };

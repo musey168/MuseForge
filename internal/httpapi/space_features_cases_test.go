@@ -28,9 +28,7 @@ func TestSpaceFeaturesLifecycleAndAuthorization(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	project := domain.Project{ID: "cvb-space-features", Key: "CSF", Name: "Space features", OwnerID: owner.ID, Members: []domain.ProjectMember{
-		{UserID: member.ID, Role: "member"}, {UserID: viewer.ID, Role: "viewer"},
-	}}
+	project := domain.Project{ID: "cvb-space-features", Key: "CSF", Name: "Space features", OwnerID: owner.ID, }
 	foreign := domain.Project{ID: "cvb-space-foreign", Key: "CSX", Name: "Foreign", OwnerID: owner.ID}
 	if err := f.s.PutProject(project); err != nil {
 		t.Fatal(err)

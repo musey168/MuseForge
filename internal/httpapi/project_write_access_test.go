@@ -51,9 +51,7 @@ func TestProjectContentWritesRequireMembership(t *testing.T) {
 	ownerUser, _ := s.UserByLoginName("owner")
 	memberUser, _ := s.UserByLoginName("member")
 	viewerUser, _ := s.UserByLoginName("viewer")
-	if err := s.PutProject(domain.Project{ID: "p1", Name: "P1", OwnerID: ownerUser.ID, Members: []domain.ProjectMember{
-		{UserID: memberUser.ID, Role: "member"}, {UserID: viewerUser.ID, Role: "viewer"},
-	}}); err != nil {
+	if err := s.PutProject(domain.Project{ID: "p1", Name: "P1", OwnerID: ownerUser.ID, }); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.PutProject(domain.Project{ID: "shared", Name: "Shared"}); err != nil {
@@ -106,9 +104,7 @@ func TestProjectContentWritesRequireMembership(t *testing.T) {
 	if code := call(other, "POST", "/api/issues", `{"projectId":"shared","title":"Shared idea"}`); code != 200 {
 		t.Fatalf("ownerless projects stay shared: %d", code)
 	}
-	if err := s.PutProject(domain.Project{ID: "ownerless-team", Name: "Ownerless team", Members: []domain.ProjectMember{
-		{UserID: memberUser.ID, Role: "member"},
-	}}); err != nil {
+	if err := s.PutProject(domain.Project{ID: "ownerless-team", Name: "Ownerless team", }); err != nil {
 		t.Fatal(err)
 	}
 	if code := call(other, "POST", "/api/issues", `{"projectId":"ownerless-team","title":"Outsider idea"}`); code != 403 {

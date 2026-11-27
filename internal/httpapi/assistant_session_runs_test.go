@@ -128,7 +128,7 @@ func TestRunSessionStatusLabelStaysNeutralForWaiting(t *testing.T) {
 
 func TestAssistantSessionListDecoratesRunSessions(t *testing.T) {
 	h, owner, viewer, prefix := sessionListFixture(t)
-	putSessionListProject(t, h, domain.Project{ID: prefix, OwnerID: owner.ID, Members: []domain.ProjectMember{{UserID: viewer.ID, Role: "member"}}})
+	putSessionListProject(t, h, domain.Project{ID: prefix, OwnerID: owner.ID, })
 	issue := domain.Issue{ID: prefix + "issue", ProjectID: prefix, Number: 7, Title: "修复登录失败"}
 	if err := h.repo.PutIssue(issue); err != nil {
 		t.Fatal(err)

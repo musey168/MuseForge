@@ -20,7 +20,7 @@ func wecomTestBot(t *testing.T, store *repo.Store) domain.NotificationBot {
 	t.Helper()
 	store.PutUser(domain.User{ID: 42, LoginName: "owner", ChineseName: "负责人"})
 	store.PutUser(domain.User{ID: 43, LoginName: "member", ChineseName: "成员"})
-	store.PutProject(domain.Project{ID: "p", OwnerID: 42, Members: []domain.ProjectMember{{UserID: 43, Role: "member"}}})
+	store.PutProject(domain.Project{ID: "p", OwnerID: 42, })
 	bot := domain.NotificationBot{ID: "cfg-wecom-card", BotID: "wecom-bot", ProjectID: "p", OwnerID: 42, Enabled: true, InteractionEnabled: true}
 	if err := store.SaveNotificationBot(bot, "secret"); err != nil {
 		t.Fatal(err)

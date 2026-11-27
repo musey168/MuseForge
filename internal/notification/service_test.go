@@ -471,7 +471,7 @@ func TestWeComPrivateOriginRechecksTheSender(t *testing.T) {
 	if err := svc.Store.PutUser(domain.User{ID: 7, LoginName: "dev"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Store.PutProject(domain.Project{ID: "p", OwnerID: 1, Members: []domain.ProjectMember{{UserID: 7, Role: "member"}}}); err != nil {
+	if err := svc.Store.PutProject(domain.Project{ID: "p", OwnerID: 1, }); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()

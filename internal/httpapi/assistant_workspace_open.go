@@ -508,8 +508,8 @@ func (h *agentToolGateway) bindConversationWorkspace(ctx context.Context, s *Age
 	// write access as the run's workspace edits, terminal, resume and retry.
 	// This also covers a viewer speaking in a shared conversation that another
 	// member bound to a LOOP.
-	if !binding.Run.IsWorkspace() && !h.speakerProjectWriter(s.ProjectID, s.User, s.UserID) {
-		return binding, fmt.Errorf("只读成员不能接入或进入 LOOP 运行 %s 的工作区：工作区写入需要项目成员、项目 Owner 或平台管理员权限", binding.Run.ID)
+	if !binding.Run.IsWorkspace() && !h.speakerAccountWriter(s.ProjectID, s.User, s.UserID) {
+		return binding, fmt.Errorf("只读成员不能接入或进入 LOOP 运行 %s 的工作区：工作区写入需要项目负责人或平台管理员权限", binding.Run.ID)
 	}
 	if runRunner := h.workspaceExecutionRunner(binding.Run); runRunner != conv.Execution().RunnerID {
 		srcMachine := h.executionMachineLabel(runRunner)

@@ -502,7 +502,7 @@ func sharedNativeMySQLFixture(t *testing.T, keys []string) (*assistantHandlers, 
 	}
 	a, _ := st.UserByLoginName(prefix + "a")
 	b, _ := st.UserByLoginName(prefix + "b")
-	if err := st.PutProject(domain.Project{ID: prefix, Name: prefix, OwnerID: a.ID, Members: []domain.ProjectMember{{UserID: b.ID, Role: "member"}}}); err != nil {
+	if err := st.PutProject(domain.Project{ID: prefix, Name: prefix, OwnerID: a.ID, }); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.PutRun(domain.Run{ID: prefix, ExecutionContext: domain.TelemetryContext{ProjectID: prefix}, Status: "succeeded", Nodes: map[string]*domain.NodeRun{}}); err != nil {

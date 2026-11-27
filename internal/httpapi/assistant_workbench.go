@@ -49,15 +49,7 @@ func (h *assistantHandlers) workbenchProjectAllowed(c *gin.Context, projectID st
 }
 
 func workbenchProjectAllowsUser(p domain.Project, userID int64, platformAdmin bool) bool {
-	if platformAdmin || p.OwnerID == userID || (p.OwnerID == 0 && len(p.Members) == 0) {
-		return true
-	}
-	for _, m := range p.Members {
-		if m.UserID == userID {
-			return true
-		}
-	}
-	return false
+	return platformAdmin || p.AccountOwns(userID)
 }
 
 func (h *assistantHandlers) workbenchReference(ref domain.AssistantReference, project string) (domain.AssistantReference, string, error) {

@@ -66,7 +66,7 @@ func (h *assistantHandlers) listSessions(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "读取对话失败"})
 		return
 	}
-	projects, err := h.repo.ProjectMemberships(projectIDs)
+	projects, err := h.repo.ProjectOwners(projectIDs)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "读取对话失败"})
 		return

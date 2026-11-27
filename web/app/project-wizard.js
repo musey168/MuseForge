@@ -4,7 +4,6 @@
 const PROJECT_WIZARD_STEPS=[
   {id:'basic',title:'基本信息',desc:'名称与默认 LOOP'},
   {id:'repos',title:'代码仓库',desc:'绑定 Git 仓库'},
-  {id:'members',title:'项目成员',desc:'Owner 与协作成员'},
   {id:'tapd',title:'TAPD 集成',desc:'可选，导入 TAPD 需求'},
   {id:'done',title:'完成',desc:'开始使用新项目'},
 ];
@@ -53,7 +52,7 @@ function projectWizardEnter(step){
   const w=projectWizard;if(!w)return;
   w.step=step;w.error='';w.focus='title';w.repo=blankProjectWizardRepo();
   const project=projectWizardProject();
-  if(project&&(step==='members'||step==='tapd')){w.draft=projectDraftFrom(project);w.base=clone(w.draft)}
+  if(project&&step==='tapd'){w.draft=projectDraftFrom(project);w.base=clone(w.draft)}
   if(step==='done')w.done.done=true;
   renderProjectWizard();
 }
@@ -144,13 +143,10 @@ async function projectWizardRemoveRepo(repoId){
   renderAll();toast(notice,tone);
   return true;
 }
-// The members step edits the roster it loaded, so it submits that roster's own token: the
-// server rejects the write when someone else changed members meanwhile, instead of letting
-// the step replace the list with one that predates an approved join request.
 async function projectWizardSaveProject(){
   const w=projectWizard,saved=projectWizardProject();
   if(!saved)return projectWizardFail('项目不存在或无权访问');
-  const d=w.draft,fields=w.step==='members'?{ownerId:d.ownerId,members:d.members,membersVersion:d.membersVersion}:{tapdWorkspaceId:d.tapdWorkspaceId,tapdIterationId:d.tapdIterationId};
+  const d=w.draft,fields={tapdWorkspaceId:d.tapdWorkspaceId,tapdIterationId:d.tapdIterationId};
   const value=buildProjectPayload(clone(saved),fields);
   const invalid=validateProjectPayload(value,{creating:false,projects:state.data.projects||[],workflows:state.data.workflows||[],saved});
   if(invalid)return projectWizardFail(invalid.message);
@@ -160,19 +156,7 @@ async function projectWizardSaveProject(){
     return project;
   });
   if(stored)renderAll();
-  else if(w.step==='members')await reloadProjectWizardMembers(value.membersVersion);
   return !!stored;
-}
-// A rejected member save usually means the roster moved on; reload it so the step shows the
-// current members and the next save replaces that list rather than the outdated one.
-async function reloadProjectWizardMembers(token){
-  const w=projectWizard,id=w?.projectId;if(!id)return;
-  await refreshProjectJoinMembers(id);
-  const fresh=projectWizardProject();
-  if(projectWizard!==w||w.step!=='members'||w.saving||!fresh||fresh.membersVersion===token)return;
-  w.draft=projectDraftFrom(fresh);w.base=clone(w.draft);
-  w.error='项目成员已经变化，这里已载入最新名单，请确认后重新保存。';
-  renderProjectWizard();
 }
 async function projectWizardNext(){
   const w=projectWizard;if(!w||w.saving)return;
@@ -180,29 +164,25 @@ async function projectWizardNext(){
   if(w.step==='repos'){
     if(String(w.repo.url||'').trim()&&!(await projectWizardAddRepo()))return;
     projectWizardMark('repos',projectWizardRepos().length>0);
-    return projectWizardEnter('members');
+    return projectWizardEnter(projectWizardStepIndex('tapd')>=0?'tapd':'done');
   }
-  if(w.step!=='members'&&w.step!=='tapd')return;
+  if(w.step!=='tapd')return;
   const changed=projectWizardDirty();
   if(changed&&!(await projectWizardSaveProject()))return;
   if(projectWizard!==w)return;
   const p=projectWizardProject()||{};
-  if(w.step==='members'){
-    projectWizardMark('members',changed||(p.members||[]).some(m=>Number(m.userId)!==Number(p.ownerId)));
-    return projectWizardEnter(projectWizardStepIndex('tapd')>=0?'tapd':'done');
-  }
   projectWizardMark('tapd',!!(p.tapdWorkspaceId||p.tapdIterationId));
   return projectWizardEnter('done');
 }
 async function projectWizardSkip(){
-  const w=projectWizard;if(!w||w.saving||!['repos','members','tapd'].includes(w.step))return;
+  const w=projectWizard;if(!w||w.saving||!['repos','tapd'].includes(w.step))return;
   if(!(await projectWizardConfirmDiscard('跳过会放弃本步骤未保存的修改。'))||projectWizard!==w)return;
   const step=w.step;
   projectWizardMark(step,step==='repos'&&projectWizardRepos().length>0);
   projectWizardEnter(projectWizardSteps()[projectWizardStepIndex(step)+1].id);
 }
 async function projectWizardBack(){
-  const w=projectWizard;if(!w||w.saving||!['members','tapd'].includes(w.step))return;
+  const w=projectWizard;if(!w||w.saving||w.step!=='tapd')return;
   if(!(await projectWizardConfirmDiscard('返回上一步会放弃本步骤未保存的修改。'))||projectWizard!==w)return;
   projectWizardEnter(projectWizardSteps()[projectWizardStepIndex(w.step)-1].id);
 }
@@ -219,29 +199,19 @@ async function projectWizardOpenSettings(){
   await closeProjectWizard({force:true,noFocus:true});
   openProjectAdminDetail(id);
 }
-function projectWizardAddMember(){
-  const w=projectWizard;if(!w||w.saving||w.step!=='members')return;
-  w.draft.members.push({userId:0,role:'member'});w.error='';
-  renderProjectWizard();
-  setTimeout(()=>[...($('#projectWizard')?.querySelectorAll('[data-pw-member] [data-user-combobox-trigger]')||[])].pop()?.click(),0);
-}
-function projectWizardRemoveMember(index){
-  const w=projectWizard;if(!w||w.saving||w.step!=='members')return;
-  w.draft.members.splice(index,1);w.error='';renderProjectWizard();
-}
 
 // Rendering.
 function pwCard(title,desc,pill,body){return `<section class="pw-card"><header class="pw-card-h"><div><strong>${title}</strong><span>${desc}</span></div>${pill}</header><div class="pw-card-b">${body}</div></section>`}
 function pwPill(text,tone='',attrs=''){return `<span class="pw-pill${tone?' is-'+tone:''}"${attrs}>${text}</span>`}
 function pwField(label,control,opt={}){return `<div class="pw-field"><label class="pw-label"${opt.for?` for="${opt.for}"`:''}>${label}${opt.required?' <em>*</em>':''}</label>${control}${opt.hint!=null?`<div class="pw-hint"${opt.hintAttrs||''}>${opt.hint}</div>`:''}</div>`}
-function pwSelect(html){return html.replace(' id="projectBusinessDomainSelect"','').replace('class="select"','class="pw-input pw-select"')}
+function pwSelect(html){return html.replace('class="select"','class="pw-input pw-select"')}
 function projectWizardRailHTML(w){
   const cur=projectWizardStepIndex(w.step);
   const steps=projectWizardSteps().map((s,i)=>{
     const active=i===cur,done=!active&&!!w.done[s.id],skipped=!active&&!done&&!!w.skipped[s.id];
     return `<li class="pw-step${active?' is-active':''}${done?' is-done':''}${skipped?' is-skipped':''}"${active?' aria-current="step"':''}><span class="pw-step-mark">${done?pwIcon('check',13,2.6):s.id==='done'?pwIcon('flag',13,2.2):i+1}</span><div class="pw-step-copy"><div class="pw-step-title">${s.title}</div><div class="pw-step-desc">${skipped?'<i>已跳过</i> · 可在项目设置补充':s.desc}</div></div></li>`;
   }).join('');
-  return `<aside class="pw-rail"><div class="pw-rail-head"><div class="pw-brand">${pwIcon('folder',20,1.9)}</div><h2 id="projectWizardLabel">新建项目</h2><p>只需名称即可创建，再按步骤绑定仓库、邀请成员。</p></div><ol class="pw-steps">${steps}</ol><p class="pw-rail-foot">所有配置之后都能在项目设置里修改。</p></aside>`;
+  return `<aside class="pw-rail"><div class="pw-rail-head"><div class="pw-brand">${pwIcon('folder',20,1.9)}</div><h2 id="projectWizardLabel">新建项目</h2><p>只需名称即可创建，再按步骤绑定仓库。</p></div><ol class="pw-steps">${steps}</ol><p class="pw-rail-foot">所有配置之后都能在项目设置里修改。</p></aside>`;
 }
 function projectWizardHeadHTML(w,title,lede){
   return `<div class="pw-kicker">第 ${projectWizardStepIndex(w.step)+1} 步，共 ${projectWizardSteps().length-1} 步</div><h3 class="pw-title" id="projectWizardTitle" tabindex="-1">${title}</h3><p class="pw-lede">${lede}</p>${w.error?`<p class="pw-note is-err" role="alert">${escapeHTML(w.error)}</p>`:''}`;
@@ -254,7 +224,7 @@ function projectWizardBasicHTML(w){
     pwField('项目名称',`<input class="pw-input" id="pwName" name="name" value="${escapeHTML(d.name||'')}" maxlength="80" placeholder="例如 Web Console" autocomplete="off">`,{for:'pwName',required:true})
     +pwField('品牌色',swatches)
     +pwField('项目说明',`<textarea class="pw-input" id="pwDescription" name="description" rows="3" placeholder="可选，这个项目负责什么？Agent 会把它作为上下文。">${escapeHTML(d.description||'')}</textarea>`,{for:'pwDescription'}));
-  const owner=Number(state.currentUser?.id)?'':pwField('项目 Owner',userCombobox('ownerId',d.ownerId,'请选择项目 Owner'),{required:true,hint:'项目的默认责任人，创建后可在项目成员中调整。'});
+  const owner=Number(state.currentUser?.id)?'':pwField('项目 Owner',userCombobox('ownerId',d.ownerId,'请选择项目 Owner'),{required:true,hint:'项目的默认责任人，创建后可在项目设置中调整。'});
   const defaults=pwCard('默认设置','新建需求时自动带上的流程',pwPill('已预选','ok'),
     `${pwField('默认 LOOP',pwSelect(projectDefaultSOPField(d)),{required:true})}${owner}`);
   return projectWizardHeadHTML(w,'基本信息','只需填写项目名称即可创建，其余都有默认值。')+`<div class="pw-pane">${identity}${defaults}</div>`;
@@ -276,14 +246,6 @@ function projectWizardReposHTML(w){
   return projectWizardHeadHTML(w,'代码仓库','Agent 执行 LOOP 时会克隆这些仓库并在工作分支上提交。第一个仓库会自动设为默认。')
     +`<div class="pw-pane"><p class="pw-note is-ok">✓ 项目「${escapeHTML(project.name||'')}」已创建。仓库添加后立即生效，也可以先跳过。</p>${pwCard('绑定代码仓库','粘贴仓库地址，自动识别名称',pwPill(repos.length?`已绑定 ${repos.length} 个`:'未绑定',repos.length?'ok':''),body)}</div>`;
 }
-function projectWizardPeoplePill(d){const count=projectPeopleIds(d).length;return pwPill(`${count} 位`,count>1?'ok':'',' data-pw-people-pill')}
-function projectWizardMembersHTML(w){
-  const d=w.draft,owner=userById(d.ownerId);
-  const rows=(d.members||[]).map((m,i)=>`<div class="member-row pw-member" data-pw-member="${i}"><span class="member-avatar">${userAvatarHTML(userById(m.userId),48)}</span><span class="pw-member-kind">成员</span>${userCombobox(`member-${i}`,m.userId,'请选择项目成员')}<button type="button" class="pw-member-rm" data-pw-member-remove="${i}" title="移除成员" aria-label="移除成员">${pwIcon('x',14)}</button></div>`).join('');
-  const body=`<div class="member-row pw-member is-owner"><span class="member-avatar owner">${userAvatarHTML(owner,48)}</span><span class="pw-member-kind is-owner">Owner</span>${userCombobox('ownerId',d.ownerId,'请选择项目 Owner')}<span></span></div>${rows}<div><button type="button" class="pw-btn pw-btn-outline pw-btn-sm" data-pw-action="add-member"${w.saving?' disabled':''}>＋ 添加成员</button></div>`;
-  return projectWizardHeadHTML(w,'项目成员','Owner 是项目的默认责任人；成员无需设置角色，可查看和推进项目内所有需求。')
-    +`<div class="pw-pane">${pwCard('负责人与成员','保存后成员即可在工作台切换到该项目',projectWizardPeoplePill(d),body)}</div>`;
-}
 function projectWizardTapdHTML(w){
   const d=w.draft,filled=!!String(d.tapdWorkspaceId||'').trim();
   const body=`<div class="pw-row2">${pwField('Workspace ID',`<input class="pw-input pw-mono" id="pwTapdWorkspace" name="tapdWorkspaceId" value="${escapeHTML(d.tapdWorkspaceId||'')}" placeholder="例如 20375341" spellcheck="false" autocomplete="off">`,{for:'pwTapdWorkspace'})}${pwField('Iteration ID',`<input class="pw-input pw-mono" id="pwTapdIteration" name="tapdIterationId" value="${escapeHTML(d.tapdIterationId||'')}" placeholder="留空导入全部" spellcheck="false" autocomplete="off">`,{for:'pwTapdIteration'})}</div>`;
@@ -291,13 +253,12 @@ function projectWizardTapdHTML(w){
     +`<div class="pw-pane">${pwCard('TAPD 需求池','Workspace ID 是 TAPD 项目 URL 中 /tapd_fe/ 后的数字',pwPill(filled?'已填写':'未配置',filled?'ok':''),body)}</div>`;
 }
 function projectWizardSummary(project,repos){
-  const p=project||{},def=repos.find(r=>r.id===p.defaultRepositoryId),others=(p.members||[]).filter(m=>Number(m.userId)&&Number(m.userId)!==Number(p.ownerId)).length;
+  const p=project||{},def=repos.find(r=>r.id===p.defaultRepositoryId);
   const sop=projectWorkflowName(p.workflowId)||p.workflowId||'';
   return [
     {key:'project',ok:true,label:'项目',value:`${escapeHTML(p.name||'')} · <code>${escapeHTML(p.id||'')}</code> · <code>${escapeHTML(p.key||'')}</code>`},
     {key:'sop',ok:!!sop,label:'默认 LOOP',value:sop?escapeHTML(sop):'未配置'},
     {key:'repos',ok:repos.length>0,label:'代码仓库',value:repos.length?`${repos.length} 个，默认 ${escapeHTML(def?.name||def?.gongfengProjectId||'未设置')}`:'未配置，可稍后在项目设置补充'},
-    {key:'members',ok:others>0,label:'项目成员',value:others?`${others+1} 位（含 Owner）`:'仅 Owner，可稍后邀请成员'},
     {key:'tapd',ok:!!p.tapdWorkspaceId,label:'TAPD',value:p.tapdWorkspaceId?`Workspace <code>${escapeHTML(p.tapdWorkspaceId)}</code>${p.tapdIterationId?` · Iteration <code>${escapeHTML(p.tapdIterationId)}</code>`:''}`:'未配置，可稍后在项目设置补充'},
   ].filter(i=>i.key!=='tapd'||tapdIntegrationAvailable(p));
 }
@@ -306,20 +267,19 @@ function projectWizardDoneHTML(){
   const list=items.map(i=>`<li class="${i.ok?'is-ok':'is-warn'}" data-pw-summary="${i.key}">${pwIcon(i.ok?'check':'warn',13,i.ok?2.6:2.2)}<span><b>${i.label}</b> · ${i.value}</span></li>`).join('');
   return `<div class="pw-success-mark">${pwIcon('check',24,2.4)}</div><h3 class="pw-title" id="projectWizardTitle" tabindex="-1">项目「${escapeHTML(project.name||'')}」已创建</h3><p class="pw-lede">默认 LOOP 已就绪，现在就可以开始第一条需求。跳过的配置随时可以在项目设置里补充。</p>
     <section class="pw-summary"><div class="pw-summary-title">已生效配置</div><ul class="pw-status-list">${list}</ul></section>
-    <div class="pw-actions"><button type="button" class="pw-action is-primary" data-pw-action="start"><span class="pw-action-icon">${pwIcon('play',16)}</span><span><strong>开始第一条需求</strong><small>切换到该项目，去需求列表新建或导入需求</small></span>${pwIcon('next',14,2.2)}</button><button type="button" class="pw-action" data-pw-action="settings"><span class="pw-action-icon">${pwIcon('gear',16,1.9)}</span><span><strong>进入项目设置</strong><small>修改基本信息，补充仓库、成员和 TAPD</small></span>${pwIcon('next',14,2.2)}</button></div>`;
+    <div class="pw-actions"><button type="button" class="pw-action is-primary" data-pw-action="start"><span class="pw-action-icon">${pwIcon('play',16)}</span><span><strong>开始第一条需求</strong><small>切换到该项目，去需求列表新建或导入需求</small></span>${pwIcon('next',14,2.2)}</button><button type="button" class="pw-action" data-pw-action="settings"><span class="pw-action-icon">${pwIcon('gear',16,1.9)}</span><span><strong>进入项目设置</strong><small>修改基本信息，补充仓库和 TAPD</small></span>${pwIcon('next',14,2.2)}</button></div>`;
 }
 function projectWizardFooterHTML(w){
   const dis=w.saving?' disabled':'';
   if(w.step==='done')return `<footer class="pw-footer"><div class="pw-footer-spacer"></div><button type="button" class="pw-btn pw-btn-outline" data-pw-action="close">关闭</button></footer>`;
   const left=w.step==='basic'?`<button type="button" class="pw-btn pw-btn-link" data-pw-action="cancel"${dis}>取消</button>`:`<button type="button" class="pw-btn pw-btn-link" data-pw-action="skip"${dis}>跳过此步</button>`;
-  const back=w.step==='members'||w.step==='tapd'?`<button type="button" class="pw-btn pw-btn-outline" data-pw-action="back"${dis}>${pwIcon('back',14,2.2)}上一步</button>`:'';
+  const back=w.step==='tapd'?`<button type="button" class="pw-btn pw-btn-outline" data-pw-action="back"${dis}>${pwIcon('back',14,2.2)}上一步</button>`:'';
   const label=w.saving?'正在保存…':w.step==='basic'?'创建并继续':w.step==='tapd'?'完成':'下一步';
   return `<footer class="pw-footer">${left}<div class="pw-footer-spacer"></div><div class="pw-footer-nav">${back}<button type="button" class="pw-btn pw-btn-primary" data-pw-action="next"${dis}>${label}${w.saving?'':pwIcon('next',14,2.2)}</button></div></footer>`;
 }
 function projectWizardBodyHTML(w){
   if(w.step==='basic')return projectWizardBasicHTML(w);
   if(w.step==='repos')return projectWizardReposHTML(w);
-  if(w.step==='members')return projectWizardMembersHTML(w);
   if(w.step==='tapd')return projectWizardTapdHTML(w);
   return projectWizardDoneHTML();
 }
@@ -376,10 +336,8 @@ function syncProjectWizardField(t){
     if(name==='repoUrl'){const hint=$('#projectWizard')?.querySelector('[data-pw-repo-hint]');if(hint)hint.innerHTML=projectWizardRepoHint(t.value)}
     return true;
   }
-  if(name==='ownerId'||/^member-\d+$/.test(name)){
-    if(name==='ownerId')d.ownerId=Number(t.value)||0;
-    else{const m=d.members[Number(name.slice(7))];if(m)m.userId=Number(t.value)||0}
-    const pill=$('#projectWizard')?.querySelector('[data-pw-people-pill]');if(pill)pill.outerHTML=projectWizardPeoplePill(d);
+  if(name==='ownerId'){
+    d.ownerId=Number(t.value)||0;
     return true;
   }
   if(!['name','description','workflowId','tapdWorkspaceId','tapdIterationId'].includes(name))return false;
@@ -402,14 +360,12 @@ function bindProjectWizardHost(host){
     const sw=t.closest('[data-pw-color]');
     if(sw){w.draft.color=sw.dataset.pwColor;host.querySelectorAll('[data-pw-color]').forEach(b=>{const on=b===sw;b.classList.toggle('is-on',on);b.setAttribute('aria-pressed',String(on))});return}
     const rmRepo=t.closest('[data-pw-repo-remove]');if(rmRepo){projectWizardRemoveRepo(rmRepo.dataset.pwRepoRemove);return}
-    const rmMember=t.closest('[data-pw-member-remove]');if(rmMember){projectWizardRemoveMember(Number(rmMember.dataset.pwMemberRemove));return}
     const action=t.closest('[data-pw-action]')?.dataset.pwAction;
     if(action==='next')projectWizardNext();
     else if(action==='skip')projectWizardSkip();
     else if(action==='back')projectWizardBack();
     else if(action==='cancel'||action==='close')closeProjectWizard({force:w.step==='done'});
     else if(action==='add-repo')projectWizardAddRepo();
-    else if(action==='add-member')projectWizardAddMember();
     else if(action==='start')projectWizardStartIssues();
     else if(action==='settings')projectWizardOpenSettings();
   });

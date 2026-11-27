@@ -23,7 +23,7 @@ func TestRunnerProjectModeOverridesPersonalDefault(t *testing.T) {
 	const owner = 1
 	const project = "mode-project"
 	if err := s.PutProject(domain.Project{ID: project, Name: project, OwnerID: owner,
-		Members: []domain.ProjectMember{{UserID: 2, Role: domain.ProjectRoleViewer}}}); err != nil {
+}); err != nil {
 		t.Fatal(err)
 	}
 	runner := domain.Runner{ID: "preferred", OwnerUserID: owner, RunnerVersion: domain.RunnerVersionConversationCLI, Status: domain.RunnerStatusOnline}

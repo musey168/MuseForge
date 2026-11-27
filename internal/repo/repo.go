@@ -87,11 +87,7 @@ type CatalogRepo struct {
 	*BotInteractionsRepo
 }
 
-// ProjectsRepo owns projects and their members.
-type BusinessDomainsRepo struct {
-	*deps
-}
-
+// ProjectsRepo owns projects.
 type ProjectsRepo struct {
 	*deps
 }
@@ -178,7 +174,6 @@ type Store struct {
 	*CatalogRepo
 	*ProjectsRepo
 	*ProjectCredentialsRepo
-	*BusinessDomainsRepo
 	*IssuesRepo
 	*TasksRepo
 	*UsersRepo
@@ -210,7 +205,6 @@ func newStore(db *gorm.DB) *Store {
 	s := &Store{deps: d}
 	s.ProjectsRepo = &ProjectsRepo{deps: d}
 	s.ProjectCredentialsRepo = &ProjectCredentialsRepo{deps: d, projects: s.ProjectsRepo}
-	s.BusinessDomainsRepo = &BusinessDomainsRepo{deps: d}
 	s.GitHTTPHostTrustRepo = &GitHTTPHostTrustRepo{deps: d}
 	s.UsersRepo = &UsersRepo{deps: d, gitHTTPHosts: s.GitHTTPHostTrustRepo}
 	s.BotInteractionsRepo = &BotInteractionsRepo{deps: d}

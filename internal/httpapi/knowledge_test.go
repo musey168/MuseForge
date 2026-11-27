@@ -163,7 +163,7 @@ func TestKnowledgeConnectorCRUDAndUserIsolation(t *testing.T) {
 	bob := domain.User{ID: 202, LoginName: "bob"}
 	_ = s.PutUser(alice)
 	_ = s.PutUser(bob)
-	_ = s.PutProject(domain.Project{ID: "p1", Name: "P1", OwnerID: alice.ID, Members: []domain.ProjectMember{{UserID: bob.ID, Role: "member"}}})
+	_ = s.PutProject(domain.Project{ID: "p1", Name: "P1", OwnerID: alice.ID, })
 	_ = s.PutAgent(domain.AgentDefinition{ID: "a1", Name: "A1", Model: "mock"})
 	_ = s.PutWorkflow(domain.WorkflowDefinition{ID: "wf-1", Name: "WF", ProjectID: "p1", Nodes: []domain.WorkflowNode{{ID: "n1", Name: "N1", Type: "agent", AgentID: "a1"}}})
 

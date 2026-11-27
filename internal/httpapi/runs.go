@@ -133,7 +133,7 @@ func (h *runsHandlers) runs(c *gin.Context) {
 			}
 			workflowProject = ""
 		}
-		if !h.requireProjectWriter(c, req.ProjectID, workflowProject) {
+		if !h.requireAccountWrite(c, req.ProjectID, workflowProject) {
 			return
 		}
 		executionContext := domain.TelemetryContext{ProjectID: req.ProjectID, ResponsibleUserID: project.OwnerID}

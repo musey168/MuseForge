@@ -163,8 +163,7 @@ func SeedAssistantAcceptance(st *repo.Store, ident AssistantAcceptanceIdentity) 
 		Name:        "AI 助手验收",
 		Description: "Disposable project for assistant acceptance tests",
 		Color:       "#526cdb",
-		OwnerID:     user.ID,
-		Members:     []domain.ProjectMember{{UserID: user.ID, Role: "maintainer"}},
+		OwnerID:    user.ID,
 	}); err != nil {
 		return domain.User{}, err
 	}

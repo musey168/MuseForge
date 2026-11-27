@@ -34,15 +34,10 @@ func (h *assistantHandlers) botExecutionUser(bot domain.NotificationBot, senderI
 	if !ok {
 		return user, errors.New("Bot 项目不存在")
 	}
-	if project.OwnerID == user.ID || h.repo.IsPlatformAdmin(user.LoginName) {
+	if project.AccountOwns(user.ID) || h.repo.IsPlatformAdmin(user.LoginName) {
 		return user, nil
 	}
-	for _, member := range project.Members {
-		if member.UserID == user.ID && !strings.EqualFold(strings.TrimSpace(member.Role), "viewer") {
-			return user, nil
-		}
-	}
-	return user, errors.New("你的平台账号没有该项目的执行权限")
+	return user, errors.New("你不是该项目的负责人")
 }
 
 // botChannelName is the user-facing IM product name of a channel.

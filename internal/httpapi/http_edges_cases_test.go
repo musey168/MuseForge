@@ -245,7 +245,7 @@ func TestBrowserHandlerAccessBranches(t *testing.T) {
 	owner, _ := st.UserByLoginName("owner")
 	_ = st.PutUser(domain.User{LoginName: "viewer"})
 	viewer, _ := st.UserByLoginName("viewer")
-	project := domain.Project{ID: "browser-p", Name: "P", OwnerID: owner.ID, Members: []domain.ProjectMember{{UserID: viewer.ID, Role: "viewer"}}}
+	project := domain.Project{ID: "browser-p", Name: "P", OwnerID: owner.ID, }
 	_ = st.PutProject(project)
 	run := domain.Run{ID: "browser-run", ExecutionContext: domain.TelemetryContext{ProjectID: project.ID}}
 	_ = st.PutRun(run)
