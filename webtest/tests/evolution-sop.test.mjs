@@ -153,7 +153,7 @@ test('SOP workbench home: filters, search, preferences priority dialog, polling 
       { method: 'GET', path: '/api/evolution/overview?projectId=project-1', body: overview },
       { method: 'GET', path: '/api/evolution/findings?projectId=project-1', body: [] },
       { method: 'GET', path: '/api/evolution/samples?projectId=project-1', body: [] },
-      { method: 'GET', path: '/api/assistant/models', body: { engines: [{ id: 'codex', name: 'Codex', personal: true }], models: [{ id: 'codex:gpt-5', name: 'GPT-5' }] } },
+      { method: 'GET', path: '/api/model-catalog', body: { engines: [{ id: 'codex', name: 'Codex', personal: true }], models: [{ id: 'codex:gpt-5', name: 'GPT-5' }] } },
       { method: 'PUT', path: '/api/evolution/sops/wf-bug/policy', body: { workflowId: 'wf-bug', projectId: 'project-1', enabled: true, preferences: ['clean', 'tokens'], batchSize: 20, model: '' } },
       { method: 'PUT', path: '/api/evolution/sops/wf-doc/policy', body: { workflowId: 'wf-doc', projectId: 'project-1', enabled: true, preferences: ['duration'], batchSize: 5, model: '' } },
     ],

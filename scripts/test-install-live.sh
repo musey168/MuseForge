@@ -21,7 +21,7 @@ actors=(root nonroot without-compose)
 for actor in "${actors[@]}"; do
   fixture="$task_dir/$actor"
   mkdir -p "$fixture/scripts" "$fixture/migrations/seed" "$fixture/user-home"
-  cp scripts/{install.sh,configure.sh,docker-access.sh,ghcr-mirror.sh,install-address.py,install-compose.py,install-observability-schema.sh,install-schema-extensions.sh} "$fixture/scripts/"
+  cp scripts/{install.sh,configure.sh,datasource.sh,docker-access.sh,ghcr-mirror.sh,install-address.py,install-compose.py,install-observability-schema.sh,install-schema-extensions.sh} "$fixture/scripts/"
   cp migrations/001_run_obs_generated_columns.sql \
     migrations/033_generic_sop_mr_node.sql \
     migrations/038_generic_sop_host_credentials.sql \
@@ -58,7 +58,7 @@ PY
         sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysql -u loopforge loopforge' \
         <<<'ALTER TABLE run_artifacts MODIFY COLUMN content TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;'
     fi
-    "${prefix[@]}" env HOME="$fixture/user-home" PATH=/usr/local/bin:/usr/bin:/bin LOOPFORGE_YES=1 COMPOSE_PROJECT_NAME="lf-install-${actor}-$$" LOOPFORGE_IMAGE="$image" LOOPFORGE_DATA_DIR="$fixture/data" LOOPFORGE_BIND=0.0.0.0 LOOPFORGE_PUBLIC_URL="http://192.0.2.10:$http_port" LOOPFORGE_DOCKER_SOCKET="$docker_socket" AGENTFLOW_HTTP_PORT="$http_port" LOOPFORGE_MYSQL_PORT="$mysql_port" bash "$fixture/scripts/install.sh" > "$fixture/$attempt.log" 2>&1 || { cat "$fixture/$attempt.log"; exit 1; }
+    "${prefix[@]}" env HOME="$fixture/user-home" PATH=/usr/local/bin:/usr/bin:/bin LOOPFORGE_YES=1 COMPOSE_PROJECT_NAME="lf-install-${actor}-$$" LOOPFORGE_IMAGE="$image" LOOPFORGE_DATA_DIR="$fixture/data" LOOPFORGE_BIND=0.0.0.0 LOOPFORGE_PUBLIC_URL="http://192.0.2.10:$http_port" LOOPFORGE_DOCKER_SOCKET="$docker_socket" AGENTFLOW_HTTP_PORT="$http_port" LOOPFORGE_MYSQL_PORT="$mysql_port" COMPOSE_PROFILES=platform,mysql bash "$fixture/scripts/install.sh" > "$fixture/$attempt.log" 2>&1 || { cat "$fixture/$attempt.log"; exit 1; }
     grep -q "Access: http://192.0.2.10:$http_port" "$fixture/$attempt.log"
     curl -fsS "http://127.0.0.1:$http_port/api/health" >/dev/null
     if [[ "$attempt" == first ]]; then

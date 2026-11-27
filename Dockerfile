@@ -48,6 +48,10 @@ RUN case "${TARGETARCH:-amd64}" in \
 COPY --from=docker:27-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker:27-cli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
 WORKDIR /app
+# The SQLite database file lives on the platform-data volume at /data; the
+# directory exists in the image so the platform can create the file on a
+# first start without a database server.
+RUN mkdir -p /data
 COPY --from=build /out/ /app/bin/
 COPY LICENSE THIRD_PARTY_NOTICES.md /app/
 COPY third_party/go/ /app/third_party/go/

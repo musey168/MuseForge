@@ -15,7 +15,7 @@ test('run helpers merge streams and format timing, output, logs, telemetry, prev
   };
   app.router.get('/api/runs/run-x/eval', evaluation);
   app.router.post('/api/runs/run-x/eval', { ...evaluation, status: 'running' });
-  app.router.get('/api/assistant/models', {
+  app.router.get('/api/model-catalog', {
     engines: [{id:'codex',name:'Codex',personal:true}],
     models: [{id:'codex:model-x',name:'Model X',engine:'codex'}],
   });
