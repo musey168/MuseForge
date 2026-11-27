@@ -11,7 +11,6 @@
 #
 # 可选参数：
 #   --name <名称>          机器显示名（默认主机名）
-#   --concurrency <N>      最大并发任务数（默认 1）
 #   --bin-dir <目录>       二进制安装目录（默认 ~/.local/bin）
 #   --from <文件>          使用本地已编译的 agentflow-runner 二进制
 #   --download-url <URL>   从指定 URL 下载二进制（含 {os} {arch} 占位符）
@@ -33,7 +32,6 @@ set -euo pipefail
 SERVER=""
 TOKEN=""
 NAME=""
-CONCURRENCY="1"
 BIN_DIR="${HOME}/.local/bin"
 LOCAL_BINARY=""
 DOWNLOAD_URL=""
@@ -51,7 +49,6 @@ while [[ $# -gt 0 ]]; do
     --server) SERVER="${2:-}"; shift 2 ;;
     --token) TOKEN="${2:-}"; shift 2 ;;
     --name) NAME="${2:-}"; shift 2 ;;
-    --concurrency) CONCURRENCY="${2:-1}"; shift 2 ;;
     --bin-dir) BIN_DIR="${2:-}"; shift 2 ;;
     --from) LOCAL_BINARY="${2:-}"; shift 2 ;;
     --download-url) DOWNLOAD_URL="${2:-}"; shift 2 ;;
@@ -942,13 +939,12 @@ if [[ "$UPGRADE" == "1" ]]; then
 fi
 
 # ---------- 2. 写入配置 ----------
-mkdir -p "$RUNNER_HOME" "$RUNNER_HOME/workspace"
+mkdir -p "$RUNNER_HOME"
 chmod 700 "$RUNNER_HOME"
 cat > "$ENV_FILE" <<EOF
 AGENTFLOW_SERVER_URL=${SERVER}
 AGENTFLOW_RUNNER_BOOTSTRAP_TOKEN=${TOKEN}
 AGENTFLOW_RUNNER_NAME=${NAME:-$(hostname)}
-AGENTFLOW_RUNNER_CONCURRENCY=${CONCURRENCY}
 AGENTFLOW_GATE_MCP_BINARY=${GATE_BINARY_PATTERN}
 AGENTFLOW_RUNNER_BINARY=${AGENTFLOW_RUNNER_BINARY:-}
 EOF
@@ -957,7 +953,7 @@ info "配置已写入 ${ENV_FILE}（权限 600）"
 export AGENTFLOW_GATE_MCP_BINARY="$GATE_BINARY_PATTERN"
 
 # ---------- 3. 注册 / 启动 ----------
-RUN_ARGS=(-server "$SERVER" -token "$TOKEN" -name "${NAME:-$(hostname)}" -concurrency "$CONCURRENCY" -state "$STATE_FILE")
+RUN_ARGS=(-server "$SERVER" -token "$TOKEN" -name "${NAME:-$(hostname)}" -state "$STATE_FILE")
 if [[ "$AUTO_UPDATE" == "0" ]]; then
   RUN_ARGS+=(-auto-update=false)
 fi
