@@ -25,14 +25,14 @@ const (
 )
 
 type userRow struct {
-	ID           int64      `gorm:"column:id;primaryKey;autoIncrement"`
-	StaffID      int        `gorm:"column:staff_id"`
-	LoginName    string     `gorm:"column:login_name;uniqueIndex:uq_users_login;size:64"`
-	ChineseName  string     `gorm:"column:chinese_name;size:128"`
-	DeptID       int        `gorm:"column:dept_id"`
-	DeptName     string     `gorm:"column:dept_name;size:128"`
-	Created      *time.Time `gorm:"column:created_at"`
-	Updated      *time.Time `gorm:"column:updated_at"`
+	ID          int64      `gorm:"column:id;primaryKey;autoIncrement"`
+	StaffID     int        `gorm:"column:staff_id"`
+	LoginName   string     `gorm:"column:login_name;uniqueIndex:uq_users_login;size:64"`
+	ChineseName string     `gorm:"column:chinese_name;size:128"`
+	DeptID      int        `gorm:"column:dept_id"`
+	DeptName    string     `gorm:"column:dept_name;size:128"`
+	Created     *time.Time `gorm:"column:created_at"`
+	Updated     *time.Time `gorm:"column:updated_at"`
 }
 
 func (userRow) TableName() string { return "users" }
@@ -84,7 +84,6 @@ type gitHTTPCredentialRow struct {
 }
 
 func (gitHTTPCredentialRow) TableName() string { return "user_git_http_credentials" }
-
 
 type projectRow struct {
 	ID          string     `gorm:"column:id;primaryKey;size:64"`

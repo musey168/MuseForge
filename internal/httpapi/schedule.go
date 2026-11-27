@@ -316,7 +316,6 @@ func scheduleRunConfigUnchanged(prior, job domain.ScheduleJob) bool {
 		maps.Equal(prior.ParameterValues, job.ParameterValues)
 }
 
-
 func scheduleMissingKeyError(engine string) string {
 	if assistantSupportsRunnerLogin(engine) {
 		return fmt.Sprintf("你还没有可用的 %s 凭据，请将默认执行机器共享给该项目并启用账号登录（Runner %s 及以上），或在个人配置填写 API Key", assistantEngineLabel(engine), domain.RunnerVersionCLISettings)

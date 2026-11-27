@@ -318,18 +318,17 @@ func TestMCPSetupInstructionsAreEmbedded(t *testing.T) {
 	}
 }
 
-func TestAccessGuideIsTheSingleOnboardingEntry(t *testing.T) {
+// The access-key page is gone: the personal build has one account and no
+// external access keys.
+func TestAccessKeyPageIsGone(t *testing.T) {
 	html, err := os.ReadFile("index.html")
 	if err != nil {
 		t.Fatal(err)
 	}
 	page := string(html)
-	if strings.Contains(page, `id="accessView"`) || strings.Contains(page, `data-view="access"`) {
-		t.Fatal("legacy access page or navigation entry is still present")
-	}
-	for _, want := range []string{`id="guideView"`, `<h1>访问密钥</h1>`, `id="accessBody"`} {
-		if !strings.Contains(page, want) {
-			t.Fatalf("token management page is missing %q", want)
+	for _, unwanted := range []string{`id="guideView"`, `id="accessBody"`, `<h1>访问密钥</h1>`, `data-view="guide"`, `data-view="access"`} {
+		if strings.Contains(page, unwanted) {
+			t.Fatalf("the access-key page is still in the interface: %q", unwanted)
 		}
 	}
 	if strings.Contains(page, `data-access-tab=`) {
@@ -343,8 +342,10 @@ func TestAccessGuideIsTheSingleOnboardingEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	code := string(js)
-	if !strings.Contains(code, `if(hash==='access')return 'guide'`) || !strings.Contains(code, `if(name==='access')name='guide'`) {
-		t.Fatal("legacy #/access links must redirect to #/guide")
+	for _, unwanted := range []string{"renderGuide", "renderAccessTokens", "loadAccessTokens", "createPersonalToken", "revokePersonalToken", "/api/auth/tokens"} {
+		if strings.Contains(code, unwanted) {
+			t.Fatalf("the access-key page is still wired into the app: %q", unwanted)
+		}
 	}
 }
 
@@ -495,8 +496,8 @@ const api = async (path, options = {}) => {
   return path.endsWith('/credentials') ? {...user, ...state.nextUser} : {valid: false, error: '令牌无效或已过期'};
 };
 const $ = () => null, setTimeout = () => {}, location = {origin: 'http://localhost'};
-const document = {activeElement: null, querySelectorAll: () => []};
-eval(code.slice(code.indexOf('const CREDENTIAL_GROUPS='), code.indexOf('// 谁能改通用模板')) +
+const document = {activeElement: null, querySelectorAll: () => [], addEventListener: () => {}};
+eval(code.slice(code.indexOf('const CREDENTIAL_GROUPS='), code.indexOf('function renderUserProfilePopover')) +
   ';globalThis.cred={CREDENTIAL_KINDS,CREDENTIAL_GROUPS,kind:credentialKind,get wizard(){return credentialWizard},set wizard(v){credentialWizard=v}};');
 const count = (html, needle) => html.split(needle).length - 1;
 
@@ -1953,15 +1954,12 @@ func TestGenericTemplateEditorUsesBundledRoles(t *testing.T) {
 	if strings.Contains(app, "const foreign=catalogForeign((state.data.agents.find(x=>x.id===state.selectedAgent)||state.agentDraft||{}).projectId)") {
 		t.Fatal("agent wizard still treats a same-id project clone as a foreign generic role")
 	}
-	for _, want := range []string{"renderPlatformAdminPanel", "platformAdminPanel", "谁可以改通用模板", "platformPublicURLHTML", "loadPlatformPublicURL", "外部访问地址"} {
-		if !strings.Contains(app, want) {
-			t.Fatalf("app.js is missing platform admin panel wiring %q", want)
+	// The generic-template editor is the account's own work: no administrator
+	// page, no public address, no platform panel behind it.
+	for _, unwanted := range []string{"renderPlatformAdminPanel", "platformAdminPanel", "谁可以改通用模板", "platformPublicURLHTML", "loadPlatformPublicURL", "外部访问地址"} {
+		if strings.Contains(app, unwanted) {
+			t.Fatalf("the platform admin panel is still wired into the app: %q", unwanted)
 		}
-	}
-	// The suggested value must come from the admin's own browser, never from a
-	// Host header the platform received: it is pasted into binding links.
-	if !strings.Contains(app, "field.value = location.origin") {
-		t.Fatal("the public address page no longer suggests location.origin")
 	}
 	if strings.Contains(app, `id="platformAdminCard"`) {
 		t.Fatal("platform admin management is still embedded in personal settings")
@@ -1970,8 +1968,8 @@ func TestGenericTemplateEditorUsesBundledRoles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(htmlBytes), `id="platformAdminPanel"`) {
-		t.Fatal("index.html is missing the generic-template platform admin panel")
+	if strings.Contains(string(htmlBytes), `id="platformAdminPanel"`) {
+		t.Fatal("index.html still carries the platform admin panel")
 	}
 }
 
@@ -2043,9 +2041,9 @@ func TestAgentPageListAndTabbedModal(t *testing.T) {
 	}
 }
 
-// 管理员名单是平台级权限，既不属于某个项目，也不属于个人凭据，
-// 所以它有自己的导航入口，而不是挂在流程模板页上。
-func TestPlatformAdminLivesOnItsOwnView(t *testing.T) {
+// The platform administrator side is gone: there is one account and no
+// platform-wide management page.
+func TestPlatformAdminViewIsGone(t *testing.T) {
 	app, err := readAppBundle()
 	if err != nil {
 		t.Fatal(err)
@@ -2056,37 +2054,25 @@ func TestPlatformAdminLivesOnItsOwnView(t *testing.T) {
 	}
 	source, markup := string(app), string(html)
 
-	for _, want := range []string{
+	for _, unwanted := range []string{
 		`id="platformView"`,
 		`id="platformNavGroup"`,
+		`id="platformAdminPanel"`,
 		`data-view="platform"`,
 	} {
-		if !strings.Contains(markup, want) {
-			t.Fatalf("index.html is missing the platform admin view wiring %q", want)
+		if strings.Contains(markup, unwanted) {
+			t.Fatalf("the platform admin page is still in the interface: %q", unwanted)
 		}
 	}
-	if strings.Contains(markup, `<div id="platformAdminPanel" class="platform-admin-panel" hidden></div>`) {
-		t.Fatal("platform admin panel is still embedded in the LOOP catalog page")
-	}
-	for _, want := range []string{
-		"platform:'平台管理'",
-		"if(name==='platform')renderPlatformAdminPanel()",
+	for _, unwanted := range []string{
+		"renderPlatformAdminPanel",
 		"renderPlatformNav",
+		"isPlatformAdmin",
+		"platform:'平台管理'",
 	} {
-		if !strings.Contains(source, want) {
-			t.Fatalf("app.js is missing the platform view wiring %q", want)
+		if strings.Contains(source, unwanted) {
+			t.Fatalf("the platform admin page is still wired into the app: %q", unwanted)
 		}
-	}
-	// 入口只对平台管理员渲染，未授权的 #/platform 要被挡回去；
-	// 后端的 403 是底线，但不能靠它来当第一道门。
-	if !strings.Contains(source, "group.hidden=!isPlatformAdmin()") {
-		t.Fatal("the platform nav entry is rendered for non-admins")
-	}
-	if !strings.Contains(source, "if(name==='platform'&&!isPlatformAdmin())name='issues'") {
-		t.Fatal("a hand-typed #/platform is not blocked for non-admins")
-	}
-	if strings.Contains(source, "state.sopScope==='generic'&&isPlatformAdmin()") {
-		t.Fatal("platform admin visibility is still tied to the generic LOOP tab")
 	}
 }
 
@@ -2221,62 +2207,44 @@ func TestClarifyOptionToggleLogic(t *testing.T) {
 	}
 }
 
-func TestPlatformAdminEnhancedUI(t *testing.T) {
+// The platform administrator page left no styles behind.
+func TestPlatformAdminStylesAreGone(t *testing.T) {
 	app, err := readAppBundle()
 	if err != nil {
 		t.Fatal(err)
 	}
-	css, err := os.ReadFile("platform.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, style := string(app), string(css)
-
-	// Key elements in app.js
-	for _, want := range []string{
+	source := string(app)
+	for _, unwanted := range []string{
 		"platform-metric-grid",
 		"platformMetricTotal",
 		"platformMetricLocked",
 		"platformMetricGranted",
-		"platform-admin-layout",
 		"platformAdminSearch",
 		"platformFilterTabs",
-		"platform-admin-side",
-		"userAvatarHTML(row.loginName",
 		"data-platform-nav",
-		"switchView(target)",
 	} {
-		if !strings.Contains(source, want) {
-			t.Fatalf("app.js missing platform admin enhancement: %q", want)
+		if strings.Contains(source, unwanted) {
+			t.Fatalf("the platform admin page is still wired into the app: %q", unwanted)
 		}
 	}
-
-	// Key styles in platform.css
-	for _, want := range []string{
-		".platform-metric-grid",
-		".platform-metric-card",
-		".platform-admin-layout",
-		".platform-admin-avatar",
-		".platform-source-badge",
-		".platform-admin-side",
-		".platform-locked-tag",
-		".platform-revoke-btn",
-	} {
-		if !strings.Contains(style, want) {
-			t.Fatalf("platform.css missing style: %q", want)
+	for _, path := range []string{"platform.css", "product-v4.css"} {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-
-	// Verify widescreen full-width adaptive support
-	if strings.Contains(style, ".platform-admin-panel{max-width:1380px") || strings.Contains(style, "max-width:1380px;") && strings.Contains(style, ".platform-admin-panel") {
-		t.Fatal("platform-admin-panel must not be locked to 1380px fixed max width")
-	}
-	v4css, err := os.ReadFile("product-v4.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(v4css), ".platform-admin-panel") || !strings.Contains(string(v4css), ".platform-admin-layout") {
-		t.Fatal("product-v4.css must include platform-admin-panel and platform-admin-layout in full-width adaptive rules")
+		for _, unwanted := range []string{
+			".platform-admin-panel",
+			".platform-admin-layout",
+			".platform-admin-avatar",
+			".platform-admin-side",
+			".platform-locked-tag",
+			".platform-revoke-btn",
+			".platform-source-badge",
+		} {
+			if strings.Contains(string(raw), unwanted) {
+				t.Fatalf("%s still styles the removed platform admin page: %q", path, unwanted)
+			}
+		}
 	}
 }
 
@@ -2381,7 +2349,7 @@ assert.match(bare, /门禁未通过。请看产物和日志后决定。/);
 // Decision controls follow the server's run write guard (the account that
 // holds the project).
 state.authRequired = true;
-state.currentUser = {id:7, isPlatformAdmin:false};
+state.currentUser = {id:7};
 state.data.projects = [
   {id:'mine', ownerId:7},
   {id:'team', ownerId:1},
@@ -2406,8 +2374,6 @@ assert.doesNotMatch(decide(runIn('team')), /确认通过/);
 assert.equal(canDecideRun(runIn('', 'iss-team')), false, 'requirement project fallback applies to outsiders');
 assert.equal(canDecideRun(runIn('other')), false);
 assert.match(decide(runIn('other')), /你不是该项目的负责人/);
-state.currentUser = {id:7, isPlatformAdmin:true};
-assert.equal(canDecideRun(runIn('team')), true, 'platform admin');
 state.currentUser = {id:0, isGuest:true};
 assert.match(decide(runIn('open')), /登录后才能审批/);
 state.authRequired = false;
@@ -2690,13 +2656,13 @@ func TestCodexStyleLeftMiniRailLayout(t *testing.T) {
 	if !strings.Contains(appJs, "observability:'用量台'") {
 		t.Fatal("viewTitles.observability must be 用量台")
 	}
-	accessBytes, err := Files.ReadFile("app/access.js")
+	paletteBytes, err := Files.ReadFile("app/command-palette.js")
 	if err != nil {
 		t.Fatal(err)
 	}
-	access := string(accessBytes)
+	palette := string(paletteBytes)
 	for _, want := range []string{"['observability','用量台','上报用量 · Token 与费用']", "['issues','需求列表'"} {
-		if !strings.Contains(access, want) {
+		if !strings.Contains(palette, want) {
 			t.Fatalf("command palette is missing %q", want)
 		}
 	}

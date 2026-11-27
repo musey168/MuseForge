@@ -133,5 +133,3 @@ printf '{"type":"result","result":"{\\"branch\\":\\"%s\\"}"}\n' "$name"
 		t.Fatalf("changing the naming configuration changed an existing run: %+v", current.Repositories)
 	}
 }
-
-

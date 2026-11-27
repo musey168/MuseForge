@@ -458,7 +458,7 @@ function adoptProjectSnapshot(fresh){
 }
 function canDeleteProject(project){
   if(!project?.id)return false;
-  if(!state.authRequired||isPlatformAdmin())return true;
+  if(!state.authRequired)return true;
   return Number(project.ownerId)>0&&Number(project.ownerId)===Number(state.currentUser?.id);
 }
 function projectDeleteRow(project){

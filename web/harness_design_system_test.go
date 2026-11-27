@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -138,7 +137,7 @@ func TestSettingsAreaUsesOneCenteredContainer(t *testing.T) {
 		t.Fatalf("%s is missing the settings container rule", harnessUICSS)
 	}
 	views := container[1]
-	for _, view := range []string{"#settingsView", "#botsView", "#projectsView", "#runnersView", "#agentsView", "#mcpView", "#assetsView", "#guideView", "#platformView"} {
+	for _, view := range []string{"#settingsView", "#botsView", "#projectsView", "#runnersView", "#agentsView", "#mcpView", "#assetsView"} {
 		if !strings.Contains(views, view) {
 			t.Errorf("settings container must include %s", view)
 		}
@@ -155,7 +154,7 @@ func TestSettingsAreaUsesOneCenteredContainer(t *testing.T) {
 	}
 
 	privateCap := regexp.MustCompile(`[{;]\s*max-width:\s*(?:920|1160|1180|1280)px`)
-	for _, path := range []string{"platform.css", "product-v4.css", "access.css", "app/assets-harness.css", "app/mcp.css", "bots.css"} {
+	for _, path := range []string{"platform.css", "product-v4.css", "app/assets-harness.css", "app/mcp.css", "bots.css"} {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
@@ -196,29 +195,6 @@ func TestMonoTokenUsesSystemMonospace(t *testing.T) {
 		if strings.Contains(stack, banned) {
 			t.Errorf("--mono must not include %s, got %q", banned, stack)
 		}
-	}
-}
-
-func TestAccessCapabilityTableKeepsShortColumnsOnOneLine(t *testing.T) {
-	raw, err := os.ReadFile("access.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	css := string(raw)
-	code := regexp.MustCompile(`\.access-table code\{[^}]*font:\s*\d+\s+(\d+(?:\.\d+)?)px var\(--mono\)`).FindStringSubmatch(css)
-	if code == nil {
-		t.Fatal("access.css must set .access-table code font with var(--mono)")
-	}
-	if size, _ := strconv.ParseFloat(code[1], 64); size < 12 {
-		t.Errorf(".access-table code must be at least 12px, got %spx", code[1])
-	}
-	for _, col := range []string{"1", "2", "3", "5"} {
-		if !regexp.MustCompile(`\.access-table td:nth-child\(` + col + `\)[^{]*\{[^}]*white-space:\s*nowrap`).MatchString(css) {
-			t.Errorf("access.css must keep capability column %s on one line", col)
-		}
-	}
-	if !regexp.MustCompile(`\.access-table th\{[^}]*white-space:\s*nowrap`).MatchString(css) {
-		t.Error("access.css must keep capability table headers on one line")
 	}
 }
 

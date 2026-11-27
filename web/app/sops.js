@@ -189,7 +189,7 @@ const SOP_MENU_ACTIONS={
 };
 function sopCardMenuItems(w){
   if(!w)return [];
-  if(catalogGeneric(w))return [{action:'run',label:'直接运行',icon:'play'},...(isPlatformAdmin()?[{action:'edit',label:'编辑模板',icon:'edit'}]:[])];
+  if(catalogGeneric(w))return [{action:'run',label:'直接运行',icon:'play'},{action:'edit',label:'编辑模板',icon:'edit'}];
   if(!catalogOwned(w.projectId))return [];
   return [{action:'share',label:w.shared?'取消共享':'共享给其他项目',icon:w.shared?'close':'arrow-up'},'-',{action:'delete',label:'删除',icon:'trash',danger:true}];
 }
@@ -424,7 +424,6 @@ function renderGenericRequirementRows(w,executors,loading=false){
 async function openGenericTemplateEditor(id){
   const w=(state.data?.workflows||[]).find(x=>x.id===id&&catalogGeneric(x));
   if(!w)return toast('通用模板不存在或已下架');
-  if(!isPlatformAdmin())return toast('只有平台管理员可以编辑通用模板');
   state.workflow=clone(w);state.selectedNode=null;markWorkflowClean();
   clearGenericTemplateAgents();
   renderWorkflowMeta();renderCanvas();renderProperties();switchView('flow');

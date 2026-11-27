@@ -140,7 +140,6 @@ function runDecisionBlock(run){
   const user=state.currentUser;
   if(!user)return '';
   if(user.isGuest)return 'guest';
-  if(user.isPlatformAdmin)return '';
   const projectId=runWriteProjectId(run);
   if(!projectId)return '';
   const project=(state.data?.projects||[]).find(p=>p.id===projectId);

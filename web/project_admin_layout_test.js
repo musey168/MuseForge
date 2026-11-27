@@ -58,7 +58,6 @@ const ctx = {
   knownTime:v=>{const d=v?new Date(v):null;return d&&d.getFullYear()>1970?d:null},
   relativeTime:()=>"3 天前",
   defaultRunEval:()=>({enabled:true}),
-  isPlatformAdmin:()=>ctx.platformAdmin!==false,
   toast:(m,t)=>notices.push(m),
   renderAll:()=>{},
   localStorage:{setItem(){}},

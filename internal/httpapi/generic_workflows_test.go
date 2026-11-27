@@ -733,7 +733,6 @@ func TestGenericTemplateAgentsAreNotTheCurrentProjectCatalog(t *testing.T) {
 		"/api/workflows/"+repo.GenericBackendDeliveryWorkflowID+"/agents", *review, http.StatusConflict)
 }
 
-
 func TestPutDeletedWorkflowIsRejected(t *testing.T) {
 	h, s := newGenericTemplateServer(t)
 	created := requestJSON[domain.WorkflowDefinition](t, h, http.MethodPut, "/api/workflows", domain.WorkflowDefinition{

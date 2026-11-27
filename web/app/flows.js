@@ -110,13 +110,13 @@ function syncPreviewBuildGraph(){
   });
   sinks.forEach((n,i)=>wf.edges.push({id:'af-preview-build-edge-'+(i+1),source:n.id,target:PREVIEW_BUILD_NODE_ID,when:'success'}));
 }
-function flowReadOnly(wf=state.workflow){return !wf||catalogForeign(wf.projectId)||(catalogGeneric(wf)&&!isPlatformAdmin())}
+function flowReadOnly(wf=state.workflow){return !wf||catalogForeign(wf.projectId)}
 function flowReadOnlyReason(wf=state.workflow){
   if(!wf)return '先选择或新建一条 LOOP';
   return catalogGeneric(wf)?'通用模板为只读，请先「复制到本项目」再修改':'这是其他项目的共享 LOOP，请先复制到本项目再改';
 }
 function flowStatusPill(wf){
-  if(catalogGeneric(wf))return isPlatformAdmin()?{cls:'draft',label:'通用模板 · 可编辑'}:{cls:'ro',label:'只读'};
+  if(catalogGeneric(wf))return {cls:'draft',label:'通用模板 · 可编辑'};
   if(catalogForeign(wf.projectId))return {cls:'ro',label:'只读'};
   if(wf.status==='published')return {cls:'ok',label:'已发布'};
   if(wf.status==='archived')return {cls:'ro',label:'已归档'};
@@ -186,7 +186,7 @@ function renderWorkflowMeta(){
   const sandboxSelect=$('#workflowSandbox');
   sandboxSelect.innerHTML=sopSandboxOptionsHTML(sopSandboxOptions());
   sandboxSelect.value=sopSandboxValue(wf);
-  const pill=$('#flowSettingsPill');if(pill)pill.textContent=catalogGeneric(wf)?(isPlatformAdmin()?'通用模板 · 可编辑':'通用模板'):[wf.status==='published'?'已发布':'草稿',workflowVersionLabel(wf),`${wf.nodes.length} 步`].filter(Boolean).join(' · ');
+  const pill=$('#flowSettingsPill');if(pill)pill.textContent=catalogGeneric(wf)?'通用模板 · 可编辑':[wf.status==='published'?'已发布':'草稿',workflowVersionLabel(wf),`${wf.nodes.length} 步`].filter(Boolean).join(' · ');
   renderFlowHeader();
   if(typeof flowPalette!=='undefined')flowPalette.render();
 }
@@ -1190,7 +1190,6 @@ async function discardWorkflow(){
   state.workflow=clone(state.workflowSaved);state.selectedNode=null;state.connectFrom=null;state.connectCursor=null;state.renamingNode=null;markWorkflowClean();flowHistory.clear();renderAll();toast('已取消修改');
 }
 async function saveWorkflow(){
-  if(catalogGeneric(state.workflow)&&!isPlatformAdmin()){toast('通用模板为只读，请先「复制到本项目」再修改');throw new Error('generic LOOP is read-only')}
   if(catalogForeign(state.workflow?.projectId)){toast('这是其他项目的共享 LOOP，请先复制到本项目再改');throw new Error('shared LOOP is read-only')}
   if(state.workflow?.preview?.enabled&&workflowPreviewExecutor(state.workflow)&&state.workflow.preview.model===''){
     const workflow=state.workflow;
@@ -1335,7 +1334,6 @@ async function deleteWorkflow(id){
   }catch(e){toast(e.message||'删除失败')}}
 async function publishWorkflow(){
   if(workflowPublishing||!workflowNeedsPublish())return;
-  if(catalogGeneric(state.workflow)&&!isPlatformAdmin())return toast('通用模板为只读，请先「复制到本项目」再发布');
   workflowPublishing=true;renderFlowHeader();
   try{
     const id=state.workflow.id;

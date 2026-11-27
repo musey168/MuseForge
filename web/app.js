@@ -18,8 +18,6 @@ const state = {
   usage:null, usageLoading:false, usageError:'', usageGrain:['day','week','month'].includes(localStorage.getItem('agentflow.usageGrain'))?localStorage.getItem('agentflow.usageGrain'):'day', usageBucket:'', usageBuckets:[], usageMetric:'tokens', usageExpanded:'', drawerOpen:false, issueDetailTab:'overview', issueDetailData:null, propTab:'basic',
   uiScroll:{runId:'', nodeId:'', graphLeft:0, feedTop:0, telTop:0, feedStick:true, telStick:true},
   runLogs:null, runTelemetry:null, runTelemetryAdapter:'live', runWorkspace:null,
-  accessClient:'cursor',
-  accessTokens:[], accessTokensStatus:'idle', accessTokensError:'', revealedToken:'',
   issueSelectionMode:false, issueSelection:new Set(), issueSelectionScope:'', issueBulkDeleting:false, issueBulkDeleteProgress:null, issueBulkDeleteResult:null,
   listPages:{}
 };
@@ -719,9 +717,8 @@ function catalogForeign(projectId){return !!projectId&&projectId!==state.project
 function catalogShared(projectId,shared){return !projectId||(!!shared&&projectId!==state.projectFilter)}
 function catalogVisible(projectId,shared){return catalogOwned(projectId)||catalogShared(projectId,shared)}
 // Generic templates are platform-provided and project independent: every
-// project sees them, but they are read-only blueprints until adopted.
-function isPlatformAdmin(){return !!(state.currentUser&&!state.currentUser.isGuest&&state.currentUser.isPlatformAdmin)}
-function canEditGeneric(wf){return catalogGeneric(wf)&&isPlatformAdmin()}
+// project sees them. The single account owns them.
+function canEditGeneric(wf){return catalogGeneric(wf)}
 function catalogGeneric(item){return !!item?.generic}
 // Generic roles live in generic_templates, but the first project that
 // adopted a template often reused the same role id. Looking the wizard
@@ -731,12 +728,11 @@ function agentWizardSubject(){
   if(catalogGeneric(state.workflow))return (state.genericTemplateAgents||[]).find(x=>x.id===state.selectedAgent)||state.agentDraft||{};
   return (state.data.agents||[]).find(x=>x.id===state.selectedAgent)||state.agentDraft||{};
 }
-// Platform roles (no project) are used by every project; like platform rules
-// and skills only administrators may change them. Others copy them first.
-function agentPlatformLocked(a){return !!a?.id&&!a.projectId&&(state.data.agents||[]).some(x=>x.id===a.id)&&!isPlatformAdmin()}
+// The single account owns the platform roles (no project) as well, so a role
+// is foreign only when it belongs to another project.
 function agentWizardForeign(a){
-  if(catalogGeneric(state.workflow))return !isPlatformAdmin();
-  return catalogForeign(a?.projectId)||agentPlatformLocked(a);
+  if(catalogGeneric(state.workflow))return false;
+  return catalogForeign(a?.projectId);
 }
 function genericTemplateMCPOptions(selected){
   const wanted=['github'];
@@ -1550,7 +1546,7 @@ function settingsSidebarExpanded(){
 }
 let settingsSidebarEntryFrame=0;
 let settingsSidebarWasManaged=false;
-const settingsManagementViews=['settings','assistant','projects','bots','projectCredentials','sops','flow','runs','aiSchedules','agents','mcp','rules','skills','knowledge','runners','sandboxes','evolution','guide','platform'];
+const settingsManagementViews=['settings','assistant','projects','bots','projectCredentials','sops','flow','runs','aiSchedules','agents','mcp','rules','skills','knowledge','runners','sandboxes','evolution'];
 const settingsRouteMotion=matchMedia('(prefers-reduced-motion: reduce)');
 let settingsRouteTransition=null;
 let settingsRouteApplying=false;
@@ -1719,7 +1715,7 @@ function setSettingsSidebarExpanded(expanded,focusToggle=false){
     });
   }
 }
-function viewTitles(){return {management:'设置',issues:'需求列表',aiSchedules:'定时任务',bots:'通道管理',runs:'运行记录',approvals:'待我确认',sops:'流程模板',flow:'流程设计',agents:'角色定义',mcp:'能力资产',rules:'能力资产',skills:'能力资产',knowledge:'我的知识库',sandboxes:'沙箱管理',observability:'用量台',projects:'项目配置',projectCredentials:'凭据管理',platform:'平台管理',runners:'执行机器',settings:'个人配置',access:'访问密钥',guide:'访问密钥',evolution:'RSI工作台'}}
+function viewTitles(){return {management:'设置',issues:'需求列表',aiSchedules:'定时任务',bots:'通道管理',runs:'运行记录',approvals:'待我确认',sops:'流程模板',flow:'流程设计',agents:'角色定义',mcp:'能力资产',rules:'能力资产',skills:'能力资产',knowledge:'我的知识库',sandboxes:'沙箱管理',observability:'用量台',projects:'项目配置',projectCredentials:'凭据管理',runners:'执行机器',settings:'个人配置',evolution:'RSI工作台'}}
   // 从流程模板打开的流程设计）按 data-nav-match 高亮它们所属的入口。
 function settingsNavMatches(btn,name){return btn.dataset.view===name||String(btn.dataset.navMatch||'').split(/\s+/).includes(name)}
 const assetTypeGroups={capability:['mcp','rules','skills']};
@@ -1733,7 +1729,6 @@ function activeViewName(){if(state.currentView)return state.currentView;const el
 function restoredView(){
   const titles=viewTitles();
   const hash=(location.hash||'').replace(/^#\/?/,'').split(/[/?]/)[0];
-  if(hash==='access')return 'guide';
   if(['assets','dockerfiles','environments'].includes(hash))return 'sandboxes';
   if(hash==='playbooks')return 'sops';
   if(hash==='management')return 'settings';
@@ -1854,15 +1849,12 @@ function switchView(name){
   $$('details.collab-settings').forEach(menu=>menu.open=false);
   const titles=viewTitles();
   if(name==='dashboard')name='issues';
-  if(name==='access')name='guide';
   if(['assets','dockerfiles','environments'].includes(name))name='sandboxes';
   if(name==='playbooks')name='sops';
   if(name==='management')name='settings';
   const assetViews=['rules','skills','sandboxes'];
   const targetView=assetViews.includes(name)?'assets':name;
   if(!titles[name]||!$(`#${targetView}View`)){name='issues'}
-  // 手敲 #/platform 或者从别的账号留下的 localStorage 恢复进来，都要挡住。
-  if(name==='platform'&&!isPlatformAdmin())name='issues';
   const previous=activeViewName();
   if(previous==='projectCredentials'&&name!=='projectCredentials')closeProjectCredentialsPage();
   if(name!=='settings')cancelCredentialFocus();
@@ -1946,7 +1938,6 @@ function switchView(name){
   if(name==='observability')refreshObs()
   if(name==='agents'){api('/api/agents',{silent:true}).then(agents=>{state.data.agents=agents;renderAgents()}).catch(e=>toast(e.message));renderAgents();applyAgentRoute()}
   if(name==='settings')renderPersonalSettings();
-  if(name==='platform')renderPlatformAdminPanel();
   if(name==='projects')renderProjectAdmin();
   if(name==='projectCredentials')loadProjectCredentialsPage();
   if(assetViews.includes(name)){
@@ -1960,7 +1951,6 @@ function switchView(name){
   if(name==='mcp')loadMCPMarket();
   if(name==='knowledge'&&typeof loadKnowledgeView==='function')loadKnowledgeView();
   if(name==='runners')refreshRunners();
-  if(name==='guide')renderGuide();
   if(name==='flow'){if(!state.workflow?.nodes?.some(n=>n.id===state.selectedNode))state.selectedNode=null;renderWorkflowMeta();renderCanvas();renderProperties();setFlowView('canvas');refreshGenericWorkflowRoles()}
 }
-function renderAll(){renderUserBadge();renderPlatformNav();renderProjectSwitcher();renderIssues();renderSOPCatalog();renderWorkflowMeta();renderCanvas();renderProperties();renderAgents();renderAssets();renderMCPManagement();renderRuns();renderSync();renderProjectAdmin();renderDashboard();renderGuide();updateApprovalBadge();if($('#knowledgeView')?.classList.contains('active')&&typeof loadKnowledgeView==='function')loadKnowledgeView();showDirectRunButton($('#flowView').classList.contains('active'))}
+function renderAll(){renderUserBadge();renderProjectSwitcher();renderIssues();renderSOPCatalog();renderWorkflowMeta();renderCanvas();renderProperties();renderAgents();renderAssets();renderMCPManagement();renderRuns();renderSync();renderProjectAdmin();renderDashboard();updateApprovalBadge();if($('#knowledgeView')?.classList.contains('active')&&typeof loadKnowledgeView==='function')loadKnowledgeView();showDirectRunButton($('#flowView').classList.contains('active'))}

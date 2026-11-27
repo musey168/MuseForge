@@ -461,7 +461,7 @@ function obsRefreshPaged(){
 // ---------- 外部数据源（上报凭据） ----------
 function obsCanManageSources(){
   const p=currentProject(),u=state.currentUser;
-  return !!(p&&u&&!u.isGuest&&(u.isPlatformAdmin||Number(p.ownerId)===Number(u.id)));
+  return !!(p&&u&&!u.isGuest);
 }
 async function openObsSources(){
   const project=currentProject();if(!project)return toast('请先选择项目');

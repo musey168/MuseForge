@@ -462,25 +462,19 @@ test('adding an artifact keeps unsaved loop and review settings of the role', as
   assert.equal(saved.artifactOutputs[0].path, 'plan.md');
 });
 
-test('platform roles are read-only for project members and can be copied', async (t) => {
+test('the single account owns the platform roles and edits them in place', async (t) => {
   const app = await loadApp();
   t.after(app.close);
   app.router.get('/api/executor-models', { codebuddy: { configured: true, models: [{ id: 'cb-model', name: 'CB model' }] } });
   app.evaluate(`switchView('agents')`);
   await settle();
   app.evaluate(`
-    state.currentUser={...(state.currentUser||{}),id:7,loginName:'member',isPlatformAdmin:false};
+    state.currentUser={...(state.currentUser||{}),id:7,loginName:'owner',isGuest:false};
     state.data.executors=[{id:'codebuddy',name:'CodeBuddy'}];
     const role={id:'platform-role',name:'Platform',projectId:'',prompt:'shared',executorId:'codebuddy',model:'cb-model'};
     state.data.agents=[role];openAgentWizard(role);
   `);
   await settle();
-  assert.equal(app.document.querySelector('#agentSave').hidden, true);
-  assert.equal(app.document.querySelector('#agentClone').hidden, false);
-  await app.evaluate(`persistAgent($('#agentForm'))`);
-  assert.equal(app.router.calls.some((c) => c.path === '/api/agents' && c.method === 'PUT'), false);
-  assert.equal(app.evaluate(`state.data.agents[0].projectId`), '');
-  app.evaluate(`state.currentUser.isPlatformAdmin=true;openAgentWizard(state.data.agents[0])`);
-  await settle();
   assert.equal(app.document.querySelector('#agentSave').hidden, false);
+  assert.equal(app.document.querySelector('#agentClone').hidden, true);
 });

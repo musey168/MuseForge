@@ -21,9 +21,9 @@ function botTypeLabel(type){return type==='group'?'群聊':'单聊'}
 function botHealthLabel(health){return ({ready:'消息权限可用',unchecked:'待验证',error:'连接异常',awaiting_authorization:'需要重新授权'})[health]||'待验证'}
 function botStatusLabel(status){return ({pending:'等待发送',sending:'发送中',sent:'已发送',failed:'发送失败',send_unknown:'送达待核对',awaiting_authorization:'等待授权',target_unavailable:'会话不可用',cancelled:'已取消',expired:'已过期'})[status]||status}
 function filteredBotSessions(items,query){const text=String(query||'').trim().toLocaleLowerCase();return(items||[]).filter(chat=>!text||String(chat.name||'').toLocaleLowerCase().includes(text))}
-function canCreateBot(){if(!state.authRequired||!state.currentUser||isPlatformAdmin())return true;const user=Number(state.currentUser.id),project=currentProject();return Number(project?.ownerId)===user}
+function canCreateBot(){if(!state.authRequired||!state.currentUser)return true;const user=Number(state.currentUser.id),project=currentProject();return Number(project?.ownerId)===user}
 function canManageBot(bot){
- if(!state.authRequired||!state.currentUser||isPlatformAdmin())return true;
+ if(!state.authRequired||!state.currentUser)return true;
  const user=Number(state.currentUser.id),project=currentProject();
  return Number(bot?.ownerId)===user||Number(project?.ownerId)===user;
 }

@@ -797,7 +797,6 @@ function evoProposalActions(p){
   if(p.status==='canary')return `<button type="button" class="kb-btn quiet" data-evo-reject="${pid}" data-trial="1">${evoReviewIcon('stop')}停止试用</button>${asset}<button type="button" class="kb-btn primary" data-evo-approve="${pid}" data-trial="${p.canary?.status==='passed'?'passed':'running'}"${p.canary?.status==='passed'?'':' disabled'}>${evoReviewIcon('arrow-up')}发布</button>`;
   if(['drafting','validating'].includes(p.status))return `<button type="button" class="kb-btn quiet" data-evo-reject="${pid}">取消修改</button>${asset}`;
   if(p.status==='released'&&['watching','degraded'].includes(p.watch?.status)&&p.watch.prevVersion)return `${asset}<button type="button" class="kb-btn${p.watch.status==='degraded'?' primary':''}" data-evo-rollback="${p.watch.prevVersion}" data-kind="${escapeHTML(p.assetKind)}" data-id="${escapeHTML(p.assetId)}">${evoReviewIcon('undo')}回滚 v${p.watch.prevVersion}</button>`;
-  if(p.status==='failed'&&p.candidateContent&&typeof isPlatformAdmin==='function'&&isPlatformAdmin())return `${asset}<button type="button" class="kb-btn" data-evo-approve="${pid}" data-force="1">强制发布</button>`;
   return asset;
 }
 function evoOpenProposal(id,fromRoute=false){
@@ -1239,7 +1238,6 @@ async function evoOpenProposalProcess(id,stage){
     else if(p.status==='canary')foot=`<button type="button" class="kb-btn quiet" data-evo-reject="${pid}" data-trial="1">终止试用</button>${asset}<button type="button" class="kb-btn primary" data-evo-approve="${pid}" data-trial="${p.canary?.status==='passed'?'passed':'running'}"${p.canary?.status==='passed'?'':' disabled'}>全量发布</button>`;
     else if(p.status==='validating'||p.status==='drafting')foot=`<button type="button" class="kb-btn quiet" data-evo-reject="${pid}">取消提案</button>${asset}`;
     else if(p.status==='released'&&(p.watch?.status==='watching'||p.watch?.status==='degraded')&&p.watch.prevVersion)foot=`${asset}<button type="button" class="kb-btn${p.watch.status==='degraded'?' primary':''}" data-evo-rollback="${p.watch.prevVersion}" data-kind="${escapeHTML(p.assetKind)}" data-id="${escapeHTML(p.assetId)}">回滚到 v${p.watch.prevVersion}</button>`;
-    else if(p.status==='failed'&&p.candidateContent&&typeof isPlatformAdmin==='function'&&isPlatformAdmin())foot=`${asset}<button type="button" class="kb-btn" data-evo-approve="${pid}" data-force="1" title="仅平台管理员：跳过回放判定直接发布">强制发布</button>`;
     const sub=`${evoKindLabel(p.assetKind)} · ${escapeHTML(p.assetName||p.assetId)} · ${evoStatusBadge(EVO_PROPOSAL_STATUS,p.status)}${p.model?` · ${escapeHTML(p.model)}`:''}`;
     evoDrawerOpen(p.title||'改进提案',sub,body,foot,{wide:true});
     evoSyncTraffic();

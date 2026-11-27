@@ -12,7 +12,6 @@ const metricHealthSrc = dashboardsSrc.slice(metricHealthStart, dashboardsSrc.ind
 const frames = [];
 const ctx = {
   state: {},
-  admin: false,
   window: {},
   escapeHTML: v => String(v ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c])),
   huiIcon: (name, cls = '') => `<svg class="agent-icon harness-icon${cls ? ` ${cls}` : ''}" data-icon="${name}"></svg>`,
@@ -22,7 +21,6 @@ const ctx = {
   isPreviewBuildNode: id => id === "af-preview-build",
   workflowPreviewExecutor: wf => wf?.preview?.executorId || 'codebuddy',
   catalogOwned: projectId => !!ctx.state.projectFilter && projectId === ctx.state.projectFilter,
-  isPlatformAdmin: () => ctx.admin,
   lfT: zh => zh,
   userById: () => ({}),
   requestAnimationFrame: fn => frames.push(fn),
@@ -87,13 +85,9 @@ assert.ok(ownMenu.includes('data-share-workflow="own"') && ownMenu.includes('共
 assert.ok(ownMenu.includes('class="issue-popover-item danger" data-sop-action="delete" data-delete-workflow="own"'), ownMenu);
 assert.strictEqual(count(ownMenu, 'role="menuitem"'), 2, ownMenu);
 assert.ok(ctx.sopCardMenuHTML(wf('own-shared')).includes('取消共享'));
-ctx.admin = false;
-let genMenu = ctx.sopCardMenuHTML(wf('gen'));
+const genMenu = ctx.sopCardMenuHTML(wf('gen'));
 assert.ok(genMenu.includes('data-run-generic="gen"') && genMenu.includes('直接运行'), genMenu);
-assert.ok(!genMenu.includes('data-edit-generic'), 'only platform admins edit generic templates');
-ctx.admin = true;
-genMenu = ctx.sopCardMenuHTML(wf('gen'));
-assert.ok(genMenu.includes('data-edit-generic="gen"') && genMenu.includes('编辑模板'), genMenu);
+assert.ok(genMenu.includes('data-edit-generic="gen"') && genMenu.includes('编辑模板'), 'the single account edits generic templates');
 
 // ---------- Badge tones ----------
 const tone = (m, live = 0) => ctx.sopHealthTone(ctx.metricHealth(m, live)).tone;

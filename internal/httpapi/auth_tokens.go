@@ -165,14 +165,14 @@ func (d deps) previewLocalAuthUser() (*auth.User, bool) {
 
 func domainUserToAuth(user domain.User) *auth.User {
 	return &auth.User{
-		ID:              user.ID,
-		StaffID:         user.StaffID,
-		LoginName:       user.LoginName,
-		ChineseName:     user.ChineseName,
-		DeptID:          user.DeptID,
-		DeptName:        user.DeptName,
-		IsGuest:         false,
-		AuthTime:        time.Now().UTC(),
+		ID:          user.ID,
+		StaffID:     user.StaffID,
+		LoginName:   user.LoginName,
+		ChineseName: user.ChineseName,
+		DeptID:      user.DeptID,
+		DeptName:    user.DeptName,
+		IsGuest:     false,
+		AuthTime:    time.Now().UTC(),
 	}
 }
 
@@ -187,8 +187,6 @@ func (d deps) isAccount(r *http.Request) bool {
 	return ok
 }
 
-
-
 func randomID() string {
 	raw := make([]byte, 12)
 	if _, err := rand.Read(raw); err != nil {
@@ -196,4 +194,3 @@ func randomID() string {
 	}
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
-

@@ -52,13 +52,13 @@ assert.equal(ctx.obsUsageIsEmpty(), false);
 ctx.state.usage = null;
 assert.equal(ctx.obsUsageIsEmpty(), false);
 
-// Managing reporting credentials follows the project role.
+// The single account owns its reporting credential; a guest never does.
 ctx.state.currentUser = { id: 7 };
 assert.equal(ctx.obsCanManageSources(), true);
 ctx.state.currentUser = { id: 8 };
 assert.equal(ctx.obsCanManageSources(), true);
 ctx.state.currentUser = { id: 9 };
-assert.equal(ctx.obsCanManageSources(), false);
+assert.equal(ctx.obsCanManageSources(), true);
 ctx.state.currentUser = { id: 9, isGuest: true };
 assert.equal(ctx.obsCanManageSources(), false);
 
