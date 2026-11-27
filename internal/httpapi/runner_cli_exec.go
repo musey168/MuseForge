@@ -83,6 +83,13 @@ func (e *runnerCLIExecutor) execute(ctx context.Context, command runtime.Command
 	if _, err := call(ctx, runtime.ConversationProcessRequest{Operation: "prepare"}); err != nil {
 		return "", err
 	}
+	// The probe's session root is transient: remove it from the machine when
+	// the probe ends, after the process has stopped.
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+		defer cancel()
+		_, _ = call(cleanup, runtime.ConversationProcessRequest{Operation: "discard"})
+	}()
 	wire := runtime.ConversationCommandFor(command, credentials)
 	wire.RunnerLogin = e.runnerLogin
 	wire.Argv[0] = assistantEngineBinary(command.Provider)

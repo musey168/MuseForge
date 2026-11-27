@@ -56,11 +56,11 @@ func TestGenericSOPCopyUsesPersonalDefaultForUnpinnedRoles(t *testing.T) {
 	if _, err := e.resolveDeferredSOPExecutor(run, workflow.Nodes[0]); !errors.Is(err, errSOPExecutorUnconfigured) {
 		t.Fatalf("the role should report missing configuration before invoking a CLI: %v", err)
 	}
-	// Without a personal default the executor falls back to the only CLI the
-	// account holds a credential for.
-	defaults := domain.ExecutorDefaults{Executor: "dsh"}
+	// The inherited template role uses the account's personal default.
+	defaults := domain.ExecutorDefaults{Executor: "dsh", Model: "deepseek-v4.1-flash"}
 	if _, err := st.UpdateUserCredentials(1, repo.UserCredentialUpdate{
 		AgentCLICredentials: map[string]repo.AgentCLICredentialUpdate{"dsh": {APIKey: "fixture-key"}},
+		ExecutorDefaults:   &defaults,
 	}); err != nil {
 		t.Fatal(err)
 	}

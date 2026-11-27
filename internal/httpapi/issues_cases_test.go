@@ -32,7 +32,6 @@ func TestIssueRouteLifecycleBranches(t *testing.T) {
 		{http.MethodGet, "/api/issues/cvb-issue/runs", nil, 200},
 		{http.MethodPost, "/api/issues/cvb-issue/clarification", map[string]any{"ready": true}, 400},
 		{http.MethodPost, "/api/issues/cvb-issue/clarification", map[string]any{"summary": "clear", "ready": true, "dimensions": map[string]int{}}, 200},
-		{http.MethodPost, "/api/issues/cvb-issue/chat-clarify/cancel", nil, 200},
 		{http.MethodPost, "/api/issues/cvb-issue/resync-tapd", nil, 400},
 		{http.MethodGet, "/api/issues/cvb-issue/requirement", nil, 200},
 		{http.MethodGet, "/api/issues/cvb-issue/sops", nil, 200},
@@ -410,8 +409,6 @@ func TestIssuesMoreRouteBranches(t *testing.T) {
 		{http.MethodPut, "/api/issues/cvb-more-route/sops", map[string]any{"bindings": []any{}}, http.StatusOK},
 		{http.MethodPost, "/api/issues/cvb-more-route/reopen", nil, http.StatusConflict},
 		{http.MethodPost, "/api/issues/cvb-more-route/dispatch", "bad", http.StatusBadRequest},
-		{http.MethodPost, "/api/issues/cvb-more-route/chat-clarify", "bad", http.StatusBadRequest},
-		{http.MethodGet, "/api/issues/cvb-more-route/chat-clarify", nil, http.StatusNotFound},
 	}
 	for _, tc := range cases {
 		rec := cvBRequest(t, f, tc.method, tc.path, tc.body, true)

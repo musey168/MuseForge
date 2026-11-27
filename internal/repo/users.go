@@ -379,6 +379,9 @@ func (r *UsersRepo) updateUserCredentials(id int64, update UserCredentialUpdate)
 		return domain.User{}, err
 	}
 	if update.ExecutorDefaults != nil {
+		if !user.HasExecutorCredential(update.ExecutorDefaults.Executor) {
+			return domain.User{}, ErrAssistantDefaultExecutorUnavailable
+		}
 		user.ExecutorDefaults = *update.ExecutorDefaults
 	} else if !user.HasExecutorCredential(user.ExecutorDefaults.Executor) {
 		user.ExecutorDefaults.Executor = firstExecutorWithCredential(user)

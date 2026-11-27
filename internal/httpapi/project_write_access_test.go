@@ -6,7 +6,6 @@ import (
 	"agentflow/internal/repo"
 	"agentflow/internal/runtime"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -70,30 +69,6 @@ func TestProjectContentWritesRequireMembership(t *testing.T) {
 	if code := call(member, "POST", "/api/issues", issue); code != 200 {
 		t.Fatalf("member create issue: %d", code)
 	}
-	t.Run("clarification catalog uses the responsible account", func(t *testing.T) {
-		const path = "/api/issues/i1/clarify-models"
-		models := []domain.CLIModel{{ID: "owner-model"}}
-		const key = "owner-test-key"
-		if _, err := s.UpdateUserCredentials(ownerUser.ID, repo.UserCredentialUpdate{CodexAPIKey: key, CodexModels: &models}); err != nil {
-			t.Fatal(err)
-		}
-		for _, cookie := range []*http.Cookie{other, viewer} {
-			if code := call(cookie, "GET", path, ""); code != 403 {
-				t.Fatalf("clarification catalog requires project write access: %d", code)
-			}
-		}
-		w := request(member, "GET", path, "")
-		if w.Code != 200 || bytes.Contains(w.Body.Bytes(), []byte(key)) {
-			t.Fatalf("invalid clarification catalog response: %d", w.Code)
-		}
-		var catalog assistantModelCatalog
-		if err := json.Unmarshal(w.Body.Bytes(), &catalog); err != nil {
-			t.Fatal(err)
-		}
-		if len(catalog.Models) != 1 || catalog.Models[0].ID != "codex:owner-model" {
-			t.Fatalf("want the project owner's model: %+v", catalog.Models)
-		}
-	})
 	if code := call(other, "PUT", "/api/issues", `{"id":"i1","projectId":"p1","title":"Hijacked"}`); code != 403 {
 		t.Fatalf("non-member edit issue: %d", code)
 	}

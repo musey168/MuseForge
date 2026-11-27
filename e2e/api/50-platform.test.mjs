@@ -1,5 +1,5 @@
 // Knowledge center (read + review queue, never written back), platform
-// rooms, scheduled jobs, assistant tasks, runners, the platform MCP endpoint
+// scheduled jobs, runners, the platform MCP endpoint
 // and user endpoints.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -117,34 +117,6 @@ test('knowledge: personal connector CRUD, secret masking, isolation and check', 
 
   await del(`/api/knowledge/connectors/${conn.id}`, { expect: [200, 204] });
   await api('GET', `/api/knowledge/connectors/${conn.id}`, undefined, { expect: 404 });
-});
-
-test('rooms: create, message, and turn a message into a dispatched requirement', { timeout: 300_000 }, async () => {
-  await api('GET', '/api/rooms', undefined, { expect: 400 });
-  await api('POST', '/api/rooms', { projectId: P }, { expect: 400 });
-  // Rooms have no delete endpoint; reuse one fixed room across runs.
-  const rooms = list(await get(`/api/rooms?projectId=${P}`));
-  const room = rooms.find(r => r.name === 'E2E 自动化') || await post('/api/rooms', { projectId: P, name: 'E2E 自动化' });
-  assert.ok(room.id);
-  assert.equal((await get(`/api/rooms/${room.id}`)).id, room.id);
-
-  const msg = await post(`/api/rooms/${room.id}/messages`, { body: `e2e 消息 ${cfg.runTag}` });
-  assert.ok(msg.id);
-  await api('POST', `/api/rooms/${room.id}/messages`, { body: '' }, { expect: 400 });
-  const messages = list(await get(`/api/rooms/${room.id}/messages`));
-  assert.ok(messages.some(m => m.id === msg.id));
-
-  const wf = await createWorkflow('room-sop', [script('r', 'echo ROOM_RUN_OK')]);
-  await api('POST', `/api/rooms/${room.id}/issues`, { title: 'x' }, { expect: 400 });
-  const created = await post(`/api/rooms/${room.id}/issues`, { title: `E2E 群需求 ${cfg.runTag}`, description: '自动化测试', workflowId: wf });
-  const issueId = created.issue?.id;
-  assert.ok(issueId, `room issue not created: ${JSON.stringify(created).slice(0, 300)}`);
-  track(`issue ${issueId}`, () => post(`/api/issues/${issueId}/close`, {}, { expect: [200, 404, 409] }));
-  assert.ok(!created.dispatchError, `room dispatch failed: ${created.dispatchError}`);
-  const runId = created.task?.runId || created.tasks?.[0]?.runId;
-  assert.ok(runId, 'room dispatch started no run');
-  trackRun(runId);
-  await waitRun(runId, r => r.status === 'succeeded', { label: 'room run succeeded' });
 });
 
 test('schedule job: a manual trigger dispatches todo requirements of the project', { timeout: 300_000 }, async () => {
@@ -345,8 +317,7 @@ test('platform: Git SSH host trust previews, registers, rotates and removes a ho
   assert.equal(await findHost(), undefined);
 });
 
-test('chat clarify and sync endpoints are reachable read-only', async () => {
-  assert.ok(await get('/api/chat-clarify', { expect: [200, 400] }));
+test('sync endpoints are reachable read-only', async () => {
   const status = await get('/api/sync/status');
   assert.ok(status);
 });

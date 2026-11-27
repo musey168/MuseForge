@@ -44,11 +44,7 @@ test('auth edges: code exchange needs a code, unconfigured OAuth and photo answe
 });
 
 test('clarification endpoints validate the project and the issue', async () => {
-  assert.match((await status('POST', '/api/chat-clarify', {}, [400])).data.error, /projectId/);
-  assert.equal((await post('/api/chat-clarify/cancel', {})).cancelled, true);
-  for (const sub of ['chat-clarify', 'chat-clarify/cancel', 'clarification']) {
-    await status('GET', `/api/issues/${MISSING}/${sub}`, undefined, [404]);
-  }
+  await status('GET', `/api/issues/${MISSING}/clarification`, undefined, [404]);
 });
 
 test('TAPD import and tracker sync reject incomplete requests before calling out', async () => {
@@ -86,11 +82,8 @@ test('MCP market install and import validate their payloads', async () => {
   assert.ok(res.data.error);
 });
 
-test('unknown bots, rooms and spaces answer 404', async () => {
+test('unknown bots answer 404', async () => {
   await status('GET', `/api/notification-bots/${MISSING}/sessions`, undefined, [404]);
-  await status('PATCH', `/api/rooms/${MISSING}`, {}, [404]);
-  await status('POST', `/api/rooms/${MISSING}/decisions`, {}, [404]);
-  for (const sub of ['decisions', 'flows', 'sops']) await status('POST', `/api/spaces/${MISSING}/${sub}`, {}, [404]);
 });
 
 

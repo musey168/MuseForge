@@ -924,7 +924,7 @@ func TestExecutorModelsConfiguredMatchesRunTimeCredentials(t *testing.T) {
 	assistantEngines := func(user domain.User, query string) map[string]assistantEngineOption {
 		t.Helper()
 		out := map[string]assistantEngineOption{}
-		for _, option := range assistantEngineOptions(user, false) {
+		for _, option := range modelCatalogEngines(st, user, "", strings.Contains(query, "schedule=1")) {
 			out[option.ID] = option
 		}
 		return out

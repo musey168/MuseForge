@@ -8,11 +8,11 @@ import (
 
 func TestContractOperationMatchesRenamedPathParameter(t *testing.T) {
 	ToolInputSchema(application.Operation{}) // load the contract
-	route, method := contractOperation(application.Operation{Method: "GET", Path: "/api/assistant/tasks"})
+	route, method := contractOperation(application.Operation{Method: "GET", Path: "/api/issues/{id}/runs"})
 	if route == nil || method == nil {
 		t.Fatalf("documented route not found: route=%v method=%v", route != nil, method != nil)
 	}
-	if got := method["operationId"]; got != "listAssistantTasks" {
+	if got := method["operationId"]; got != "listIssueRuns" {
 		t.Fatalf("operationId = %v", got)
 	}
 	route, method = contractOperation(application.Operation{Method: "GET", Path: "/api/no-such-route/{id}"})

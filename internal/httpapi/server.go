@@ -148,6 +148,11 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 			return runnerControls.requestWorkspace(ctx, e.RunExecutionRunner(run), request)
 		}
 		e.ConfigureKnowledge(knowledgeExec)
+		// The platform asks a model to pick a sandbox profile and to name the
+		// work branch before a LOOP starts.
+		sop := &sopHelper{deps: d}
+		e.SelectSOPSandbox = sop.selectSOPSandbox
+		e.GenerateSOPWorkBranch = sop.generateSOPWorkBranch
 	}
 	api := &Server{
 		deps:            d,
@@ -376,9 +381,6 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 	g.Any("/api/issues/:id/comments", api.issues.issue)
 	g.Any("/api/issues/:id/runs", api.issues.issue)
 	g.Any("/api/issues/:id/clarification", api.issues.issue)
-	g.Any("/api/issues/:id/chat-clarify", api.issues.issue)
-	g.GET("/api/issues/:id/clarify-models", api.issues.issue)
-	g.Any("/api/issues/:id/chat-clarify/cancel", api.issues.issue)
 	g.Any("/api/issues/:id/reopen", api.issues.issue)
 	g.Any("/api/issues/:id/close", api.issues.issue)
 	g.Any("/api/issues/:id/resync-tapd", api.issues.issue)
