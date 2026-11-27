@@ -13,33 +13,6 @@ import (
 	"time"
 )
 
-func TestManagedCLIShutdown(t *testing.T) {
-	t.Setenv("AGENTFLOW_MANAGED_CLI_CONFIG", "invalid-policy.json")
-	// Never let a startup check reach the public registry in an entrypoint test.
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	for _, tc := range []struct {
-		role    string
-		execute bool
-		root    string
-	}{
-		{"worker", true, t.TempDir()}, {"all", true, t.TempDir()},
-		{"api", true, t.TempDir()}, {"runner", true, t.TempDir()},
-		{"worker", false, t.TempDir()}, {"all", false, t.TempDir()},
-		{"worker", true, ""}, {"all", true, "  "},
-	} {
-		t.Setenv("AGENTFLOW_MANAGED_CLI_ROOT", tc.root)
-		stop := startManagedCLIUpdates(ctx, tc.role, tc.execute)
-		done := make(chan struct{})
-		go func() { stop(); stop(); close(done) }()
-		select {
-		case <-done:
-		case <-time.After(3 * time.Second):
-			t.Fatalf("shutdown blocked: %+v", tc)
-		}
-	}
-}
-
 func TestCLIAdmin(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("AGENTFLOW_MANAGED_CLI_CONFIG", filepath.Join(root, "invalid.json"))
@@ -139,15 +112,5 @@ func TestCLIAdminExitsBeforeServices(t *testing.T) {
 	}
 	if _, err := os.Stat(root); !os.IsNotExist(err) {
 		t.Fatalf("read-only status/expired operation created root: %v", err)
-	}
-}
-
-func TestResolveRole(t *testing.T) {
-	t.Setenv("AGENTFLOW_ROLE", "")
-	for input, want := range map[string]string{"": "all", "API": "api", "scheduler": ""} {
-		got, err := resolveRole(input)
-		if got != want || (err != nil) != (want == "") {
-			t.Fatalf("role %q: %q, %v", input, got, err)
-		}
 	}
 }

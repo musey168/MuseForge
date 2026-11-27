@@ -7,16 +7,6 @@ import (
 	"agentflow/internal/managedcli"
 )
 
-// defaultProviderBinary is the executable a CLI installs by default.
-func defaultProviderBinary(provider string) string {
-	for _, spec := range defaultProviders {
-		if spec.Kind == provider {
-			return spec.Binary
-		}
-	}
-	return ""
-}
-
 // detectManagedRuntimes reports the CLIs a managed runner has installed. The
 // managed CLI root coordinates the installation, so the discovery runs under
 // its usage lock and the reported versions are the real ones.

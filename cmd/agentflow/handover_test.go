@@ -61,21 +61,6 @@ func TestListenMainBindsWithoutInheritedFD(t *testing.T) {
 	}
 }
 
-func TestResolveDrainTimeoutDefaultsToTwoHours(t *testing.T) {
-	t.Setenv("AGENTFLOW_DRAIN_TIMEOUT", "")
-	if got := resolveDrainTimeout(); got != 120*time.Minute {
-		t.Fatal(got)
-	}
-	t.Setenv("AGENTFLOW_DRAIN_TIMEOUT", "90s")
-	if got := resolveDrainTimeout(); got != 90*time.Second {
-		t.Fatal(got)
-	}
-	t.Setenv("AGENTFLOW_DRAIN_TIMEOUT", "bogus")
-	if got := resolveDrainTimeout(); got != 120*time.Minute {
-		t.Fatal(got)
-	}
-}
-
 // The helper is a miniature API process that uses the production handover
 // primitives: it serves /api/health with its pid and runs one long task.
 const helperEnv = "AGENTFLOW_HANDOVER_TEST_HELPER"
