@@ -19,12 +19,12 @@ func (s *Service) ImportTracker(store IssueStoreAdapter, providerName, projectID
 	provider, ok := s.trackerProvider(providerName)
 	if !ok {
 		return domain.TrackerImportRun{
-			ID:        strings.ToLower(strings.TrimSpace(providerName)),
-			Provider:  strings.ToLower(strings.TrimSpace(providerName)),
-			ProjectID: strings.TrimSpace(projectID),
-			Status:    domain.TrackerImportFailed,
-			Reason:    fmt.Sprintf("unknown tracker provider %q", providerName),
-			StartedAt: time.Now().UTC(),
+			ID:         strings.ToLower(strings.TrimSpace(providerName)),
+			Provider:   strings.ToLower(strings.TrimSpace(providerName)),
+			ProjectID:  strings.TrimSpace(projectID),
+			Status:     domain.TrackerImportFailed,
+			Reason:     fmt.Sprintf("unknown tracker provider %q", providerName),
+			StartedAt:  time.Now().UTC(),
 			FinishedAt: time.Now().UTC(),
 		}
 	}
@@ -88,7 +88,7 @@ func (s *Service) importProviderIssues(store IssueStoreAdapter, provider IssuePr
 	}
 	if matched == 0 {
 		run.Status = domain.TrackerImportFailed
-		run.Reason = fmt.Sprintf("没有绑定 %s 仓库的项目", provider.Name())
+		run.Reason = fmt.Sprintf("没有绑定 %s 仓库的项目", provider.Label())
 	} else if run.Failed > 0 {
 		run.Reason = strings.Join(reasons, "；")
 		if run.Failed == matched {

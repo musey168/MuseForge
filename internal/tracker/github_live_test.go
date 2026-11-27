@@ -89,7 +89,7 @@ func TestGitHubLiveImportAndDelivery(t *testing.T) {
 	awaitIssue := func(status string) domain.Issue {
 		t.Helper()
 		for attempt := 0; attempt < 25; attempt++ {
-			if _, err := s.pullGitHubIssues(st, r); err != nil {
+			if _, err := s.importProviderRepository(st, &githubProvider{service: s}, r); err != nil {
 				t.Fatal(err)
 			}
 			local, found := st.Issue(id)
@@ -106,7 +106,7 @@ func TestGitHubLiveImportAndDelivery(t *testing.T) {
 	if err := st.PutIssue(local); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pullGitHubIssues(st, r); err != nil {
+	if _, err := s.importProviderRepository(st, &githubProvider{service: s}, r); err != nil {
 		t.Fatal(err)
 	}
 	local, _ = st.Issue(id)

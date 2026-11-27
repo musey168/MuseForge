@@ -268,21 +268,14 @@ func (s *Service) githubMergeBranch(project, branch, target, title, description 
 	return p.ref(), nil
 }
 
-// pullGitHubIssues imports into repo.ProjectID as that project's Owner, like
-// Gongfeng imports use the project's own binding. Borrowing the token of
-// whichever project bound the same repository first would import private
-// issues for projects whose Owner has no access, and break the import of
-// projects whose Owner does.
-func (s *Service) pullGitHubIssues(store IssueStoreAdapter, repo domain.Repository) (int, error) {
-	return s.importProviderRepository(store, &githubProvider{service: s}, repo)
-}
-
 // githubProvider adapts GitHub to the shared tracker import path.
 type githubProvider struct {
 	service *Service
 }
 
 func (p *githubProvider) Name() string { return "github" }
+
+func (p *githubProvider) Label() string { return "GitHub" }
 
 func (p *githubProvider) IDPrefix() string { return "gh" }
 

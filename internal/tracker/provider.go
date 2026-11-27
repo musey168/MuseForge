@@ -35,6 +35,8 @@ type ProviderIssue struct {
 type IssueProvider interface {
 	// Name is the provider key: "github", later "gitlab".
 	Name() string
+	// Label is the provider's name for the user: "GitHub", "GitLab".
+	Label() string
 	// IDPrefix is the prefix of the local requirement ids this provider
 	// owns, e.g. "gh" for GitHub.
 	IDPrefix() string

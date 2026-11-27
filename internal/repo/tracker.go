@@ -28,8 +28,8 @@ type TrackerRepo struct {
 // trackerImportPayload is the part of a run that is not worth a column of
 // its own: the reason and the per-repository outcome.
 type trackerImportPayload struct {
-	Reason       string                             `json:"reason,omitempty"`
-	Repositories []domain.TrackerImportRepository  `json:"repositories,omitempty"`
+	Reason       string                           `json:"reason,omitempty"`
+	Repositories []domain.TrackerImportRepository `json:"repositories,omitempty"`
 }
 
 // PutTrackerImportRun stores the outcome of one provider's import run. The

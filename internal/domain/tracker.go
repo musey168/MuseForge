@@ -11,15 +11,15 @@ import (
 // provider. The record is persisted, so the outcome of the last run survives
 // a restart of the platform.
 type TrackerImportRun struct {
-	ID         string                    `json:"id"`
-	Provider   string                    `json:"provider"`
-	ProjectID  string                    `json:"projectId,omitempty"`
-	Status     string                    `json:"status"`
-	Reason     string                    `json:"reason,omitempty"`
-	Imported   int                       `json:"imported"`
-	Failed     int                       `json:"failed"`
-	StartedAt  time.Time                 `json:"startedAt"`
-	FinishedAt time.Time                 `json:"finishedAt"`
+	ID         string    `json:"id"`
+	Provider   string    `json:"provider"`
+	ProjectID  string    `json:"projectId,omitempty"`
+	Status     string    `json:"status"`
+	Reason     string    `json:"reason,omitempty"`
+	Imported   int       `json:"imported"`
+	Failed     int       `json:"failed"`
+	StartedAt  time.Time `json:"startedAt"`
+	FinishedAt time.Time `json:"finishedAt"`
 	// Repositories holds the outcome per repository, so a broken repository
 	// stays visible next to the ones that imported fine.
 	Repositories []TrackerImportRepository `json:"repositories,omitempty"`

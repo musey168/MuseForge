@@ -57,7 +57,7 @@ func TestGitHubImportPreservesLocalWorkAndMergeChecksConfirmation(t *testing.T) 
 	s := NewService()
 	s.ConfigureWithStore(domain.SyncConfig{}, st)
 	s.githubAPIBase = srv.URL
-	if n, err := s.pullGitHubIssues(st, r); err != nil || n != 1 {
+	if n, err := s.importProviderRepository(st, &githubProvider{service: s}, r); err != nil || n != 1 {
 		t.Fatalf("import: %d %v", n, err)
 	}
 	issue, ok := st.Issue("gh-github-repo-2")
@@ -69,7 +69,7 @@ func TestGitHubImportPreservesLocalWorkAndMergeChecksConfirmation(t *testing.T) 
 	if err := st.PutIssue(issue); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.pullGitHubIssues(st, r); err != nil {
+	if _, err := s.importProviderRepository(st, &githubProvider{service: s}, r); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := st.Issue(issue.ID); got.Description != issue.Description || got.Status != "in_progress" {
@@ -248,7 +248,7 @@ func TestGitHubImportUsesTheImportingProjectOwnersToken(t *testing.T) {
 		{"a-no-token", "", false},
 	} {
 		seen = nil
-		n, err := s.pullGitHubIssues(st, repos[c.project])
+		n, err := s.importProviderRepository(st, &githubProvider{service: s}, repos[c.project])
 		if len(seen) != 1 || seen[0] != c.auth {
 			t.Fatalf("%s: GitHub saw Authorization %q, want %q", c.project, seen, c.auth)
 		}

@@ -81,8 +81,12 @@ function renderTrackerImport(){
   if(status){status.textContent=trackerImportLabel(run);status.className=`sync-import-status ${run&&run.status?run.status:''}`}
   const host=$('#trackerImportRepos');
   if(!host)return;
+  const projectName=id=>{const p=(state.data.projects||[]).find(x=>x.id===id);return p?p.name:''};
   const outcomes=(run&&run.repositories)||[];
-  host.innerHTML=outcomes.length?outcomes.map(o=>`<div class="sync-repo-item"><b>${escapeHTML(o.name||o.repositoryId||'')}</b><span class="sync-stat ${o.status==='failed'?'danger':'success'}"><b>${o.status==='failed'?'!':'✓'}</b>${o.status==='failed'?'失败':'成功'}</span>${o.reason?`<span class="sync-import-reason">${escapeHTML(o.reason)}</span>`:''}</div>`).join(''):'';
+  host.innerHTML=outcomes.length?outcomes.map(o=>{
+    const elsewhere=o.projectId&&state.projectFilter&&o.projectId!==state.projectFilter?`（${projectName(o.projectId)||o.projectId}）`:'';
+    return `<div class="sync-repo-item"><b>${escapeHTML(o.name||o.repositoryId||'')}</b>${elsewhere?`<span class="sync-stat"><b>·</b>${escapeHTML(elsewhere)}</span>`:''}<span class="sync-stat ${o.status==='failed'?'danger':'success'}"><b>${o.status==='failed'?'!':'✓'}</b>${o.status==='failed'?'失败':'成功'}</span>${o.reason?`<span class="sync-import-reason">${escapeHTML(o.reason)}</span>`:''}</div>`;
+  }).join(''):'';
 }
 // loadTrackerImport 读出最近一次导入的结果；它存在服务端，重启后仍在。
 async function loadTrackerImport(){
@@ -99,7 +103,7 @@ async function triggerTrackerImport(){
   const button=$('#trackerImportBtn');
   if(button){button.disabled=true;button.textContent='⟳ 导入中…'}
   try{
-    const answer=await api('/api/tracker/import',{method:'POST',body:JSON.stringify({provider:'github'})});
+    const answer=await api('/api/tracker/import',{method:'POST',body:JSON.stringify({provider:'github',projectId:state.projectFilter||''})});
     state.data.trackerImport=(answer&&answer.run)||null;
     renderTrackerImport();
     await refreshIssues();

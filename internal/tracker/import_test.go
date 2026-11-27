@@ -83,9 +83,10 @@ func TestTrackerImportCreatesOneRequirementPerIssueAndSkipsPullRequests(t *testi
 // a description the user edited stays, and a status the user moved stays.
 func TestTrackerImportKeepsLocalDescriptionAndUserStatus(t *testing.T) {
 	state := "open"
+	title := "First issue"
 	st, s, _ := trackerImportFixture(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[{"id":10,"number":2,"title":"First issue","body":"Original brief","state":"` + state + `","html_url":"https://github.com/example/repo/issues/2"}]`))
+		_, _ = w.Write([]byte(`[{"id":10,"number":2,"title":"` + title + `","body":"Original brief","state":"` + state + `","html_url":"https://github.com/example/repo/issues/2"}]`))
 	}))
 	if run := s.ImportTracker(st, "github", ""); run.Status != domain.TrackerImportSuccess {
 		t.Fatalf("run status %q reason %q", run.Status, run.Reason)
@@ -96,12 +97,19 @@ func TestTrackerImportKeepsLocalDescriptionAndUserStatus(t *testing.T) {
 	if err := st.PutIssue(issue); err != nil {
 		t.Fatal(err)
 	}
-	// The tracker closes the issue while the requirement is done.
+	// The tracker closes the issue and renames it while the requirement is done.
 	state = "closed"
+	title = "Renamed issue"
 	if run := s.ImportTracker(st, "github", ""); run.Status != domain.TrackerImportSuccess {
 		t.Fatalf("run status %q reason %q", run.Status, run.Reason)
 	}
 	got, _ := st.Issue("gh-repo-1-2")
+	if got.Title != "Renamed issue" {
+		t.Fatalf("the tracker title must be refreshed: %q", got.Title)
+	}
+	if got.ExternalRef == nil || got.ExternalRef.ExternalState != "closed" {
+		t.Fatalf("the tracker state must be refreshed: %+v", got.ExternalRef)
+	}
 	if got.Description != "Locally clarified requirement" {
 		t.Fatalf("the edited description must survive a re-import: %q", got.Description)
 	}
