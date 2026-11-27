@@ -1,5 +1,5 @@
 // --- Sync Panel (embedded in Issues view) ---
-function sourceBadge(issue){if(!issue.source||issue.source==='local')return '<span class="sync-badge local">本地</span>';if(issue.source==='github')return '<span class="sync-badge local">GitHub</span>';if(issue.source==='gongfeng')return '<span class="sync-badge gongfeng">工蜂</span>';if(issue.source==='tapd')return '<span class="sync-badge tapd">TAPD</span>';return ''}
+function sourceBadge(issue){if(!issue.source||issue.source==='local')return '<span class="sync-badge local">本地</span>';if(issue.source==='github')return '<span class="sync-badge local">GitHub</span>';if(issue.source==='gitlab')return '<span class="sync-badge local">GitLab</span>';if(issue.source==='gongfeng')return '<span class="sync-badge gongfeng">工蜂</span>';if(issue.source==='tapd')return '<span class="sync-badge tapd">TAPD</span>';return ''}
 function externalLink(issue){if(!issue.externalRef)return '';return `<a href="${escapeHTML(safeURL(issue.externalRef.externalUrl))}" target="_blank" rel="noopener noreferrer" class="ext-link" title="${escapeHTML(issue.externalRef.externalUrl)}">↗</a>`}
 function renderSync(){
   const cfg=state.data.syncConfig||{};const logs=state.data.syncLogs||[];
@@ -8,6 +8,7 @@ function renderSync(){
   const gfCount=projectIssues.filter(i=>i.source==='gongfeng').length;
   const tapdCount=projectIssues.filter(i=>i.source==='tapd').length;
   const githubCount=projectIssues.filter(i=>i.source==='github').length;
+  const gitlabCount=projectIssues.filter(i=>i.source==='gitlab').length;
   const lastSync=knownTime(cfg.lastSyncAt)?.toLocaleString()||'从未同步';
   // Scope logs to the current project (legacy entries without projectId stay
   // visible everywhere); diagnostics only reflect what the user can act on.
@@ -27,19 +28,19 @@ function renderSync(){
   const latestBySource=['github','gongfeng','tapd'].map(source=>scopedLogs.find(l=>l.source===source)).filter(Boolean);
   const diag=[...new Set(scopedFails.flatMap(l=>String(l.message||'').split(/[；;]/)).map(s=>s.trim()).filter(Boolean))];
   const diagText=diag.join('；');
-  $('#syncPanelSummary').innerHTML=`<span class="sync-stat"><b>${githubCount}</b>GitHub</span>${gfCount?`<span class="sync-stat"><b>${gfCount}</b>工蜂</span>`:''}${tapdCount?`<span class="sync-stat"><b>${tapdCount}</b>TAPD</span>`:''}<span class="sync-stat">最近：${lastSync}</span>${latestBySource.map(l=>`<span class="sync-stat ${l.status==='failed'?'danger':'success'}"><b>${l.status==='failed'?'!':'✓'}</b>${l.source==='github'?'GitHub':l.source==='gongfeng'?'工蜂':'TAPD'} ${l.status==='failed'?'异常':'正常'}</span>`).join('')}${diagText?`<span class="sync-stat danger sync-error-detail" title="${escapeHTML(diagText)}"><b>诊断</b>${escapeHTML(diagText)}</span>`:''}`;
+  $('#syncPanelSummary').innerHTML=`<span class="sync-stat"><b>${githubCount}</b>GitHub</span>${gitlabCount?`<span class="sync-stat"><b>${gitlabCount}</b>GitLab</span>`:''}${gfCount?`<span class="sync-stat"><b>${gfCount}</b>工蜂</span>`:''}${tapdCount?`<span class="sync-stat"><b>${tapdCount}</b>TAPD</span>`:''}<span class="sync-stat">最近：${lastSync}</span>${latestBySource.map(l=>`<span class="sync-stat ${l.status==='failed'?'danger':'success'}"><b>${l.status==='failed'?'!':'✓'}</b>${l.source==='github'?'GitHub':l.source==='gongfeng'?'工蜂':'TAPD'} ${l.status==='failed'?'异常':'正常'}</span>`).join('')}${diagText?`<span class="sync-stat danger sync-error-detail" title="${escapeHTML(diagText)}"><b>诊断</b>${escapeHTML(diagText)}</span>`:''}`;
   const project=currentProject();
   // POST /api/sync/now and PUT /api/sync/config are platform-wide (every
   // project's repositories); the single account owns them, a guest does not.
   const canSync=!state.authRequired||!state.currentUser?.isGuest,adminOnly=canSync?'':'请先登录后再同步外部工作项';
   const githubButton=document.querySelector("#importGitHubIssues");if(githubButton){githubButton.disabled=!!syncing||!canSync;githubButton.title=adminOnly}
   for(const id of ['#syncAutoEnabledInline','#syncAutoEnabled','#syncInterval','#saveSyncConfig']){const el=$(id);if(el){el.disabled=!canSync;el.title=adminOnly}}
-  const repos=(state.data.repositories||[]).filter(r=>r.projectId===state.projectFilter&&r.provider==='github');
+  const repos=(state.data.repositories||[]).filter(r=>r.projectId===state.projectFilter&&(r.provider==='github'||r.provider==='gitlab'));
   const repoHost=$('#syncGongfengRepos');
   if(repoHost){
     repoHost.innerHTML=repos.length
-      ? `<div class="sync-repo-head">当前项目 GitHub 仓库（${escapeHTML(project?.name||state.projectFilter||'—')}）</div>`+repos.map(r=>`<div class="sync-repo-item"><b>${escapeHTML(r.name)}</b><code>${escapeHTML(r.gongfengProjectId||'—')}</code>${project?.defaultRepositoryId===r.id?'<em>默认</em>':''}</div>`).join('')
-      : `<div class="sync-empty">当前项目还没有绑定 GitHub 仓库，去「项目配置」添加。</div>`;
+      ? `<div class="sync-repo-head">当前项目 GitHub / GitLab 仓库（${escapeHTML(project?.name||state.projectFilter||'—')}）</div>`+repos.map(r=>`<div class="sync-repo-item"><b>${escapeHTML(r.name)}</b><code>${escapeHTML(r.gongfengProjectId||'—')}</code>${project?.defaultRepositoryId===r.id?'<em>默认</em>':''}</div>`).join('')
+      : `<div class="sync-empty">当前项目还没有绑定 GitHub / GitLab 仓库，去「项目配置」添加。</div>`;
   }
   const configPanel=$('#syncPanelConfig'),editing=configPanel&&configPanel.contains(document.activeElement);
   if(!editing){
@@ -58,6 +59,14 @@ function renderSync(){
   $('#syncLogList').innerHTML=scopedLogs.length?scopedLogs.slice(0,20).map(l=>`<div class="sync-log-item"><span class="sync-log-direction ${l.direction}">${l.direction==='pull'?'拉取':'推送'}</span><span class="sync-log-source">${l.source}</span><span class="sync-log-message">${escapeHTML(l.message||l.action)}</span><span class="sync-log-status ${l.status}">${l.status==='success'?'成功':'失败'}</span><span class="sync-log-time">${new Date(l.startedAt).toLocaleTimeString()}</span></div>`).join(''):'<div class="sync-empty">暂无同步记录</div>';
   renderTrackerImport();
 }
+// trackerImportProvider 是导入面板选中的来源：GitHub 或 GitLab。
+function trackerImportProvider(){
+  const picker=$('#trackerImportProvider');
+  return picker&&picker.value?picker.value:'github';
+}
+function trackerImportProviderLabel(provider){
+  return provider==='gitlab'?'GitLab':'GitHub';
+}
 // trackerImportLabel 是最近一次导入的结果：时间、结论和原因。
 function trackerImportLabel(run){
   if(!run)return '尚未导入';
@@ -67,6 +76,16 @@ function trackerImportLabel(run){
 }
 // renderTrackerImport 画出最近一次导入的结论和每个仓库的结果。
 function renderTrackerImport(){
+  const provider=trackerImportProvider(),providerLabel=trackerImportProviderLabel(provider);
+  const picker=$('#trackerImportProvider');
+  if(picker&&!picker.dataset.bound){
+    picker.dataset.bound='1';
+    picker.onchange=()=>{state.data.trackerImport=null;renderTrackerImport();loadTrackerImport()};
+  }
+  const button=$('#trackerImportBtn');
+  if(button)button.textContent=`⟳ 立即导入 ${providerLabel} 需求`;
+  const hint=$('#trackerImportHint');
+  if(hint)hint.textContent=`按当前项目已绑定的 ${providerLabel} 仓库导入需求`;
   const run=state.data.trackerImport;
   const status=$('#trackerImportStatus');
   if(status){status.textContent=trackerImportLabel(run);status.className=`sync-import-status ${run&&run.status?run.status:''}`}
@@ -79,33 +98,35 @@ function renderTrackerImport(){
     return `<div class="sync-repo-item"><b>${escapeHTML(o.name||o.repositoryId||'')}</b>${elsewhere?`<span class="sync-stat"><b>·</b>${escapeHTML(elsewhere)}</span>`:''}<span class="sync-stat ${o.status==='failed'?'danger':'success'}"><b>${o.status==='failed'?'!':'✓'}</b>${o.status==='failed'?'失败':'成功'}</span>${o.reason?`<span class="sync-import-reason">${escapeHTML(o.reason)}</span>`:''}</div>`;
   }).join(''):'';
 }
-// loadTrackerImport 读出最近一次导入的结果；它存在服务端，重启后仍在。
+// loadTrackerImport 读出选中来源最近一次导入的结果；它存在服务端，重启后仍在。
 async function loadTrackerImport(){
+  const provider=trackerImportProvider();
   try{
-    const answer=await api('/api/tracker/import?provider=github',{silent:true});
-    state.data.trackerImport=(answer&&answer.run)||null;
+    const answer=await api(`/api/tracker/import?provider=${encodeURIComponent(provider)}`,{silent:true});
+    if(provider===trackerImportProvider())state.data.trackerImport=(answer&&answer.run)||null;
   }catch(e){
     state.data.trackerImport=null;
   }
   renderTrackerImport();
 }
-// triggerTrackerImport 立即导入 GitHub 需求，并刷新需求列表和导入结论。
+// triggerTrackerImport 立即导入选中来源的需求，并刷新需求列表和导入结论。
 async function triggerTrackerImport(){
+  const provider=trackerImportProvider(),providerLabel=trackerImportProviderLabel(provider);
   const button=$('#trackerImportBtn');
   if(button){button.disabled=true;button.textContent='⟳ 导入中…'}
   try{
-    const answer=await api('/api/tracker/import',{method:'POST',body:JSON.stringify({provider:'github',projectId:state.projectFilter||''})});
+    const answer=await api('/api/tracker/import',{method:'POST',body:JSON.stringify({provider,projectId:state.projectFilter||''})});
     state.data.trackerImport=(answer&&answer.run)||null;
     renderTrackerImport();
     await refreshIssues();
     const run=state.data.trackerImport;
-    if(run&&run.status==='success')toast(`已导入 ${run.imported} 条需求`);
-    else if(run&&run.status==='partial')toast(`部分仓库导入失败：${run.reason||''}`);
-    else toast(`导入失败：${run&&run.reason?run.reason:'没有可导入的仓库'}`);
+    if(run&&run.status==='success')toast(`已从 ${providerLabel} 导入 ${run.imported} 条需求`);
+    else if(run&&run.status==='partial')toast(`${providerLabel} 部分仓库导入失败：${run.reason||''}`);
+    else toast(`${providerLabel} 导入失败：${run&&run.reason?run.reason:'没有可导入的仓库'}`);
   }catch(e){
     toast(e.message||'导入失败');
   }finally{
-    if(button){button.disabled=false;button.textContent='⟳ 立即导入 GitHub 需求'}
+    if(button){button.disabled=false;button.textContent=`⟳ 立即导入 ${providerLabel} 需求`}
   }
 }
 function scheduleModelAPI(){return window.AgentFlowAssistantModels}
