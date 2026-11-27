@@ -37,8 +37,8 @@ func TrackerProviders() []string {
 	return []string{"github", "gitlab"}
 }
 
-// trackerProvider returns the adapter of a provider name. GitLab adds its own
-// case here and reuses the shared import path.
+// trackerProvider returns the adapter of a provider name. Each provider adds
+// its own case here and reuses the shared import path.
 func (s *Service) trackerProvider(name string) (IssueProvider, bool) {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "github":

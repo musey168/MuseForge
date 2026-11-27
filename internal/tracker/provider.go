@@ -30,15 +30,15 @@ type ProviderIssue struct {
 }
 
 // IssueProvider adapts one external tracker to the shared import path.
-// GitHub implements it today; GitLab reuses the same interface instead of
-// adding a second copy of the import.
+// GitHub and GitLab implement it; a new tracker reuses the same interface
+// instead of adding a second copy of the import.
 type IssueProvider interface {
-	// Name is the provider key: "github", later "gitlab".
+	// Name is the provider key: "github" or "gitlab".
 	Name() string
 	// Label is the provider's name for the user: "GitHub", "GitLab".
 	Label() string
 	// IDPrefix is the prefix of the local requirement ids this provider
-	// owns, e.g. "gh" for GitHub.
+	// owns, e.g. "gh" for GitHub and "gl" for GitLab.
 	IDPrefix() string
 	// CredentialHost is the git host whose stored credential authenticates
 	// the provider's API calls ("github.com", "gitlab.com").

@@ -19,8 +19,8 @@ import (
 // gitlabClient talks to one GitLab project's REST API. GitLab scopes its
 // issues under the project, so the project path is part of the client.
 type gitlabClient struct {
-	base, path, host, token string
-	http                    *http.Client
+	base, path, token string
+	http              *http.Client
 }
 
 // gitlabClient builds the client of one repository's GitLab project. The
@@ -42,7 +42,6 @@ func (s *Service) gitlabClient(repo domain.Repository) (*gitlabClient, error) {
 	return &gitlabClient{
 		base: strings.TrimRight(base, "/"),
 		path: path,
-		host: host,
 		http: &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }},
 	}, nil
 }
