@@ -241,4 +241,3 @@ func TestConversationRunnerDefaultSkipsMachinesThatOnlySupportSOPs(t *testing.T)
 	putDefault("/api/runners/default", "sop-only")
 	check("/api/runners/default?conversation=1", "")
 }
-

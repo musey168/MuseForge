@@ -11,7 +11,6 @@ import (
 	"testing"
 	"unicode/utf8"
 
-
 	"agentflow/internal/domain"
 	"agentflow/internal/knowledge"
 	"agentflow/internal/repo"
@@ -196,4 +195,3 @@ func TestRunTelemetryAndClipRunTextKnowledgeEdges(t *testing.T) {
 		t.Fatalf("clipRunText must not leave half-clipped citation marker: %q", clipped)
 	}
 }
-

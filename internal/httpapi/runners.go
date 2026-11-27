@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/gitwork"
 	"agentflow/internal/repo"
 
 	"github.com/gin-gonic/gin"
@@ -243,7 +242,6 @@ func (h *runnersHandlers) platformRunnerStatus(ctx context.Context, projectID st
 	return status, nil
 }
 
-
 func runnerPreferenceError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, repo.ErrRunnerNotFound):
@@ -283,7 +281,6 @@ func (h *runnersHandlers) runnerRemove(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, map[string]bool{"ok": true})
 }
-
 
 // runnerDefaultSet selects the user's personal default or a project override.
 // 路由: g.PUT("/api/runners/default", h.runnerDefaultSet)
@@ -724,7 +721,6 @@ func (h *runnersHandlers) runnerHeartbeat(c *gin.Context) {
 	c.JSON(http.StatusOK, map[string]any{"ok": true, "serverTime": now, "expiresAt": expires})
 }
 
-
 func isRunnerAgentPath(path string) bool {
 	if strings.HasPrefix(path, "/runners/") {
 		return true
@@ -741,4 +737,3 @@ func isRunnerAgentPath(path string) bool {
 	}
 	return false
 }
-

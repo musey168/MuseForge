@@ -68,4 +68,3 @@ func TestRunnerModelProbeUsesOwnersSelectedMachine(t *testing.T) {
 		t.Fatalf("runner metadata was not preserved and constrained: %s", w.Body)
 	}
 }
-

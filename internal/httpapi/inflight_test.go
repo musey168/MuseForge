@@ -5,8 +5,6 @@ import (
 	"errors"
 	"testing"
 	"time"
-
-
 )
 
 func TestInflightTrackerWaitsForEveryTaskAndHonoursDeadline(t *testing.T) {
@@ -86,4 +84,3 @@ func TestRunAfterGateDefersUntilClosed(t *testing.T) {
 		t.Fatal("did not run after gate closed")
 	}
 }
-

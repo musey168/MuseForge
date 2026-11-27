@@ -3,11 +3,9 @@ package httpapi
 import (
 	"agentflow/internal/domain"
 	"agentflow/internal/repo"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -38,7 +36,6 @@ func (h issuesHandlers) addIssueComment(c *gin.Context, issue domain.Issue) {
 		respond(c, h.repo.PutComment(v))
 	}
 }
-
 
 func (h issuesHandlers) reopenIssue(c *gin.Context, issue domain.Issue) {
 	reopened, err := h.repo.ReopenDeliveredIssue(issue.ID)

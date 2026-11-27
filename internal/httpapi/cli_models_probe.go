@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"agentflow/internal/domain"
 	"agentflow/internal/agentcli"
+	"agentflow/internal/domain"
 
 	"github.com/gin-gonic/gin"
 )

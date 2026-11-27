@@ -11,9 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"agentflow/internal/domain"
 	"agentflow/internal/agentcli"
-
+	"agentflow/internal/domain"
 )
 
 const assistantDefaultModel = "default"
@@ -35,18 +34,18 @@ type assistantModel struct {
 }
 
 type assistantModelCatalog struct {
-	Default        string           `json:"default"`
+	Default        string                   `json:"default"`
 	Preferences    *domain.ExecutorDefaults `json:"preferences,omitempty"`
-	DefaultEfforts []string         `json:"defaultEfforts,omitempty"`
-	Models         []assistantModel `json:"models"`
+	DefaultEfforts []string                 `json:"defaultEfforts,omitempty"`
+	Models         []assistantModel         `json:"models"`
 	// SponsoredModels is set when users without their own CodeBuddy API Key
 	// may still chat on the platform's shared key, limited to these models;
 	// SponsoredModel is the first (the default).
 	SponsoredModel  string   `json:"sponsoredModel,omitempty"`
 	SponsoredModels []string `json:"sponsoredModels,omitempty"`
 	// Engines lists the CLIs a signed-in user can switch between.
-	Engines             []assistantEngineOption   `json:"engines,omitempty"`
-	CursorModelsPending bool                      `json:"cursorModelsPending,omitempty"`
+	Engines             []assistantEngineOption `json:"engines,omitempty"`
+	CursorModelsPending bool                    `json:"cursorModelsPending,omitempty"`
 }
 
 func prefetchAssistantModels() {}

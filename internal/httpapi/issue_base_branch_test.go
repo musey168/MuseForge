@@ -400,4 +400,3 @@ func TestIssueSaveEchoingLegacySharedBranchNormalizes(t *testing.T) {
 	}
 	requestJSON[map[string]string](t, h, http.MethodPut, "/api/issues", map[string]any{"id": feature.ID, "baseBranch": "master"}, http.StatusBadRequest)
 }
-

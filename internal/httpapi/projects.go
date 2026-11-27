@@ -2,9 +2,7 @@ package httpapi
 
 import (
 	"agentflow/internal/domain"
-	"agentflow/internal/repo"
 	"github.com/gin-gonic/gin"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -66,9 +64,7 @@ func (h *projectsHandlers) projects(c *gin.Context) {
 				}
 			}
 		}
-		isNew := true
 		if existing, ok := h.repo.Project(v.ID); ok {
-			isNew = false
 			if v.OwnerID == 0 {
 				v.OwnerID = existing.OwnerID
 			}

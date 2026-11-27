@@ -34,11 +34,11 @@ var (
 )
 
 type runnerControlMessage struct {
-	Type              string                           `json:"type"`
-	RequestID         string                           `json:"requestId,omitempty"`
-	WorkspaceRequest  *domain.RunnerWorkspaceRequest   `json:"workspaceRequest,omitempty"`
-	WorkspaceResponse *domain.RunnerWorkspaceResponse  `json:"workspaceResponse,omitempty"`
-	ActiveTaskIDs     []string                         `json:"activeTaskIds,omitempty"`
+	Type              string                          `json:"type"`
+	RequestID         string                          `json:"requestId,omitempty"`
+	WorkspaceRequest  *domain.RunnerWorkspaceRequest  `json:"workspaceRequest,omitempty"`
+	WorkspaceResponse *domain.RunnerWorkspaceResponse `json:"workspaceResponse,omitempty"`
+	ActiveTaskIDs     []string                        `json:"activeTaskIds,omitempty"`
 }
 
 type runnerControlHub struct {

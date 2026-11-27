@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"crypto/subtle"
 	"io/fs"
 	"log"
 	"net"
@@ -60,6 +61,7 @@ type Server struct {
 	platformSetting *platformSettingsHandlers
 	httpHostTrust   *gitHTTPHostTrustHandlers
 	projects        *projectsHandlers
+	repositories    *repositoriesHandlers
 	credentials     *projectCredentialsHandlers
 	insights        *insightsHandlers
 	issues          *issuesHandlers
@@ -87,6 +89,7 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 		httpHostTrust:   &gitHTTPHostTrustHandlers{deps: d, hosts: s.GitHTTPHostTrustRepo},
 		insights:        &insightsHandlers{deps: d},
 		projects:        &projectsHandlers{deps: d},
+		repositories:    &repositoriesHandlers{deps: d},
 		credentials:     &projectCredentialsHandlers{deps: d},
 		issues:          &issuesHandlers{deps: d},
 		runners:         &runnersHandlers{deps: d, runnerControls: runnerControls, runnerBindCodes: map[string]runnerBindCode{}},
@@ -191,6 +194,11 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 	g.GET("/api/openapi.yaml", api.openAPI)
 	g.GET("/api/bootstrap", api.bootstrap)
 	g.GET("/api/projects", api.projects.projects)
+	g.GET("/api/repositories", api.repositories.repositories)
+	g.PUT("/api/repositories", api.repositories.repositories)
+	g.POST("/api/repositories", api.repositories.repositories)
+	g.DELETE("/api/repositories", api.repositories.repositories)
+	g.GET("/api/repositories/:id", api.repositories.repository)
 	g.PUT("/api/projects", api.projects.projects)
 	g.POST("/api/projects", api.projects.projects)
 	g.GET("/api/projects/:id", api.projects.project)
@@ -236,8 +244,6 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 	g.GET("/api/runners/default", api.runners.runnerDefault)
 	g.PUT("/api/runners/default", api.runners.runnerDefaultSet)
 	g.DELETE("/api/runners/:id", api.runners.runnerRemove)
-	g.PUT("/api/runners/:id/run-limit", api.runners.runnerRunLimitSet)
-	g.PUT("/api/runners/:id/shared-projects", api.runners.runnerSharedProjectsSet)
 	g.GET("/api/runners/:id/maintenance", api.runners.runnerMaintenance)
 	g.POST("/api/runners/:id/maintenance", api.runners.runnerMaintenance)
 	g.POST("/api/runners/:id/models/probe", api.runners.probeRunnerModels)
@@ -245,7 +251,6 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 	g.POST("/api/runners/heartbeat", api.runners.runnerHeartbeat)
 	g.PUT("/api/runners/runtimes", api.runners.runnerRuntimeStatus)
 	g.POST("/api/runners/runtimes", api.runners.runnerRuntimeStatus)
-	g.POST("/api/runners/runtimes/test", api.runners.runnerRuntimeTest)
 
 	// Machine plane: this prefix is safe to exempt from gateway interactive
 	// login. Public install assets are read-only; daemon APIs authenticate with

@@ -20,12 +20,14 @@ const (
 	controlReconnectMax = 30 * time.Second
 )
 
-// The control channel carries exactly two operations: CLI maintenance and the
-// CLI model probe. The operation names are the wire values the platform
-// sends; they are part of the protocol, not of the runner's internals.
+// The control channel carries exactly three operations: CLI maintenance, the
+// CLI model probe and the SSH host-key probe. The operation names are the
+// wire values the platform sends; they are part of the protocol, not of the
+// runner's internals.
 const (
-	controlOperationMaintenance = "maintenance"
-	controlOperationLoginModels = "login_models"
+	controlOperationMaintenance   = "maintenance"
+	controlOperationLoginModels   = "login_models"
+	controlOperationSSHHostKey    = "ssh_host_key_probe"
 )
 
 // controlReadTimeout outlives two server ping periods (30s). Without a read
@@ -41,6 +43,9 @@ type controlRequest struct {
 	Operation     string                          `json:"operation,omitempty"`
 	Maintenance   *domain.RunnerMaintenanceRequest `json:"maintenance,omitempty"`
 	ModelProvider string                          `json:"modelProvider,omitempty"`
+	// SSHHostKeyAddress is the git host whose public key the machine should
+	// read. It belongs to the SSH host-key probe operation only.
+	SSHHostKeyAddress string `json:"sshHostKeyAddress,omitempty"`
 }
 
 // controlResponse is the runner's answer to one control request.
@@ -167,7 +172,11 @@ func (d *Daemon) handleControlRequest(ctx, daemonCtx context.Context, request co
 	case controlOperationMaintenance:
 		return d.maintenanceResponse(ctx, daemonCtx, request.Maintenance)
 	case controlOperationLoginModels:
-		return d.runnerLoginModels(ctx, request.ModelProvider)
+		response := d.runnerLoginModels(ctx, request.ModelProvider)
+		return response, nil
+	case controlOperationSSHHostKey:
+		response := d.runnerSSHHostKey(ctx, request.SSHHostKeyAddress)
+		return response, nil
 	default:
 		return controlResponse{Status: http.StatusBadRequest, Error: "unsupported runner operation"}, nil
 	}

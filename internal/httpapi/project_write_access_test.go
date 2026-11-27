@@ -79,7 +79,7 @@ func TestProjectContentWritesRequireTheAccountHoldingTheProject(t *testing.T) {
 	if code := call(other, "POST", "/api/issues", `{"projectId":"shared","title":"Shared idea"}`); code != 200 {
 		t.Fatalf("ownerless projects stay shared: %d", code)
 	}
-	if err := s.PutProject(domain.Project{ID: "ownerless-team", Name: "Ownerless team", }); err != nil {
+	if err := s.PutProject(domain.Project{ID: "ownerless-team", Name: "Ownerless team"}); err != nil {
 		t.Fatal(err)
 	}
 	if code := call(other, "POST", "/api/issues", `{"projectId":"ownerless-team","title":"Outsider idea"}`); code != 200 {
