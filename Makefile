@@ -1,4 +1,4 @@
-.PHONY: run test test-mysql clean-mysql build build-gate-mcp coverage coverage-go coverage-web coverage-e2e
+.PHONY: run test test-mysql clean-mysql build build-gate-mcp coverage coverage-go coverage-web coverage-e2e test-omp-extension
 
 GOCACHE ?= /tmp/agentflow-gocache
 # Use the local toolchain; go.mod requires go >= 1.26.11.
@@ -8,6 +8,11 @@ run:
 
 test:
 	GOCACHE=$(GOCACHE) go test -p=16 ./... -count=1 -timeout=4m
+
+# test-omp-extension runs the usage-reporting omp extension's tests. The
+# extension is not part of the platform binary; it only needs Node 24.
+test-omp-extension:
+	node --test "omp-extension/tests/*.test.mjs"
 
 # coverage runs the same gates as CI. COVERAGE_P lowers Go package parallelism
 # on small hosts.
