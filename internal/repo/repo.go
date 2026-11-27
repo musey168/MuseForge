@@ -378,8 +378,10 @@ func openSQLite(dsn string) (*gorm.DB, error) {
 }
 
 // sqliteTarget turns a SQLite DSN into the driver DSN. A "file:" URI is
-// passed through; anything else is a filesystem path, whose directory is
-// created so the file can be opened.
+// passed through; anything else is a filesystem path. Either way the file's
+// parent directory is created, so a fresh install needs one file and nothing
+// else — the "file:" form is what scripts/configure.sh writes, so it must
+// behave exactly like the bare path.
 func sqliteTarget(dsn string) (string, error) {
 	target := dsn
 	if !strings.HasPrefix(dsn, "file:") {
@@ -387,12 +389,12 @@ func sqliteTarget(dsn string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("sqlite path %q: %w", dsn, err)
 		}
-		if dir := filepath.Dir(abs); dir != "" {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
-				return "", fmt.Errorf("sqlite directory %q: %w", dir, err)
-			}
-		}
 		target = "file:" + abs
+	}
+	if dir, ok := sqliteParentDir(target); ok {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return "", fmt.Errorf("sqlite directory %q: %w", dir, err)
+		}
 	}
 	// Every connection waits for a busy database instead of failing at once.
 	if strings.Contains(target, "?") {
@@ -401,6 +403,28 @@ func sqliteTarget(dsn string) (string, error) {
 		target += "?_pragma=busy_timeout(" + sqliteBusyTimeout + ")"
 	}
 	return target, nil
+}
+
+// sqliteParentDir returns the directory that must exist for the SQLite file
+// behind a "file:" URI. It reports false for the in-memory forms, which have
+// no directory: "file::memory:..." and the empty-name form.
+func sqliteParentDir(target string) (string, bool) {
+	path := strings.TrimPrefix(target, "file:")
+	if i := strings.IndexAny(path, "?#"); i >= 0 {
+		path = path[:i]
+	}
+	if path == "" || path == ":memory:" {
+		return "", false
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", false
+	}
+	dir := filepath.Dir(abs)
+	if dir == "" {
+		return "", false
+	}
+	return dir, true
 }
 
 // Close releases the underlying connection pool. The gorm handle is kept so

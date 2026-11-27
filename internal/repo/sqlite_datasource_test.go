@@ -2,6 +2,7 @@ package repo
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -51,6 +52,27 @@ func TestOpenSQLiteCreatesSchemaFromModelManifest(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("sqlite file was not created: %v", err)
+	}
+}
+
+// TestOpenSQLiteCreatesMissingParentDirectory covers both DSN spellings of a
+// file-backed database: the bare path and the "file:" URI that
+// scripts/configure.sh writes. Both must create the directory the file lives
+// in, so a fresh install needs one file and nothing else.
+func TestOpenSQLiteCreatesMissingParentDirectory(t *testing.T) {
+	for _, dsn := range []string{
+		"file:%s/museforge.db",
+		"%s/museforge.db",
+	} {
+		dir := filepath.Join(t.TempDir(), "nested", "data")
+		s, err := Open(fmt.Sprintf(dsn, dir))
+		if err != nil {
+			t.Fatalf("open %q: %v", fmt.Sprintf(dsn, dir), err)
+		}
+		s.Close()
+		if _, err := os.Stat(filepath.Join(dir, "museforge.db")); err != nil {
+			t.Fatalf("sqlite file was not created for %q: %v", fmt.Sprintf(dsn, dir), err)
+		}
 	}
 }
 
