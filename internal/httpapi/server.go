@@ -257,7 +257,6 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 	// one-time bind codes or runner session tokens instead of a user identity.
 	g.GET("/runners/install.sh", serveBindCLIScript)
 	g.GET("/runners/agentflow-runner", serveRunnerBinary)
-	g.GET("/runners/agentflow-gate-mcp", serveGateMCPBinary)
 	g.GET("/runners/health", api.health)
 	g.GET("/runners/connect", api.runners.runnerControlConnect)
 	g.POST("/runners/register", api.runners.runnerRegister)
@@ -266,7 +265,6 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 	g.POST("/runners/heartbeat", api.runners.runnerHeartbeat)
 	g.GET("/deploy/bind-cli.sh", serveBindCLIScript)
 	g.GET("/deploy/agentflow-runner", serveRunnerBinary)
-	g.GET("/deploy/agentflow-gate-mcp", serveGateMCPBinary)
 	mcpHandler := mcpserver.New(mcpserver.LocalInvoker{Handler: g}).HTTPHandler()
 	g.Any("/mcp", func(c *gin.Context) {
 		mcpHandler.ServeHTTP(c.Writer, c.Request)

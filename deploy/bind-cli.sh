@@ -302,7 +302,6 @@ start_background_runner() {
     echo 'child=0'
     echo 'trap '\''if [[ "$child" != 0 ]]; then kill "$child" 2>/dev/null || true; fi; exit 0'\'' TERM INT'
     echo "export PATH=$(shell_quote "$USER_PATH")"
-    echo "export AGENTFLOW_GATE_MCP_BINARY=$(shell_quote "$GATE_BINARY_PATTERN")"
     echo 'while true; do'
     printf '  %s' "$(shell_quote "$BINARY")"
     for arg in "${RUN_ARGS[@]}"; do
@@ -386,7 +385,6 @@ RUNNER_HOME="${HOME}/.agentflow-runner"
 ENV_FILE="${RUNNER_HOME}/env"
 STATE_FILE="${RUNNER_HOME}/state.json"
 BINARY="${BIN_DIR}/agentflow-runner"
-GATE_BINARY_PATTERN="${BIN_DIR}/agentflow-gate-mcp-{os}-{arch}"
 PLIST="${HOME}/Library/LaunchAgents/com.agentflow.runner.plist"
 UNIT="${HOME}/.config/systemd/user/agentflow-runner.service"
 BACKGROUND_SCRIPT="${RUNNER_HOME}/run-service.sh"
@@ -470,10 +468,6 @@ if [[ "$UNINSTALL" == "1" ]]; then
     done
   fi
   rm -f "$BINARY"
-  rm -f "${BIN_DIR}"/agentflow-gate-mcp-darwin-amd64 \
-    "${BIN_DIR}"/agentflow-gate-mcp-darwin-arm64 \
-    "${BIN_DIR}"/agentflow-gate-mcp-linux-amd64 \
-    "${BIN_DIR}"/agentflow-gate-mcp-linux-arm64
   rm -rf "$RUNNER_HOME"
   info "已删除二进制 ${BINARY}"
   info "已删除配置目录及全部工作区 ${RUNNER_HOME}"
@@ -850,45 +844,11 @@ if [[ "$OS" == "darwin" ]]; then
   check_macos_helper_paths
 fi
 
-install_gate_binary() {
-  local target_os="$1" target_arch="$ARCH" optional="${2:-0}" target
-  local src="${SOURCE_DIR:-$PWD}" error
-  target="${GATE_BINARY_PATTERN//\{os\}/$target_os}"
-  target="${target//\{arch\}/$target_arch}"
-  info "从 ${SERVER} 下载 Gate MCP（${target_os}/${target_arch}）..."
-  TEMP_BINARY=$(mktemp "${BIN_DIR}/.agentflow-gate-mcp.XXXXXX")
-  if curl -fsSL "${SERVER}/runners/agentflow-gate-mcp?os=${target_os}&arch=${target_arch}" -o "$TEMP_BINARY" &&
-     [[ -s "$TEMP_BINARY" ]]; then
-    publish_runner_binary "$target"
-    return
-  fi
-  if [[ ! -d "$src/cmd/agentflow-gate-mcp" ]]; then
-    error="平台未提供 Gate MCP ${target_os}/${target_arch} 二进制，且未找到本地源码"
-  elif ! command -v go >/dev/null 2>&1; then
-    error="本机未安装 Go，无法构建 Gate MCP；请让平台配置 AGENTFLOW_GATE_MCP_BINARY"
-  elif build_runner_binary "$target_os" "$src" agentflow-gate-mcp && [[ -s "$TEMP_BINARY" ]]; then
-    publish_runner_binary "$target"
-    return
-  else
-    error="Gate MCP ${target_os}/${target_arch} 源码构建失败"
-  fi
-  rm -f "$TEMP_BINARY"
-  TEMP_BINARY=""
-  if [[ "$optional" == "1" ]]; then
-    warn "$error"
-  else
-    fail "$error"
-  fi
-}
 
 # Install the primary slice's companions before touching the optional slice.
 if [[ "$OS" == "darwin" ]]; then
   for ARCH in "${runner_arches[@]}"; do
     DOCKER_RUNNER_BINARY=$(macos_docker_runner_helper_path "$ARCH" "$AGENTFLOW_RUNNER_BINARY")
-    optional_gate=0
-    [[ "$ARCH" == "$required_arch" ]] || optional_gate=1
-    install_gate_binary darwin "$optional_gate"
-    install_gate_binary linux "$optional_gate"
     install_docker_runner_binary
     if [[ "$ARCH" == "$required_arch" && "$require_replacement_helper" == "1" ]] &&
        ! is_usable_docker_runner_helper "$DOCKER_RUNNER_BINARY"; then
@@ -896,7 +856,7 @@ if [[ "$OS" == "darwin" ]]; then
     fi
   done
 else
-  install_gate_binary "$OS"
+  :
 fi
 
 TEMP_BINARY="$STAGED_RUNNER"
@@ -945,12 +905,10 @@ cat > "$ENV_FILE" <<EOF
 AGENTFLOW_SERVER_URL=${SERVER}
 AGENTFLOW_RUNNER_BOOTSTRAP_TOKEN=${TOKEN}
 AGENTFLOW_RUNNER_NAME=${NAME:-$(hostname)}
-AGENTFLOW_GATE_MCP_BINARY=${GATE_BINARY_PATTERN}
 AGENTFLOW_RUNNER_BINARY=${AGENTFLOW_RUNNER_BINARY:-}
 EOF
 chmod 600 "$ENV_FILE"
 info "配置已写入 ${ENV_FILE}（权限 600）"
-export AGENTFLOW_GATE_MCP_BINARY="$GATE_BINARY_PATTERN"
 
 # ---------- 3. 注册 / 启动 ----------
 RUN_ARGS=(-server "$SERVER" -token "$TOKEN" -name "${NAME:-$(hostname)}" -state "$STATE_FILE")
@@ -992,13 +950,11 @@ EOF
     for arg in "${RUN_ARGS[@]}"; do printf '    <string>%s</string>\n' "$arg" >> "$PLIST"; done
     # plist 值需要 XML 转义（& 等）
     ESCAPED_PATH=$(printf '%s' "$USER_PATH" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-    ESCAPED_GATE_PATTERN=$(printf '%s' "$GATE_BINARY_PATTERN" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
     ESCAPED_RUNNER_PATTERN=$(printf '%s' "$AGENTFLOW_RUNNER_BINARY" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
     cat >> "$PLIST" <<EOF
   </array>
   <key>EnvironmentVariables</key><dict>
     <key>PATH</key><string>${ESCAPED_PATH}</string>
-    <key>AGENTFLOW_GATE_MCP_BINARY</key><string>${ESCAPED_GATE_PATTERN}</string>
     <key>AGENTFLOW_RUNNER_BINARY</key><string>${ESCAPED_RUNNER_PATTERN}</string>
   </dict>
   <key>RunAtLoad</key><true/>
@@ -1019,7 +975,6 @@ EOF
       echo ""
       echo "[Service]"
       echo "Environment=PATH=${USER_PATH}"
-      echo "Environment=AGENTFLOW_GATE_MCP_BINARY=${GATE_BINARY_PATTERN}"
       printf 'ExecStart=%s' "$BINARY"
       for arg in "${RUN_ARGS[@]}"; do printf ' %s' "$arg"; done
       echo ""
