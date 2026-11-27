@@ -24,17 +24,9 @@ function fillRepoBranchNaming(form,naming){
   const fields=form.elements;
   const prefix=naming?.mode==='prefix'?(naming.prefix??''):'feature/';
   const preset=Array.from(fields.workBranchPrefix.options).some(option=>option.value===prefix&&option.value!=='custom');
-  fields.workBranchNamingMode.value=naming?.mode==='ai'?'ai':'prefix';
+  fields.workBranchNamingMode.value='prefix';
   fields.workBranchPrefix.value=preset?prefix:'custom';
   fields.workBranchCustomPrefix.value=preset?'':prefix;
-  fields.workBranchPrompt.value=naming?.prompt||'';
-  const executors=(state.data.executors||[]).filter(executor=>executor.kind);
-  fields.workBranchExecutorId.replaceChildren(
-    new Option(lfT('选择 CLI','Choose a CLI'),''),
-    ...executors.map(executor=>repoBranchOption(executor.id,executor.name||executor.id,window.AgentFlowAssistantModels.cliIcon(executor.kind))),
-  );
-  fields.workBranchExecutorId.value=naming?.executorId||'';
-  fillRepoBranchModels(form,naming?.model||'');
   syncRepoBranchNaming(form);
 }
 function repoBranchOption(id,name,icon){
@@ -42,47 +34,11 @@ function repoBranchOption(id,name,icon){
   if(icon)option.dataset.brand=icon.split('/').at(-1);
   return option;
 }
-function fillRepoBranchModels(form,model='',custom=false){
-  const fields=form.elements,executor=fields.workBranchExecutorId.value,choice=fields.workBranchModelChoice;
-  const catalog=window.AgentFlowAssistantModels;
-  const items=(executorModelCatalogs()[executor]?.models||[]).filter(item=>catalog.concreteModelId(item.id));
-  const listed=items.some(item=>item.id===model);
-  choice.replaceChildren(
-    new Option(lfT('选择模型','Choose a model'),''),
-    ...items.map(item=>repoBranchOption(item.id,item.name||item.id,catalog.modelIcon(item))),
-  );
-  if(executor)choice.add(new Option(lfT('手动输入模型 ID…','Enter a model ID…'),AGENT_CUSTOM_MODEL));
-  const manual=!!executor&&(custom||!!model&&!listed);
-  choice.disabled=!executor;
-  choice.value=manual?AGENT_CUSTOM_MODEL:listed?model:'';
-  fields.workBranchCustomModel.value=manual?model:'';
-  form.querySelector('[data-work-branch-custom-model]').hidden=!manual;
-}
-function repoBranchModel(form){
-  const fields=form.elements,choice=fields.workBranchModelChoice.value;
-  return choice===AGENT_CUSTOM_MODEL?fields.workBranchCustomModel.value.trim():choice;
-}
 function syncRepoBranchNaming(form){
-  const isAI=form.elements.workBranchNamingMode.value==='ai';
-  form.querySelector('[data-work-branch-prefix]').hidden=isAI;
-  form.querySelector('[data-work-branch-prompt]').hidden=!isAI;
   form.querySelector('[data-work-branch-custom-prefix]').hidden=form.elements.workBranchPrefix.value!=='custom';
-  if(isAI){
-    const user=state.currentUser?.id;
-    loadExecutorModelCatalogs().then(()=>{
-      if(repoDrawerOpen()&&state.currentUser?.id===user&&form.elements.workBranchNamingMode.value==='ai'){
-        const manual=form.elements.workBranchModelChoice.value===AGENT_CUSTOM_MODEL;
-        const model=repoBranchModel(form);
-        fillRepoBranchModels(form,model,manual&&!model);
-      }
-    });
-  }
 }
 function repoBranchNamingPayload(form){
   const fields=form.elements;
-  if(fields.workBranchNamingMode.value==='ai'){
-    return {mode:'ai',executorId:fields.workBranchExecutorId.value,model:repoBranchModel(form),prompt:fields.workBranchPrompt.value.trim()};
-  }
   const prefix=fields.workBranchPrefix.value;
   return {mode:'prefix',prefix:prefix==='custom'?fields.workBranchCustomPrefix.value.trim():prefix};
 }
@@ -187,12 +143,6 @@ function bindRepoDrawer(){
   f.elements.name.addEventListener('input',()=>{repoDrawerState.nameTouched=!!f.elements.name.value.trim();syncRepoDrawerDetect()});
   f.elements.workBranchNamingMode.addEventListener('change',()=>syncRepoBranchNaming(f));
   f.elements.workBranchPrefix.addEventListener('change',()=>syncRepoBranchNaming(f));
-  f.elements.workBranchExecutorId.addEventListener('change',()=>fillRepoBranchModels(f));
-  f.elements.workBranchModelChoice.addEventListener('change',()=>{
-    const manual=f.elements.workBranchModelChoice.value===AGENT_CUSTOM_MODEL;
-    f.querySelector('[data-work-branch-custom-model]').hidden=!manual;
-    if(manual)f.elements.workBranchCustomModel.focus();
-  });
   $('#repoDrawerRename').onclick=()=>{repoDrawerState.nameTouched=true;$('#repoDrawerNameField').hidden=false;f.elements.name.focus();f.elements.name.select()};
   $('#repoDrawerDefault').onclick=()=>setRepoDrawerSwitch(!$('#repoDrawerDefault').classList.contains('on'));
   $$('[data-repo-drawer-close]').forEach(b=>b.onclick=closeRepoDrawer);

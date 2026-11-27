@@ -9,22 +9,9 @@ function bindAvatarFallbacks(){document.addEventListener('error',event=>{
 
 // ================= 工作台 =================
 function jumpBind(host){if(!host)return;host.querySelectorAll('[data-jump],[data-issue-filter]').forEach(el=>el.onclick=()=>{
-  if(el.dataset.issueFilter!=null){setIssueRunFilter(el.dataset.issueFilter,false);return}
+  if(el.dataset.issueFilter!=null){state.issueDeliveryFilter=el.dataset.issueFilter;resetListPage('issues');renderIssues();return}
   switchView(el.dataset.jump);
 })}
-function openRunFromId(id,opts={}){
-  const issueId=issueIdForRun(id);
-  if(!opts.forceRuns&&issueId){openIssueDetail(issueId,opts.tab||'sop');return}
-  switchView('runs');
-  showRunDetail(id);
-}
-function updateApprovalBadge(){
-  const n=approvalItems().length;
-  const badge=$('#approvalNavBadge');
-  if(!badge)return;
-  badge.hidden=!n;
-  badge.textContent=n||'';
-}
 
 // ================= 个人凭证 =================
 // One table drives the list rows, the inline editors and the add wizard.
@@ -147,7 +134,7 @@ const CREDENTIAL_CATALOG_MAX=100;
 let credentialEffortCatalogs,credentialEffortCatalogRequest;
 async function loadCredentialEffortCatalogs(){
   if(credentialEffortCatalogs)return;
-  if(!credentialEffortCatalogRequest)credentialEffortCatalogRequest=api('/api/executor-models?builtin=1',{silent:true}).then(data=>{credentialEffortCatalogs=data}).catch(()=>{}).finally(()=>{credentialEffortCatalogRequest=null});
+  if(!credentialEffortCatalogRequest)credentialEffortCatalogRequest=Promise.resolve().then(()=>{credentialEffortCatalogs={};}).finally(()=>{credentialEffortCatalogRequest=null});
   await credentialEffortCatalogRequest;
 }
 function credentialCatalogModels(value){
@@ -1814,13 +1801,9 @@ function renderPlatformAdminPanel(){
             <span class="platform-side-icon green">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
             </span>
-            <h3>通用模板与资产管理</h3>
+            <h3>平台级资产</h3>
           </div>
-          <p class="platform-side-desc">平台管理员在流程设计或角色定义中维护通用模板后，所有关联项目将在下次运行自动应用最新版本。</p>
-          <div class="platform-side-quick-links">
-            <button type="button" class="button ghost small platform-quick-link-btn" data-platform-nav="sops">查看 LOOP 流程 ↗</button>
-            <button type="button" class="button ghost small platform-quick-link-btn" data-platform-nav="agents">查看角色定义 ↗</button>
-          </div>
+          <p class="platform-side-desc">平台管理员在这里维护跨项目生效的账号、共享密钥与主机信任配置。</p>
           <div class="platform-audit-note">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
             <span>管理员授予与撤销操作均实时生效，变更将记录平台审计。</span>
@@ -2110,15 +2093,6 @@ async function loadPlatformAdmins(host){
   const filterTabs=host.querySelectorAll('#platformFilterTabs button');
   if(!list||!form)return;
 
-  host.querySelectorAll('[data-platform-nav]').forEach(btn=>{
-    btn.onclick=()=>{
-      const target=btn.dataset.platformNav;
-      if(target&&typeof switchView==='function'){
-        switchView(target);
-      }
-    };
-  });
-
   const sourceMeta={
     builtin:{label:'内置',className:'source-builtin',icon:'<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>'},
     granted:{label:'已授权',className:'source-granted',icon:'<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'}
@@ -2395,6 +2369,11 @@ function renderUserProfilePopover() {
   bindThemeSegment(popover);
 }
 
+function setThemePreference(preference){if(!['light','dark','system'].includes(preference))return;try{localStorage.setItem(THEME_KEY,preference)}catch{}applyTheme(preference)}
+// The profile card is visibility:hidden while closed, so callers re-run this with snap when it opens.
+function renderThemeSegment({snap=false}={}){const preference=typeof activeThemePreference==='string'?activeThemePreference:readThemePreference();document.querySelectorAll('.upp-theme-seg').forEach(seg=>{seg.querySelectorAll('[data-theme-pref]').forEach(button=>{const on=button.dataset.themePref===preference;button.classList.toggle('active',on);if(button.getAttribute('aria-checked')!==String(on))button.setAttribute('aria-checked',String(on));button.tabIndex=on?0:-1});const tabs=window.AgentFlowSlidingTabs;if(!tabs)return;const indicator=seg.querySelector(':scope > [data-sliding-indicator]');if(snap&&indicator)indicator.style.transition='none';tabs.mount(seg,{activeSelector:'.active',auto:true,compact:true,cacheKey:'upp-theme-seg'}).refresh();if(snap&&indicator){indicator.getBoundingClientRect();requestAnimationFrame(()=>{indicator.style.transition=''})}})}
+function renderThemeToggle(){renderThemeSegment();const light=document.documentElement.dataset.theme==='light',button=$('#themeToggle');if(!button)return;window.AgentFlowHarnessIcons?.render(button.querySelector('span'),light?'moon':'sun');button.querySelector('b').textContent=light?'深色':'亮色';button.title=light?'切换到深色主题':'切换到亮色主题'}
+function toggleTheme(){const theme=document.documentElement.dataset.theme==='light'?'dark':'light';try{localStorage.setItem(THEME_KEY,theme)}catch{}applyTheme(theme)}
 const THEME_SEGMENT_OPTIONS = [['light', 'sun', '浅色'], ['dark', 'moon', '深色'], ['system', 'monitor', '跟随系统']];
 function themeSegmentHTML() {
   return `
@@ -2481,17 +2460,15 @@ function renderUserBadge(){
 function renderDashboard(){
   const issues=state.data.issues||[];
   const projectIssues=issues.filter(i=>!state.projectFilter||i.projectId===state.projectFilter);
-  const attention=projectIssues.filter(i=>issueRunHealth(i)==='attention');
-  const waiting=projectIssues.filter(i=>issueCurrentStage(i).key==='waiting');
-  const confirm=projectIssues.filter(i=>issueCurrentStage(i).key==='confirm');
-  const active=projectIssues.filter(i=>issueRunHealth(i)==='active'&&issueCurrentStage(i).key!=='waiting');
-  const closed=projectIssues.filter(i=>issueRunHealth(i)==='closed');
-  updateApprovalBadge();
-  const needMe=[...waiting,...confirm,...attention.filter(i=>!waiting.includes(i)&&!confirm.includes(i))];
+  const stageOf=i=>issueCurrentStage(i);
+  const attention=projectIssues.filter(i=>stageOf(i).key==='attention');
+  const confirm=projectIssues.filter(i=>stageOf(i).key==='confirm');
+  const active=projectIssues.filter(i=>stageOf(i).key==='active');
+  const closed=projectIssues.filter(i=>stageOf(i).key==='closed');
+  const needMe=[...confirm,...attention];
   const statCards=[
-    {label:'需要介入',value:attention.length,foot:'待确认结论、失败或已中断',color:'#c63c4b',filter:'attention'},
-    {label:'待我确认',value:approvalItems().length,foot:'批准后才会继续跑',color:'#fbbf24',to:'approvals'},
-    {label:'正在推进',value:active.length,foot:'Agent 正在执行',color:'#5b8cff',filter:'active'},
+    {label:'需要介入',value:attention.length,foot:'被阻塞或需要确认',color:'#c63c4b',filter:'attention'},
+    {label:'正在推进',value:active.length,foot:'需求正在推进',color:'#5b8cff',filter:'active'},
     {label:'已经完成',value:closed.length,foot:'本项目已闭环',color:'#34d399',filter:'closed'},
   ];
   const statsHost=$('#dashStats');

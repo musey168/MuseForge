@@ -102,56 +102,6 @@ function selectedReqRepositoryIds(){
 function selectedReqRepositoryId(){
   return selectedReqRepositoryIds()[0]||'';
 }
-function fillReqWorkflow(preferred){
-  const select=$('#reqWorkflow');
-  if(!select)return;
-  const opts=runnableWorkflowOptions();
-  const preferredId=String(preferred||select.value||'').trim();
-  const fallback=defaultSOPForIssue({projectId:state.projectFilter,kind:'requirement'});
-  const selected=opts.some(w=>w.id===preferredId)?preferredId:(opts.some(w=>w.id===fallback)?fallback:(opts[0]?.id||''));
-  select.innerHTML=opts.map(w=>`<option value="${escapeHTML(w.id)}" ${w.id===selected?'selected':''}>${escapeHTML(w.name)}</option>`).join('')||'<option value="">暂无可选 LOOP</option>';
-  if(selected)select.value=selected;
-  window.enhanceSelect?.(select)?.refresh?.();
-}
-function reqUsesSOP(){
-  return state.reqDelivery!=='none'&&runnableWorkflowOptions().length>0;
-}
-function renderReqDelivery(){
-  const hasSOP=runnableWorkflowOptions().length>0;
-  const delivery=reqUsesSOP()?'sop':'none';
-  $$('#reqDelivery [data-req-delivery]').forEach(btn=>{
-    const on=btn.dataset.reqDelivery===delivery;
-    btn.classList.toggle('is-on',on);
-    btn.setAttribute('aria-checked',String(on));
-    const ind=btn.querySelector('.req-choice-ind');
-    if(ind)ind.innerHTML=on?reqIcon('check',11):'';
-    if(btn.dataset.reqDelivery==='sop'){
-      btn.disabled=!hasSOP;
-      btn.classList.toggle('is-unavailable',!hasSOP);
-    }
-  });
-  const hint=$('#reqDeliverySOPHint');
-  if(hint)hint.textContent=hasSOP?'按选定的 LOOP 流程跑，可手动或定时触发':'当前项目还没有可运行的 LOOP';
-  const field=$('#reqWorkflowField');
-  if(field)field.hidden=delivery!=='sop';
-  hydrateReqIcons($('#reqDelivery'));
-}
-function setReqDelivery(delivery){
-  if(delivery==='sop'&&!runnableWorkflowOptions().length)return;
-  state.reqDelivery=delivery==='none'?'none':'sop';
-  renderReqDelivery();
-  renderReqFooter();
-  persistRequirementComposer();
-}
-function selectedReqWorkflowId(){
-  return reqUsesSOP()?($('#reqWorkflow')?.value.trim()||''):'';
-}
-function selectedReqPlaybookId(){
-  const wf=selectedReqWorkflowId();
-  const books=projectPlaybooks(currentProject());
-  const hit=books.find(b=>(b.bindings||[]).some(x=>x.workflowId===wf));
-  return hit?.id||'';
-}
 function setReqRepositoryIds(ids){
   const host=$('#reqRepository');
   if(!host)return;
@@ -233,11 +183,9 @@ function renderReqContext(){
     else{host.dataset.ids='[]';renderReqRepositoryPicker()}
   }
   renderReqRepoChip();
-  fillReqWorkflow();
-  renderReqDelivery();
 }
 function reqFooterNote(){
-  return reqUsesSOP()?'建单后可在详情里触发 LOOP':'不绑定 LOOP，定时任务也不会自动认领；以后想跑 LOOP 可在详情里选择';
+  return '建单后可在详情里补充说明、代码仓库和交付信息。';
 }
 function renderReqFooter(){
   const creating=!!state.reqCreating;
@@ -316,11 +264,8 @@ function persistRequirementComposer(){
     projectId:currentProject()?.id||'',
     input:$('#chatInput')?.value||'',
     target:state.reqTarget||'local',
-    delivery:reqUsesSOP()?'sop':'none',
     repoIds:selectedReqRepositoryIds(),
     baseBranch:selectedReqBaseBranch(),
-    workflowId:selectedReqWorkflowId(),
-    playbookId:selectedReqPlaybookId(),
   };
   try{sessionStorage.setItem('agentflow.requirementComposer',JSON.stringify(draft))}catch{}
 }
@@ -328,7 +273,7 @@ function clearRequirementComposer(){
   try{sessionStorage.removeItem('agentflow.requirementComposer')}catch{}
 }
 function resetRequirementComposer(){
-  Object.assign(state,{reqCreating:'',reqTarget:'local',reqDelivery:'sop'});
+  Object.assign(state,{reqCreating:'',reqTarget:'local'});
   ['#reqBaseBranch','#chatInput'].forEach(id=>{const el=$(id);if(el)el.value=''});
   reqImages.splice(0).forEach(({url})=>URL.revokeObjectURL(url));
   renderReqImages();
@@ -346,13 +291,10 @@ function readRequirementComposerDraft(){
 }
 function applyRequirementComposerDraft(raw){
   state.reqTarget=raw.target==='tapd'?'tapd':'local';
-  state.reqDelivery=raw.delivery==='none'?'none':'sop';
   renderReqContext();
   if(Array.isArray(raw.repoIds))setReqRepositoryIds(raw.repoIds);
   const baseBranch=$('#reqBaseBranch');if(baseBranch)baseBranch.value=baseBranch.disabled?'':(raw.baseBranch||'');
   renderReqRepoChip();
-  fillReqWorkflow(raw.workflowId||raw.playbookId);
-  renderReqDelivery();
   const input=$('#chatInput');if(input)input.value=raw.input||'';
   renderReqTarget();
   updateReqCharCount();
@@ -447,9 +389,6 @@ async function createIssueFromChat(target){
   if(!draft.description&&!reqImages.length){$('#chatInput')?.focus();return toast('先写一句需求')}
   if(target==='tapd'&&!projectTAPDReady())return toast('当前项目未配置 TAPD');
   if(state.reqCreating)return toast('正在建单，请勿重复点击');
-  const useSOP=reqUsesSOP();
-  const workflowId=selectedReqWorkflowId();
-  if(useSOP&&!workflowId)return toast('请选择 LOOP，或改为不使用 LOOP');
   state.reqCreating='issue';
   renderReqFooter();
   const project=currentProject();
@@ -460,8 +399,7 @@ async function createIssueFromChat(target){
       kind:'requirement',
       sopMode:useSOP?'':'none',
       workflowId,
-      playbookId:selectedReqPlaybookId(),
-      repositoryId:selectedReqRepositoryId(),
+        repositoryId:selectedReqRepositoryId(),
       repositoryIds:selectedReqRepositoryIds(),
       baseBranch:selectedReqBaseBranch(),
       assigneeUserId:Number(state.currentUser?.id)||0,
@@ -488,7 +426,7 @@ async function createIssueFromChat(target){
     renderIssues();
     if(syncError)toast('已在平台建单，TAPD 同步失败：'+syncError,'err');
     else if(target==='tapd')toast(`已创建需求并同步 TAPD ${issue.externalRef?.externalId||''}`,'ok');
-    else toast(useSOP?'已在平台创建需求，可在详情里触发 LOOP':'已创建需求（不使用 LOOP）','ok');
+    else toast('已创建需求','ok');
     openIssueDetail(issue.id);
   }catch(err){toast(err.message,'err')}
   finally{state.reqCreating='';renderReqFooter()}

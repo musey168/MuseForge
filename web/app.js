@@ -24,7 +24,7 @@ const state = {
   listPages:{}
 };
 
-const LIST_PAGE_SIZE={issues:20,runs:20,mcp:24,obs:20};
+const LIST_PAGE_SIZE={issues:20,obs:20};
 function listPageSize(key){return String(key||'').startsWith('obs-')?LIST_PAGE_SIZE.obs:(LIST_PAGE_SIZE[key]||20)}
 function resetListPage(key){if(!state.listPages)state.listPages={};if(key)state.listPages[key]=1}
 function resetListPages(prefix){
@@ -64,8 +64,6 @@ function goListPage(key, page){
   state.listPages[key]=Math.max(1, Number(page)||1);
   if(String(key).startsWith('obs-')){if(typeof obsRefreshPaged==='function')obsRefreshPaged(key);else renderObservability()}
   else if(key==='issues')renderIssues();
-  else if(key==='runs')renderRuns();
-  else if(key==='mcp')renderMCPManagement();
   const el=document.querySelector(`[data-page-anchor="${key}"]`)||document.querySelector(`[data-pager="${key}"]`);
   if(el)el.scrollIntoView({block:'nearest'});
 }
@@ -600,21 +598,6 @@ function parseInlineMarkdown(text, allowImages=false){
   return s.replace(/\u0000(\d+)\u0000/g,(match,i)=>`<code>${codeSpans[Number(i)]}</code>`);
 }
 
-function isMarkdownArtifact(artifact, content){
-  const name=String(artifact?.name||'').toLowerCase();
-  const path=String(artifact?.path||'').toLowerCase();
-  const type=String(artifact?.mediaType||'').toLowerCase();
-  if(name.endsWith('.md') || name.endsWith('.markdown') || path.endsWith('.md') || path.endsWith('.markdown') || type==='text/markdown'){
-    return true;
-  }
-  if(typeof content==='string'){
-    if(/^\s*#+\s+/m.test(content) || /\|[^\n]+\|\n\|[-:| ]+\|/.test(content)){
-      return true;
-    }
-  }
-  return false;
-}
-
 let currentCodeEditorSave = null;
 function openCodeEditorModal({ title, subtitle, language='shell', value='', onSave }){
   const modal=$('#codeEditorModal');
@@ -713,157 +696,32 @@ function resourceIdProblem(id){
   return '';
 }
 function uid(prefix){return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`}
-const PRODUCTION_SOPS=new Set(['issue-fix-production','requirement-development-production']);
-function catalogOwned(projectId){return !!state.projectFilter&&projectId===state.projectFilter}
-function catalogForeign(projectId){return !!projectId&&projectId!==state.projectFilter}
-function catalogShared(projectId,shared){return !projectId||(!!shared&&projectId!==state.projectFilter)}
-function catalogVisible(projectId,shared){return catalogOwned(projectId)||catalogShared(projectId,shared)}
-// Generic templates are platform-provided and project independent: every
-// project sees them, but they are read-only blueprints until adopted.
-function isPlatformAdmin(){return !!(state.currentUser&&!state.currentUser.isGuest&&state.currentUser.isPlatformAdmin)}
-function canEditGeneric(wf){return catalogGeneric(wf)&&isPlatformAdmin()}
-function catalogGeneric(item){return !!item?.generic}
-// Generic roles live in generic_templates, but the first project that
-// adopted a template often reused the same role id. Looking the wizard
-// subject up in the project catalog then marks that role as foreign and
-// hides Save in favour of「复制到本项目」.
-function agentWizardSubject(){
-  if(catalogGeneric(state.workflow))return (state.genericTemplateAgents||[]).find(x=>x.id===state.selectedAgent)||state.agentDraft||{};
-  return (state.data.agents||[]).find(x=>x.id===state.selectedAgent)||state.agentDraft||{};
-}
-// Platform roles (no project) are used by every project; like platform rules
-// and skills only administrators may change them. Others copy them first.
-function agentPlatformLocked(a){return !!a?.id&&!a.projectId&&(state.data.agents||[]).some(x=>x.id===a.id)&&!isPlatformAdmin()}
-function agentWizardForeign(a){
-  if(catalogGeneric(state.workflow))return !isPlatformAdmin();
-  return catalogForeign(a?.projectId)||agentPlatformLocked(a);
-}
-function genericTemplateMCPOptions(selected){
-  const wanted=['github'];
-  const out=[];
-  const seen=new Set();
-  const add=(id,name,description)=>{
-    if(!id||seen.has(id))return;
-    seen.add(id);
-    out.push({id,name:name||id,description:description||'通用模板按市场别名绑定，运行时解析到当前项目已安装的 MCP'});
-  };
-  for(const item of state.mcpMarket||[]){
-    const alias=(item.aliases||[]).find(key=>wanted.includes(key));
-    if(alias||wanted.includes(item.id))add(alias||item.id,item.name,item.description);
-  }
-  // The server resolves these aliases from its embedded catalog, so they stay
-  // selectable even if the catalog request has not finished or failed.
-  for(const id of wanted)add(id,id==='github'?'GitHub':id);
-  for(const id of selected||[]){
-    if(seen.has(id))continue;
-    const item=(state.mcpMarket||[]).find(m=>m.id===id||(m.aliases||[]).includes(id));
-    add(id,item?.name,item?.description);
-  }
-  return out;
-}
-function genericMCPChecked(id,selected){
-  if((selected||[]).includes(id))return true;
-  const item=(state.mcpMarket||[]).find(m=>m.id===id||(m.aliases||[]).includes(id));
-  if(!item)return false;
-  return (selected||[]).some(s=>s===item.id||(item.aliases||[]).includes(s));
-}
-function assetVisible(item){return !item?.projectId||item.projectId===state.projectFilter}
-function catalogWorkflows(){return (state.data?.workflows||[]).filter(w=>!catalogGeneric(w)&&catalogVisible(w.projectId,w.shared))}
-// Runnable options = stored LOOPs + platform generic templates (run by reference).
-function runnableWorkflowOptions(){return catalogWorkflows().concat((state.data?.workflows||[]).filter(catalogGeneric).map(w=>({...w,name:`通用 · ${w.name}`})))}
-function scopedWorkflows(){
-  const all=state.data?.workflows||[];
-  if(state.sopScope==='generic')return all.filter(w=>catalogGeneric(w));
-  if(state.sopScope==='shared')return all.filter(w=>!catalogGeneric(w)&&catalogShared(w.projectId,w.shared));
-  return all.filter(w=>!catalogGeneric(w)&&catalogOwned(w.projectId));
-}
-function catalogAgents(){return (state.data?.agents||[]).filter(a=>catalogVisible(a.projectId,a.shared))}
-function projectWorkflowAgent(agent,projectId){
-  return !!agent.projectId&&(agent.projectId===projectId||agent.shared);
-}
-function workflowAgents(){
-  if(catalogGeneric(state.workflow))return state.genericTemplateAgents||[];
-  const projectId=state.workflow?.projectId||state.projectFilter||'';
-  return (state.data?.agents||[]).filter(a=>projectWorkflowAgent(a,projectId));
-}
-function workflowAgent(id){return workflowAgents().find(a=>a.id===id)}
-async function refreshWorkflowAgents(){
-  const wf=state.workflow;
-  if(catalogGeneric(wf))return hydrateGenericWorkflowRoles(wf);
-  const projectId=wf?.projectId||state.projectFilter;
-  if(!projectId)return;
-  const agents=await api('/api/agents?projectId='+encodeURIComponent(projectId),{silent:true});
-  if(state.workflow!==wf)return;
-  const ids=new Set(agents.map(a=>a.id));
-  state.data.agents=(state.data.agents||[]).filter(a=>!projectWorkflowAgent(a,projectId)&&!ids.has(a.id)).concat(agents);
-}
-function clearGenericTemplateAgents(){state.genericTemplateAgents=[];state.genericTemplateAgentWorkflowId=''}
-async function hydrateGenericWorkflowRoles(wf=state.workflow){
-  if(!catalogGeneric(wf)){
-    if(state.genericTemplateAgentWorkflowId)clearGenericTemplateAgents();
-    return false;
-  }
-  if(state.genericTemplateAgentWorkflowId===wf.id)return false;
-  const id=wf.id;
+function relativeTime(value){const seconds=Math.max(0,Math.floor((Date.now()-new Date(value))/1000));if(seconds<60)return '刚刚';if(seconds<3600)return `${Math.floor(seconds/60)} 分钟前`;if(seconds<86400)return `${Math.floor(seconds/3600)} 小时前`;return `${Math.floor(seconds/86400)} 天前`}
+function runStatus(s){return ({queued:'排队中',running:'运行中',waiting:'待确认',paused:'已暂停',succeeded:'已完成',failed:'失败',cancelled:'已取消'}[s]||s)}
+function formatTokens(n){n=Number(n||0);if(n>=1000000)return `${(n/1000000).toFixed(n<10000000?1:0)}M`;return n>999?`${(n/1000).toFixed(n>9999?0:1)}k`:String(n)}
+function fallbackCopyText(value){
+  const input=document.createElement('textarea');
+  input.value=value;
+  input.readOnly=true;
+  input.style.cssText='position:fixed;top:-9999px;left:-9999px';
+  document.body.appendChild(input);
   try{
-    const agents=await api(`/api/workflows/${encodeURIComponent(id)}/agents`);
-    if(state.workflow?.id!==id)return false;
-    state.genericTemplateAgents=Array.isArray(agents)?agents:[];
-    state.genericTemplateAgentWorkflowId=id;
-    return true;
-  }catch(e){
-    // 不要把失败记成「已加载」：那个标记是用来跳过重复请求的，
-    // 一旦写上，这个模板就再也不会重拉，门禁会一直显示成没有配置。
-    if(state.workflow?.id===id)clearGenericTemplateAgents();
-    toast(e.message||'加载通用模板角色失败');
+    input.select();
+    return document.execCommand('copy');
+  }catch{
     return false;
+  }finally{
+    input.remove();
   }
 }
-async function refreshGenericWorkflowRoles(){
-  if(await hydrateGenericWorkflowRoles()){
-    renderCanvas();
-    renderProperties();
-  }
-}
-function scopedAgents(){const all=state.data?.agents||[];return state.agentScope==='shared'?all.filter(a=>catalogShared(a.projectId,a.shared)):all.filter(a=>catalogOwned(a.projectId))}
-function visibleAssets(items){return (items||[]).filter(assetVisible)}
-function visibleMCPAssets(items){const uid=state.currentUser&&!state.currentUser.isGuest?Number(state.currentUser.id):0;return (items||[]).filter(item=>item.scope==='project'?item.projectId===state.projectFilter:item.scope==='personal'&&!item.marketId&&uid>0&&Number(item.ownerUserId)===uid)}
+async function copyText(value,message){if(navigator.clipboard&&window.isSecureContext){try{await navigator.clipboard.writeText(value);toast(message);return}catch(e){}}toast(fallbackCopyText(value)?message:'复制失败，请手动复制')}
+function isPlatformAdmin(){return !!(state.currentUser&&!state.currentUser.isGuest&&state.currentUser.isPlatformAdmin)}
 function projectQuery(){return state.projectFilter?`?projectId=${encodeURIComponent(state.projectFilter)}`:''}
-function projectQueryWith(extra){const q=projectQuery();return q?q+`&${extra}`:`?${extra}`}
-function runProjectId(r){
-  if(r?.executionContext?.projectId)return r.executionContext.projectId;
-  const issue=runContext(r).issue;
-  if(issue?.projectId)return issue.projectId;
-  const rid=r?.repository?.repositoryId;
-  if(rid){const repo=(state.data.repositories||[]).find(x=>x.id===rid);if(repo?.projectId)return repo.projectId}
-  return '';
-}
-function scopedRuns(runs){const pid=state.projectFilter,list=runs||[];return pid?list.filter(r=>runProjectId(r)===pid):list}
-// Conversation workspaces (Run.kind=workspace) are the chat's sandbox, not LOOP
-// runs: they have no nodes and stay "waiting" until reclaimed. They are reached
-// from the conversation and the requirement, never from LOOP run lists or counts.
-function isSOPRun(r){return r?.kind!=='workspace'}
-function sopRuns(runs){return (runs||[]).filter(isSOPRun)}
-function preferredWorkflow(){
-  const usable=catalogWorkflows(), mine=usable.filter(w=>catalogOwned(w.projectId));
-  return mine.find(w=>w.id==='issue-fix-production')||mine[0]||usable.find(w=>w.id==='issue-fix-production')||usable[0]||null;
-}
-function syncWorkflowToProject(){
-  if(state.workflow&&!catalogGeneric(state.workflow)&&catalogVisible(state.workflow.projectId,state.workflow.shared))return;
-  state.workflow=clone(preferredWorkflow());
-  state.workflowSaved=clone(state.workflow);
-  state.workflowDirty=false;
-  rememberOpenWorkflow();
-}
-function isStaleRun(r){if(r?.status!=='running')return false;const t=new Date(r.updatedAt||r.createdAt||0).getTime();return !t||(Date.now()-t)>4*60*1000}
-function isGhostRun(r){if(!['failed','cancelled'].includes(r?.status))return false;return Object.values(r?.nodes||{}).some(n=>n?.status==='running'||n?.status==='pending_input')}
-function liveRuns(){return scopedRuns(sopRuns(state.data?.runs).filter(r=>r.status==='waiting'||(r.status==='running'&&!isStaleRun(r))||isGhostRun(r)))}
-function staleRuns(){return scopedRuns(sopRuns(state.data?.runs).filter(isStaleRun))}
 async function refreshDashboard(){
   try{
     const opt={silent:true};
-    const [runs,tasks,issues]=await Promise.all([api('/api/runs',opt),api('/api/tasks',opt),api('/api/issues',opt)]);
-    state.data.runs=runs;state.data.tasks=tasks;state.data.issues=issues;
+    const issues=await api('/api/issues',opt);
+    state.data.issues=issues;
     renderDashboard();
   }catch{}
 }
@@ -877,11 +735,8 @@ function userById(id){return (state.data.users||[]).find(u=>Number(u.id)===Numbe
 function userDisplay(user){return user?(user.chineseName&&user.loginName?`${user.loginName}(${user.chineseName})`:user.loginName||user.chineseName||`用户 ${user.id}`):''}
 function issueAssigneeName(issue){
 	if(issue?.assigneeUserId)return userDisplay(userById(issue.assigneeUserId));
-	if(!issue?.assigneeId)return '';
-  if(issue.assigneeType==='agent')return (state.data.agents||[]).find(a=>a.id===issue.assigneeId)?.name||'';
   return '';
 }
-function runIssueTitle(r){const task=(state.data.tasks||[]).find(t=>t.runId===r.id);const issue=task&&(state.data.issues||[]).find(i=>i.id===task.issueId);if(issue?.title)return issue.title;const line=String(r.input||'').split('\n')[0].trim();return line||r.workflowSnapshot?.name||r.workflowId||r.id}
 
 function isLoopbackHost(hostname){
   return hostname==='localhost'||hostname==='127.0.0.1'||hostname==='[::1]'||hostname==='0.0.0.0';
@@ -908,8 +763,8 @@ function shouldAutoSSORedirect({isGuest, hostname, bypassAutoAuth, authErr, logi
 }
 
 async function boot(){
-  state.data = {runs:[],issues:[],tasks:[],workflowMetrics:[],syncLogs:[],trackerImport:null,agents:[],workflows:[],projects:[],repositories:[],users:[],rules:[],skills:[],mcpServers:[],executors:[],sandboxes:[]};
-  bind(); renderProjectSwitcher(); updateApprovalBadge();
+  state.data = {issues:[],syncLogs:[],projects:[],repositories:[],users:[],trackerImport:null};
+  bind(); renderProjectSwitcher();
 
   // 1. 检查 URL 中是否有 SSO 回调的 code
   const urlParams = new URLSearchParams(window.location.search);
@@ -973,41 +828,20 @@ async function boot(){
   if(isGuest&&state.authRequired){location.replace('/login.html');return}
   renderUserBadge();
 
-  const shell = await api('/api/bootstrap', {silent: restoredView()==='runs'});
+  const shell = await api('/api/bootstrap', {silent: true});
   state.data = Object.assign(state.data, shell);
   const savedProject=urlParams.get('projectId')||localStorage.getItem('agentflow.activeProject');
   state.projectFilter=(state.data.projects||[]).some(p=>p.id===savedProject)?savedProject:defaultProjectId(state.data.projects,state.currentUser?.id);
-  state.workflow = clone(restoreOpenWorkflow());
-  state.workflowSaved = clone(state.workflow);
-  state.workflowDirty = false;
-  if(state.workflow?.id)localStorage.setItem('agentflow.activeWorkflow',state.workflow.id);
-  renderProjectSwitcher(); updateApprovalBadge();
-  ensureMCPMarketCatalog().then(()=>{if(activeViewName()==='sops')renderSOPCatalog()});
+  renderProjectSwitcher();
   listenForGongfengOAuth();
   window.addEventListener('hashchange',async()=>{
     const name=restoredView();
-    const assetDetailHash=state.selectedAsset&&isProjectSharedAsset(activeViewName())?assetViewHash(state.assetType,state.selectedAsset):'';
-    if(assetDetailHash&&location.hash!==assetDetailHash&&!(await confirmAssetLeave())){
-      history.pushState({assetFrom:assetViewHash(state.assetType)},'',assetDetailHash);
-      return;
-    }
     if(name==='settings'&&routePart(1)==='executors'){gotoCredential('executors');return}
     if(activeViewName()!==name){
-      if(name==='flow')await applyFlowRoute();
       if(name==='projects')syncProjectAdminRouteState();
       if(restoredView()===name)switchView(name);
       return;
     }
-    if(name==='runs'){
-      const id=runRouteId();
-      if(id){if(state.selectedRun!==id)showRunDetail(id)}
-      else if(state.selectedRun)showRunList();
-      return;
-    }
-    if(name==='flow')applyFlowRoute();
-    if(name==='evolution'&&typeof evoApplyRoute==='function')evoApplyRoute();
-    if(name==='agents')applyAgentRoute();
-    if(isProjectSharedAsset(name))applyAssetRoute();
     if(name==='projects')applyProjectAdminRoute();
   });
   const view=restoredView();
@@ -1016,7 +850,6 @@ async function boot(){
   if(view==='settings'&&routePart(1)==='executors')gotoCredential('executors');
   else switchView(view);
   settleBootLoader();
-  if(!['approvals','issues','runs','sops'].includes(state.currentView))preloadApprovalBadge();
   restoreRequirementComposer();
 }
 let bootLoaderTimer=0;
@@ -1048,10 +881,8 @@ themeMedia.addEventListener('change',()=>applyTheme());
 window.addEventListener('storage',event=>{if(!event.key||event.key===THEME_KEY)applyTheme()});
 
 function bind(){
-	prepareMCPFormHints();
   $('#returnToQuickAccess')?.addEventListener('click',returnToQuickAccess);
   $$('.nav[data-view]').forEach(btn=>btn.onclick=async()=>{
-    if(!(await confirmAssetLeave()))return;
     if(btn.dataset.view==='projects'&&state.projectAdminDetailId){
       if(!(await confirmDiscardProjectDraft()))return;
       resetProjectAdminDetail();
@@ -1082,36 +913,6 @@ function bind(){
     }
   },true);
   matchMedia('(max-width:1000px)').addEventListener('change',()=>setSettingsSidebarExpanded(settingsSidebarExpanded()));
-  bindFlowDesigner();
-  $('#workflowSelect').onchange=e=>switchFlowWorkflow(e.target.value);
-  $('#workflowName').oninput=e=>{if(!state.workflow)return;state.workflow.name=e.target.value;dirty()};
-  $('#workflowOwner').oninput=e=>{if(!state.workflow)return;state.workflow.owner=e.target.value;dirty()};
-  $('#workflowSandbox').onchange=e=>{if(!state.workflow)return;setSOPSandboxChoice(state.workflow,e.target.value);dirty()};
-  $('#workflowStatus').onchange=e=>{if(!state.workflow)return;state.workflow.status=e.target.value;dirty()};
-  $('#workflowTags').oninput=e=>{if(!state.workflow)return;state.workflow.tags=e.target.value.split(',').map(x=>x.trim()).filter(Boolean);dirty()};
-  $('#workflowMetricCategory').onchange=e=>{if(!state.workflow)return;state.workflow.metricCategory=e.target.value;dirty()};
-  $('#workflowSOPLane').onchange=e=>{if(!state.workflow)return;state.workflow.sopLane=e.target.value;dirty()};
-  $('#workflowDescription').oninput=e=>{if(!state.workflow)return;state.workflow.description=e.target.value;dirty()};
-  $('#saveWorkflow').onclick=saveWorkflow; $('#discardWorkflow').onclick=discardWorkflow; $('#publishWorkflow').onclick=publishWorkflow;
-  $('#flowHistory')&&($('#flowHistory').onclick=()=>openRevisionHistory('workflow', state.workflow?.id, state.workflow?.name));
-  $('#runButton').onclick=()=>openRunModal(state.workflow?.id);
-  $('#flowSettingsToggle').onclick=()=>{const panel=$('#flowSettingsPanel');panel.hidden=!panel.hidden;$('#flowSettingsToggle').classList.toggle('active',!panel.hidden)};
-  const closeFlowSettings=()=>{const panel=$('#flowSettingsPanel');if(panel){panel.hidden=true;$('#flowSettingsToggle')?.classList.remove('active')}};
-  $('#flowSettingsClose')?.addEventListener('click',closeFlowSettings);
-  $('#flowSettingsCollapse')?.addEventListener('click',closeFlowSettings);
-  $('#flowSettingsQuickSave')?.addEventListener('click',saveWorkflow);
-  const sandboxChip=$('#sandboxChip');
-  if(sandboxChip)sandboxChip.onclick=()=>{
-    const panel=$('#flowSettingsPanel');
-    if(!panel)return;
-    panel.hidden=false;
-    $('#flowSettingsToggle')?.classList.add('active');
-    const field=$('#workflowSandboxField');
-    if(field){field.classList.add('highlight');setTimeout(()=>field.classList.remove('highlight'),1600)}
-    const sel=$('#workflowSandbox');
-    if(sel)sel.focus();
-  };
-  $$('.canvas-view-toggle [data-flow-view]').forEach(btn=>btn.onclick=()=>setFlowView(btn.dataset.flowView));
   const refreshRunnersBtn=$('#refreshRunners');if(refreshRunnersBtn)refreshRunnersBtn.onclick=()=>refreshRunners();
   $('#themeToggle').onclick=toggleTheme;renderThemeToggle();
   const profileWrap = $('#userProfileWrap');
@@ -1157,215 +958,54 @@ function bind(){
   $('#commandResults').onmousemove=e=>{const item=e.target.closest('[data-command-index]');if(!item)return;const idx=Number(item.dataset.commandIndex);if(idx!==commandSelectedIndex){commandSelectedIndex=idx;highlightCommandSelection()}};
   $$('[data-issue-view]').forEach(btn=>btn.onclick=()=>setIssueView(btn.dataset.issueView));
   setIssueView(state.issueView,false);
-  $$('#runModal .modal-close').forEach(b=>b.onclick=()=>$('#runModal').classList.remove('open'));
-  $$('.generic-template-close').forEach(b=>b.onclick=()=>$('#genericTemplateModal').classList.remove('open'));
-  $('#confirmGenericTemplate')&&($('#confirmGenericTemplate').onclick=adoptGenericTemplate);
-  $('#runGenericTemplateDirect')&&($('#runGenericTemplateDirect').onclick=()=>{const id=state.genericTemplateId;$('#genericTemplateModal').classList.remove('open');if(!id)return toast('请先选择通用模板');openRunModal(id)});
-  $('#confirmRun').onclick=startRun; $('#newAgent').onclick=()=>openAgentWizard();
-  $('#agentForm').onsubmit=saveAgent;
-  $('#agentForm').elements.executorId?.addEventListener('change',e=>applyAgentModelUI(e.target.value,'','',true));
-  bindAgentPicker('#agentModelPicker',renderAgentModelPicker);
-  bindAgentPicker('#agentEffortPicker',renderAgentEffortPicker);
-  $('#agentClone')&&($('#agentClone').onclick=()=>cloneAgent(state.selectedAgent));
-  $('#agentForm').addEventListener('input',()=>renderAgentPreview(state.agentDraft));
-  $('#agentForm').addEventListener('change',()=>renderAgentPreview(state.agentDraft)); $('#refreshRuns').onclick=()=>refreshRuns(false);$('#runBackBtn')&&($('#runBackBtn').onclick=()=>showRunList());
 	$('#refreshDashboard').onclick=refreshDashboard;
 	$('#refreshIssues').onclick=refreshIssues;
-	$('#refreshSOPs').onclick=refreshWorkflowMetrics;
-  $('#agentSearch').oninput=renderAgents;$('#agentPrev').onclick=agentWizardPrev;$('#agentNext').onclick=agentWizardNext;$$('[data-wizard-steps="agent"] [data-agent-tab]').forEach(b=>b.onclick=()=>setAgentTab(b.dataset.agentTab));$$('[data-wizard-steps="agent-create"] [data-create-step]').forEach(b=>b.onclick=()=>{if(!b.disabled)setAgentCreateStep(Number(b.dataset.createStep))});bindAgentModalInputs();$$('.agent-close').forEach(b=>b.onclick=closeAgentWizard);
-  $('#newRunFromRuns')&&($('#newRunFromRuns').onclick=()=>switchView('issues'));
-  $('#runSearch').oninput=e=>{state.runQuery=e.target.value.trim().toLowerCase();resetListPage('runs');renderRuns()};
-  $('#runWorkflowFilter').onchange=e=>{state.runWorkflowFilter=e.target.value;resetListPage('runs');renderRuns()};
-  $('#runFilters').onclick=e=>{const button=e.target.closest('[data-run-filter]');if(!button)return;state.runFilter=button.dataset.runFilter;resetListPage('runs');$$('[data-run-filter]').forEach(x=>x.classList.toggle('active',x===button));renderRuns()};
-  $$('[data-asset-scope]').forEach(btn=>btn.onclick=()=>{if(state.selectedAsset)return;const key=assetScopeKey(state.assetType);if(state[key]!==btn.dataset.assetScope)state.assetQuery='';state[key]=btn.dataset.assetScope;renderAssets()});
-  $('#newAsset').onclick=()=>openAssetDetail('__new__');
-  $('#assetSearch').oninput=e=>{state.assetQuery=e.target.value;renderAssetGrid()};
-  $('#assetForm').onsubmit=saveAsset;
-  const markAssetFormDirty=e=>{if(e.target instanceof HTMLInputElement&&e.target.type==='file')return;markAssetDirty()};
-  $('#assetForm').addEventListener('input',markAssetFormDirty);
-  $('#assetForm').addEventListener('change',markAssetFormDirty);
-  // 技能文件上传：事件委托绑定在持久表单节点上，表单 innerHTML 重建不影响。
-  // 每次渲染直接挂 onchange 会因轮询重建表单时 input 被替换而丢事件。
-  $('#assetForm').addEventListener('change',e=>{
-    if(e.target.id==='skillFolderPick'||e.target.id==='skillZipPick')uploadSkillFiles(e.target);
-    if(e.target.id==='skillMdPick')uploadSkillMd(e.target);
-  });
-  $('#assetForm').addEventListener('click',e=>{
-    const previewBtn=e.target.closest('[data-skill-file-preview]');
-    if(previewBtn){
-      e.preventDefault();
-      if(previewBtn.disabled)return;
-      openSkillFilePreview(selectedSkill(), previewBtn.getAttribute('data-skill-file-preview'), previewBtn);
-      return;
-    }
-    const delBtn=e.target.closest('[data-skill-file-del]');
-    if(delBtn){
-      e.preventDefault();
-      if(skillWriteBlocked())return toast('共享资产只读');
-      deleteSkillFile(delBtn.getAttribute('data-skill-file-del'));
-      return;
-    }
-    const tree=e.target.closest('[data-tree-toggle]');
-    if(tree){
-      const key=tree.getAttribute('data-tree-toggle');
-      if(!(state.skillTreeCollapsed instanceof Set))state.skillTreeCollapsed=new Set();
-      if(state.skillTreeCollapsed.has(key))state.skillTreeCollapsed.delete(key);else state.skillTreeCollapsed.add(key);
-      refreshSkillFileTree();
-      return;
-    }
-    const folderBtn=e.target.closest('#skillFolderBtn');
-    const zipBtn=e.target.closest('#skillZipBtn');
-    const mdBtn=e.target.closest('#skillMdBtn');
-    if(folderBtn||zipBtn||mdBtn){
-      if(state.selectedAsset==='__new__'||!state.selectedAsset)return toast('先保存技能，再上传文件');
-      if(skillWriteBlocked())return toast('共享资产只读');
-    }
-    if(folderBtn){
-      const inp=$('#skillFolderPick');if(!inp)return;
-      inp.click();
-      // 兜底：个别场景 change 不触发，轮询 files 变化
-      let seen=0;
-      const poll=setInterval(()=>{
-        const n=inp.files?inp.files.length:0;
-        if(n>0&&n!==seen){seen=n;clearInterval(poll);uploadSkillFiles(inp)}
-      },300);
-      setTimeout(()=>clearInterval(poll),180000);
-    }
-    if(zipBtn){
-      const inp=$('#skillZipPick');if(!inp)return;
-      inp.click();
-      let seen=0;
-      const poll=setInterval(()=>{
-        const n=inp.files?inp.files.length:0;
-        if(n>0&&n!==seen){seen=n;clearInterval(poll);uploadSkillFiles(inp)}
-      },300);
-      setTimeout(()=>clearInterval(poll),180000);
-    }
-    if(mdBtn){
-      const inp=$('#skillMdPick');if(!inp)return;
-      inp.click();
-      let seen=0;
-      const poll=setInterval(()=>{
-        const n=inp.files?inp.files.length:0;
-        if(n>0&&n!==seen){seen=n;clearInterval(poll);uploadSkillMd(inp)}
-      },300);
-      setTimeout(()=>clearInterval(poll),180000);
-    }
-  });
-  $$('[data-asset-type-tab]').forEach(btn=>{
-    btn.onclick=async()=>{
-      const next=btn.dataset.assetTypeTab;
-      if(next===activeViewName()||!(await confirmAssetLeave()))return;
-      switchView(next);
-      $$(`[data-asset-type-tab="${next}"]`).find(tab=>tab.getClientRects().length)?.focus();
-    };
-    btn.onkeydown=e=>{
-      if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
-      const tabs=[...btn.parentElement.querySelectorAll('[data-asset-type-tab]')],i=tabs.indexOf(btn);
-      const to=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
-      e.preventDefault();tabs[to].click();
-    };
-  });
-  const mcpScopeSelect=$('#mcpScopeSelect');
-  if(mcpScopeSelect){window.enhanceSelect?.(mcpScopeSelect);mcpScopeSelect.onchange=()=>{state.mcpScope=mcpScopeSelect.value==='personal'?'personal':'project';resetListPage('mcp');renderMCPManagement()}}
-  let mcpSearchTimer=0;
-  $('#mcpMarketSearch')&&($('#mcpMarketSearch').oninput=e=>{state.mcpQuery=e.target.value.trim().toLowerCase();resetListPage('mcp');clearTimeout(mcpSearchTimer);mcpSearchTimer=setTimeout(()=>renderMCPManagement(),120)});
-  $('#newCustomMcp')&&($('#newCustomMcp').onclick=()=>openCustomMCPModal());
-  $$('.custom-mcp-close').forEach(btn=>btn.onclick=()=>$('#customMcpModal').classList.remove('open'));
-  $('#customMcpForm')&&($('#customMcpForm').onsubmit=saveCustomMCP);
-  $('#customMcpForm')?.addEventListener('change',e=>{
-    if(e.target.name==='transport')mcpSetTransport(e.target.value);
-    if(e.target.id==='mcpFolderPick'||e.target.id==='mcpZipPick'){
-      const other=$(e.target.id==='mcpFolderPick'?'#mcpZipPick':'#mcpFolderPick');if(other)other.value='';mcpUpdateFileSummary(e.target.files);
-    }
-  });
-  $('#customMcpForm')?.addEventListener('click',async e=>{
-    const add=e.target.closest('[data-mcp-kv-add]');if(add){e.preventDefault();mcpAddKVRow(add.dataset.mcpKvAdd);return}
-    const del=e.target.closest('[data-mcp-kv-del]');if(del){e.preventDefault();del.closest('.kv-editor-row')?.remove();return}
-    if(e.target.closest('#mcpJsonParseBtn')){e.preventDefault();try{await importMCPJSONText($('#mcpJsonInput')?.value||'')}catch(err){toast(err.message,'err')}return}
-    if(e.target.closest('#mcpFolderBtn')){e.preventDefault();$('#mcpFolderPick')?.click()}
-    if(e.target.closest('#mcpZipBtn')){e.preventDefault();$('#mcpZipPick')?.click()}
-  });
-  $('#agentHistory')&&($('#agentHistory').onclick=()=>openRevisionHistory('agent', state.selectedAgent, $('#agentForm')?.elements?.name?.value));
-  $('#revisionClose')&&($('#revisionClose').onclick=closeRevisionHistory);
-  $('#revisionClose2')&&($('#revisionClose2').onclick=closeRevisionHistory);
-  $('#revisionRestore')&&($('#revisionRestore').onclick=restoreSelectedRevision);
   $('#newIssue').onclick=openRequirementWizard;
   $('#importGitHubIssues').onclick=syncNow;
   $('#importTAPDIssue')&&($('#importTAPDIssue').onclick=openImportTAPDModal);
   $$('.import-tapd-close').forEach(b=>b.onclick=()=>$('#importTAPDModal').classList.remove('open'));
   $('#importTAPDForm')&&($('#importTAPDForm').onsubmit=importTAPDStory);
-  $('#editScheduleTrigger')&&($('#editScheduleTrigger').onclick=()=>openScheduleJobModal('dispatch'));
-  $('#newAISchedule').onclick=()=>{selectAIScheduleTab('project');openScheduleJobModal('assistant')};
-  $('#refreshAISchedules').onclick=refreshAISchedules;
-  bindSharedScheduleUI();
-  bindScheduleExecutionUI();
   bindProjectAdmin();bindRepoDrawer();
   $$('.requirement-close').forEach(b=>b.onclick=()=>closeRequirementComposer());
   $('#reqCreate').onclick=()=>createIssueFromChat();
   $('#reqRepoChipToggle').onclick=e=>{e.stopPropagation();toggleReqRepoPopover()};
   $$('#reqTarget [data-req-target]').forEach(b=>b.onclick=()=>setReqTarget(b.dataset.reqTarget));
-  $$('#reqDelivery [data-req-delivery]').forEach(b=>b.onclick=()=>setReqDelivery(b.dataset.reqDelivery));
   document.addEventListener('pointerdown',e=>{
     const pop=$('#reqRepoPopover');
     if(pop&&!pop.hidden&&!e.target.closest?.('#reqRepoChip, .hui-select-panel'))toggleReqRepoPopover(false);
   });
   $('#chatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();createIssueFromChat(undefined,'chat')}});
-  $('#reqWorkflow')&&($('#reqWorkflow').onchange=()=>{renderReqFooter();persistRequirementComposer()});
   $('#reqBaseBranch')?.addEventListener('input',onReqBaseBranchInput);
   $('#chatInput').addEventListener('input',onReqDescriptionInput);
   $('#chatInput').addEventListener('paste',onReqDescriptionPaste);
   $('#reqPreviewToggle').onclick=()=>setReqPreview($('#reqMarkdownPreview').hidden);
   window.addEventListener('beforeunload',()=>persistRequirementComposer());
-  if($('#sopCreateForm')){$('#sopCreateForm').onsubmit=createSOPFromWizard;$('#sopPrev').onclick=()=>setSOPWizardStep(state.sopWizardStep-1);$('#sopNext').onclick=()=>setSOPWizardStep(state.sopWizardStep+1);$$('[data-wizard-steps="sop"] [data-step-target]').forEach(b=>b.onclick=()=>setSOPWizardStep(Number(b.dataset.stepTarget)));$$('.sop-create-close').forEach(b=>b.onclick=()=>$('#sopCreateModal').classList.remove('open'))}
-  $('#newSOP')&&($('#newSOP').onclick=openSOPWizard);
-  $('#newSOPFromFlow')&&($('#newSOPFromFlow').onclick=openSOPWizard);
-  $('#sopHealthFilter').onchange=renderSOPCatalog;$('#sopSort').onchange=renderSOPCatalog;
   if($('#manageRepositories'))$('#manageRepositories').onclick=openRepositoryModal;
   $$('.repository-close').forEach(b=>b.onclick=()=>$('#repositoryModal').classList.remove('open'));
   if($('#repositoryForm'))$('#repositoryForm').onsubmit=saveRepository;
   $('#sourceFilter').onchange=e=>{state.sourceFilter=e.target.value;resetListPage('issues');renderIssues()};
   $('#issueStatusFilter')&&($('#issueStatusFilter').onchange=e=>{state.issueStatusFilter=e.target.value;resetListPage('issues');renderIssues()});
   $('#issueAssigneeFilter')&&($('#issueAssigneeFilter').onchange=e=>{state.issueAssigneeFilter=e.target.value;resetListPage('issues');renderIssues()});
-  $('#issueRunFilter').onchange=e=>{state.issueRunFilter=e.target.value;resetListPage('issues');renderIssues()};
   $('#issueSearch').oninput=e=>{state.issueQuery=e.target.value.trim().toLowerCase();resetListPage('issues');renderIssues()};
   $$('.issue-close').forEach(b=>b.onclick=()=>$('#issueModal').classList.remove('open'));
   $('#issueForm').onsubmit=saveIssue;
-  $('#dispatchIssue').onclick=dispatchIssue;
   $('#syncNowBtn').onclick=syncNow;
   $('#trackerImportBtn').onclick=triggerTrackerImport;
   $('#saveSyncConfig').onclick=saveSyncConfig;
-  $('#scheduleJobForm').onsubmit=saveScheduleJob;
-  const scheduleSaveAndRun=$('#scheduleSaveAndRun');
-  if(scheduleSaveAndRun)scheduleSaveAndRun.onclick=()=>saveScheduleJob({preventDefault(){},currentTarget:$('#scheduleJobForm')},{runNow:true});
-  $('#scheduleTimingTabs')?.addEventListener('click',e=>{
-    const tab=e.target.closest('[data-schedule-tab]');
-    if(!tab)return;
-    const f=$('#scheduleJobForm');
-    f.elements.scheduleMode.value=tab.dataset.scheduleTab;
-    syncScheduleJobTiming();
-    if(f.elements.scheduleMode.value==='cron')f.elements.cron.focus();
-    else f.elements.intervalSec.focus();
-  });
-  bindScheduleModelPicker();
   $('#pushToGongfeng').onclick=()=>pushIssue('gongfeng');
   $('#pushToTAPD').onclick=()=>pushIssue('tapd');
   $('#openSyncModal').onclick=()=>{$('#syncModal').classList.add('open');refreshSyncStatus()};
   bindIssueHeadingMenu();
   enhanceIssueFilters();
   $$('.sync-close').forEach(b=>b.onclick=()=>$('#syncModal').classList.remove('open'));
-  $$('.schedule-close').forEach(b=>b.onclick=closeScheduleJobModal);
   $('#syncAutoEnabledInline').onchange=e=>{$('#syncAutoEnabled').checked=e.target.checked;saveSyncConfig()};
-  bindArtifactPreview();
   $$('.modal').forEach(modal=>modal.addEventListener('pointerdown',e=>{
     if(e.target!==modal)return;
     if(modal.id==='requirementModal')return;
     if(modal.id==='confirmModal')return;
-    if(modal.id==='scheduleModal')return closeScheduleJobModal();
     modal.classList.remove('open');
   }));
   document.addEventListener('keydown',e=>{
-    if($('#artifactModal').open)return;
     if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openCommandPalette();return}
     if(!$('#commandPalette').hidden){
       if(e.key==='Escape'){closeCommandPalette();return}
@@ -1374,19 +1014,13 @@ function bind(){
       if(e.key==='Enter'){e.preventDefault();executeCommand(commandSelectedIndex);return}
     }
     if(e.key==='Escape'){
-      if(flowDesignerEscape(e))return;
       if(state.drawerOpen)return closeIssueDrawer();
       if($('#requirementModal')?.classList.contains('open')){
         if(!$('#reqRepoPopover')?.hidden){toggleReqRepoPopover(false);return}
         closeRequirementComposer();return
       }
       const open=[...$$('.modal.open')].pop();
-      if(open?.id==='scheduleModal')return closeScheduleJobModal();
-      if(open?.id==='agentModal')return closeAgentWizard();
       if(open)return open.classList.remove('open');
-      const panel=$('#flowSettingsPanel');
-      if(panel&&!panel.hidden){panel.hidden=true;$('#flowSettingsToggle')?.classList.remove('active');return}
-      if($('#flowView')?.classList.contains('active')&&closeNodeDrawer())return;
     }
   });
 
@@ -1416,7 +1050,6 @@ function bind(){
   $('#dashNewRequirement').onclick=openRequirementWizard;
   $('#dashNewRun').onclick=()=>switchView('issues');
   $$('[data-jump]').forEach(el=>el.onclick=()=>switchView(el.dataset.jump));
-  $('#refreshApprovals').onclick=()=>renderApprovals(false);
   $('#refreshObs').onclick=refreshObs;
   $('#obsManageSources').onclick=openObsSources;
   $$('.drawer-tab').forEach(btn=>btn.onclick=()=>{state.issueDetailTab=btn.dataset.dtab;$$('.drawer-tab').forEach(x=>x.classList.toggle('active',x===btn));renderIssueDetailTab()});
@@ -1424,31 +1057,16 @@ function bind(){
   if(issueDrawer&&issueDrawer.parentElement!==document.body)document.body.appendChild(issueDrawer);
   $$('[data-close-drawer]').forEach(el=>el.onclick=closeIssueDrawer);
   $('#projectSwitcher').onchange=async e=>{
-    if(!await confirmAssetLeave()){e.target.value=state.projectFilter||'';return}
-    closeScheduleJobModal();
     state.projectFilter=e.target.value;state.selectedIssue=null;
-    if(state.currentView==='aiSchedules')refreshAISchedules();
     if(state.currentView==='runners')refreshRunners(true);
     localStorage.setItem('agentflow.activeProject',state.projectFilter);
-    if($('#botsView')?.classList.contains('active'))loadBots();
     if(state.currentView==='projectCredentials')loadProjectCredentialsPage();
     resetListPages();
-    syncWorkflowToProject();
     renderProjectSwitcher();renderIssues();renderSync();renderProjectAdmin();
-    renderSOPCatalog();renderAgents();renderAssets();renderMCPManagement();renderRuns();renderWorkflowMeta();
-    renderApprovals(true);
+    renderObsTabs();
     if($('#dashboardView').classList.contains('active'))renderDashboard();
     if($('#observabilityView').classList.contains('active'))refreshObs();
-    if($('#evolutionView')?.classList.contains('active')&&typeof renderEvolutionView==='function')renderEvolutionView();
-    if($('#sopsView').classList.contains('active'))refreshWorkflowMetrics();
   };
-  document.querySelectorAll('[data-scope-for]').forEach(bar=>{
-    bar.querySelectorAll('[data-scope]').forEach(btn=>btn.onclick=()=>{
-      const key=bar.dataset.scopeFor==='agent'?'agentScope':'sopScope';
-      state[key]=btn.dataset.scope;
-      if(key==='agentScope')renderAgents();else renderSOPCatalog();
-    });
-  });
   bindGlobalModals();
 }
 function bindGlobalModals(){
@@ -1550,7 +1168,7 @@ function settingsSidebarExpanded(){
 }
 let settingsSidebarEntryFrame=0;
 let settingsSidebarWasManaged=false;
-const settingsManagementViews=['settings','assistant','projects','bots','projectCredentials','sops','flow','runs','aiSchedules','agents','mcp','rules','skills','knowledge','runners','sandboxes','evolution','guide','platform'];
+const settingsManagementViews=['settings','projects','projectCredentials','runners','guide','platform'];
 const settingsRouteMotion=matchMedia('(prefers-reduced-motion: reduce)');
 let settingsRouteTransition=null;
 let settingsRouteApplying=false;
@@ -1632,12 +1250,6 @@ function startSettingsRouteTransition(name){
     if(!newPane){cancelSettingsRouteTransition();return}
     hold(target.nav);
     transition.motion=helper.play(oldPane,newPane,{direction:isSettingsManagementView(name)?'settings':'workspace',duration:320});
-    if(home?.shell){
-      transition.observer=new MutationObserver(()=>{
-        if(home.shell.matches('.sidebar-hidden,.sidebar-resizing'))cancelSettingsRouteTransition();
-      });
-      transition.observer.observe(home.shell,{attributes:true,attributeFilter:['class']});
-    }
     transition.motion.finished.finally(()=>{
       if(settingsRouteTransition===transition)cancelSettingsRouteTransition();
     });
@@ -1719,27 +1331,17 @@ function setSettingsSidebarExpanded(expanded,focusToggle=false){
     });
   }
 }
-function viewTitles(){return {management:'设置',issues:'需求列表',aiSchedules:'定时任务',bots:'通道管理',runs:'运行记录',approvals:'待我确认',sops:'流程模板',flow:'流程设计',agents:'角色定义',mcp:'能力资产',rules:'能力资产',skills:'能力资产',knowledge:'我的知识库',sandboxes:'沙箱管理',observability:'用量台',projects:'项目配置',projectCredentials:'凭据管理',platform:'平台管理',runners:'执行机器',settings:'个人配置',access:'访问密钥',guide:'访问密钥',evolution:'RSI工作台'}}
-  // 从流程模板打开的流程设计）按 data-nav-match 高亮它们所属的入口。
+function viewTitles(){return {management:'设置',issues:'需求列表',observability:'用量台',projects:'项目配置',projectCredentials:'凭据管理',platform:'平台管理',runners:'执行机器',settings:'个人配置',access:'访问密钥',guide:'访问密钥'}}
+// 从流程模板打开的流程设计）按 data-nav-match 高亮它们所属的入口。
 function settingsNavMatches(btn,name){return btn.dataset.view===name||String(btn.dataset.navMatch||'').split(/\s+/).includes(name)}
-const assetTypeGroups={capability:['mcp','rules','skills']};
-function assetTypeGroup(name){return Object.keys(assetTypeGroups).find(key=>assetTypeGroups[key].includes(name))||''}
-function syncAssetTypeTabs(name){
-  const group=assetTypeGroup(name);
-  $$('[data-asset-type-group]').forEach(bar=>{if(bar.closest('#assetsView'))bar.hidden=bar.dataset.assetTypeGroup!==group});
-  $$('[data-asset-type-tab]').forEach(btn=>{const on=btn.dataset.assetTypeTab===name;btn.classList.toggle('active',on);btn.setAttribute('aria-selected',String(on));btn.tabIndex=on?0:-1});
-}
 function activeViewName(){if(state.currentView)return state.currentView;const el=document.querySelector('.view.active');return el?el.id.replace(/View$/,''):''}
 function restoredView(){
   const titles=viewTitles();
   const hash=(location.hash||'').replace(/^#\/?/,'').split(/[/?]/)[0];
   if(hash==='access')return 'guide';
-  if(['assets','dockerfiles','environments'].includes(hash))return 'sandboxes';
-  if(hash==='playbooks')return 'sops';
   if(hash==='management')return 'settings';
   if(titles[hash])return hash;
   const saved=localStorage.getItem('agentflow.activeView');
-  if(saved==='playbooks')return 'sops';
   if(saved==='management')return 'settings';
   if(titles[saved]&&saved!=='dashboard')return saved;
   return 'issues';
@@ -1750,99 +1352,9 @@ function routePart(index){
   const part=parts[index]||'';
   try{return decodeURIComponent(part)}catch{return part}
 }
-function runRouteId(){
-  return routePart(0)==='runs'?routePart(1):'';
-}
-function flowRouteId(){
-  return routePart(0)==='flow'?routePart(1):'';
-}
-function agentRouteId(){return routePart(0)==='agents'?routePart(1):''}
-function assetRouteId(){return isProjectSharedAsset(routePart(0))?routePart(1):''}
-function assetViewHash(type,id){if(!id)return `#/${type}`;return `#/${type}/${id==='__new__'?'new':encodeURIComponent(id)}`}
-// Syncs the open asset detail with #/<type>/<id>; a no-op until the catalog is loaded.
-function applyAssetRoute(){
-  const type=routePart(0);
-  if(!isProjectSharedAsset(type)||state.assetType!==type||!state.data?.[type])return;
-  const id=assetRouteId();
-  if(!id){if(state.selectedAsset){resetAssetDetailState();renderAssets()}return}
-  const hit=assetFindVisible(id);
-  if(!hit&&id==='new'){
-    if(state.selectedAsset==='__new__')return;
-    state[assetScopeKey(type)]='project';
-    resetAssetDetailState();state.selectedAsset='__new__';state.skillUploadStatus='';
-    renderAssets();scrollAssetTop();return;
-  }
-  if(!hit){
-    toast('资产不存在或已删除');
-    history.replaceState(null,'',assetViewHash(type));
-    resetAssetDetailState();renderAssets();return;
-  }
-  if(state.selectedAsset===id)return;
-  state[assetScopeKey(type)]=hit.scope;
-  resetAssetDetailState();state.selectedAsset=id;state.skillUploadStatus='';
-  renderAssets();scrollAssetTop();
-}
-async function applyAgentRoute(){
-  const id=agentRouteId();
-  if(!id){$('#agentModal')?.classList.remove('open');return}
-  try{
-    const agent=await api(`/api/agents/${encodeURIComponent(id)}`);
-    if(agentRouteId()!==id||activeViewName()!=='agents')return;
-    const index=(state.data.agents||[]).findIndex(a=>a.id===id);
-    if(index>=0)state.data.agents[index]=agent;else state.data.agents.push(agent);
-    openAgentWizard(agent,routePart(2)==='gov'?3:1,{loaded:true});
-  }catch(error){if(agentRouteId()===id)toast(error.message,'err')}
-}
-// Only LOOPs visible in the active project can be restored from the URL or localStorage.
-function openableWorkflow(id){return id?catalogWorkflows().find(w=>w.id===id)||null:null}
-function savedWorkflowId(){
-  const id=state.workflow?.id||'';
-  return id&&(state.data?.workflows||[]).some(w=>w.id===id)?id:'';
-}
-function flowViewHash(){const id=savedWorkflowId();return id?`#/flow/${encodeURIComponent(id)}`:'#/flow'}
-function restoreOpenWorkflow(){
-  return openableWorkflow(flowRouteId())||openableWorkflow(localStorage.getItem('agentflow.activeWorkflow')||'')||preferredWorkflow();
-}
-function rememberOpenWorkflow(){
-  const id=savedWorkflowId();
-  if(id)localStorage.setItem('agentflow.activeWorkflow',id);
-  if((state.currentView||activeViewName())!=='flow')return;
-  const next=flowViewHash();
-  if(location.hash!==next)history.replaceState(null,'',next);
-}
-async function applyFlowRoute(){
-  const id=flowRouteId();
-  if(!id||state.workflow?.id===id)return;
-  const wf=openableWorkflow(id);
-  if(!wf){rememberOpenWorkflow();return}
-  if(state.workflowDirty&&!(await afConfirm({title:'未保存更改',message:'当前流程有未保存修改，切换将放弃这些修改。继续？',danger:true}))){rememberOpenWorkflow();return}
-  if(flowRouteId()!==id)return;
-  state.workflow=clone(wf);
-  state.workflowSaved=clone(wf);
-  state.workflowDirty=false;
-  state.selectedNode=null;
-  localStorage.setItem('agentflow.activeWorkflow',id);
-  renderWorkflowMeta();renderCanvas();renderProperties();
-  refreshGenericWorkflowRoles();
-}
-function runViewHash(id){return id?`#/runs/${encodeURIComponent(id)}`:'#/runs'}
-function syncRunHash(id){
-  if((state.currentView||activeViewName())!=='runs')return;
-  const next=runViewHash(id||'');
-  if(location.hash!==next)history.replaceState(null,'',next);
-}
 function persistView(name,push=false){
   localStorage.setItem('agentflow.activeView',name);
   let next=`#/${name}`;
-  if(name==='settings'&&location.hash===QUICK_ACCESS_EXECUTOR_SETTINGS)next=QUICK_ACCESS_EXECUTOR_SETTINGS;
-  if(name==='runs'){
-    const linked=runRouteId();
-    if(linked)next=runViewHash(linked);
-  }
-  if(name==='flow')next=flowViewHash();
-  if(name==='evolution'&&routePart(0)==='evolution')next=location.hash;
-  if(name==='agents'&&agentRouteId())next=`#/agents/${encodeURIComponent(agentRouteId())}${routePart(2)==='gov'?'/gov':''}`;
-  if(isProjectSharedAsset(name)&&routePart(0)===name&&assetRouteId())next=`#/${name}/${encodeURIComponent(assetRouteId())}`;
   if(name==='projects')next=projectAdminHash(state.projectAdminDetailId||'',state.projectAdminTab);
   if(location.hash===next)return;
   // push=true 时压入新历史记录，让浏览器「后退」能在平台页面间回退；
@@ -1855,11 +1367,8 @@ function switchView(name){
   const titles=viewTitles();
   if(name==='dashboard')name='issues';
   if(name==='access')name='guide';
-  if(['assets','dockerfiles','environments'].includes(name))name='sandboxes';
-  if(name==='playbooks')name='sops';
   if(name==='management')name='settings';
-  const assetViews=['rules','skills','sandboxes'];
-  const targetView=assetViews.includes(name)?'assets':name;
+  const targetView=name;
   if(!titles[name]||!$(`#${targetView}View`)){name='issues'}
   // 手敲 #/platform 或者从别的账号留下的 localStorage 恢复进来，都要挡住。
   if(name==='platform'&&!isPlatformAdmin())name='issues';
@@ -1873,21 +1382,17 @@ function switchView(name){
     $('#gitHTTPCredentialDialog')?.close();
     $('#gitSSHKeyDialog')?.close();
   }
-  if(previous==='agents'&&name!=='agents')$('#agentModal')?.classList.remove('open');
   if(!settingsRouteApplying){
     const crossingSettings=previous!==name&&isSettingsManagementView(name);
     if(crossingSettings&&!settingsRouteMotion.matches){startSettingsRouteTransition(name);return}
     cancelSettingsRouteTransition();
   }
-  const target=assetViews.includes(name)?'assets':name;
+  const target=name;
   const staying=activeViewName()===name;
   const prevView=state.currentView;
   if(previous==='observability'&&name!=='observability'&&typeof obsDisposeCharts==='function'){obsCollapse?.({silent:true});obsDisposeCharts();obsDisposeSelects?.()}
-  if(previous==='evolution'&&name!=='evolution'&&typeof evoDispose==='function')evoDispose();
   state.currentView=name;
-  if(name!=='runs')stopQueuedRunRefresh();
   $$('.nav[data-view]').forEach(n=>n.classList.toggle('active',settingsNavMatches(n,name)));
-  syncAssetTypeTabs(name);
   $$('.view').forEach(v=>v.classList.remove('active'));
   $(`#${target}View`).classList.add('active');
   $('#pageTitle').textContent=titles[name]||name;
@@ -1902,18 +1407,16 @@ function switchView(name){
   setSettingsSidebarExpanded(!narrowSettings?isPureManagement:staying?settingsSidebarExpanded():!!prevView&&!isSettingsManagementView(previous));
   $('#managementEntry')?.classList.toggle('active', isPureManagement);
   $('#railSettingsEntry')?.classList.toggle('active', isPureManagement);
-  const noSidebarViews = ['issues', 'approvals', 'observability'];
+  const noSidebarViews = ['issues', 'observability'];
   document.body.classList.toggle('no-sidebar', noSidebarViews.includes(name));
-  showDirectRunButton(name==='flow');
   closeIssueDrawer();
-  if(name!=='sops'&&typeof hideSOPCardMenu==='function')hideSOPCardMenu();
   // 仅真实用户切换时压栈：boot 首次进入（prevView 为空）与同视图重复调用
   //（staying）不压；hashchange 后退触发的调用 prevView 非空且 hash 已是目标值，
   // persistView 内部会短路，不会重复压栈。
   persistView(name,!staying&&!!prevView);
   const nav=$('.platform-sidebar nav');
   if(nav){
-    if(['dashboard','issues','approvals'].includes(name)){
+    if(['dashboard','issues'].includes(name)){
       nav.scrollTop=0;
     }else{
       const activeBtn=$$('.platform-sidebar .nav[data-view]').find(btn=>settingsNavMatches(btn,name));
@@ -1925,42 +1428,14 @@ function switchView(name){
       }
     }
   }
-  if(name==='runs'){
-    const linkedRun=runRouteId();
-    const hashAlreadyRuns=(location.hash||'').replace(/^#\/?/,'').split(/[/?]/)[0]==='runs';
-    if(!staying){
-      if(linkedRun&&(hashAlreadyRuns||!prevView))showRunDetail(linkedRun);
-      else showRunList();
-    }
-    refreshRuns(false,true);
-  }
   if(name==='issues'){refreshIssues();renderSync();loadTrackerImport();const issueId=new URL(location.href).searchParams.get('issueId');if(issueId)openIssueDetail(issueId)}
-
-  if(name==='aiSchedules'){renderScheduleJobs();refreshAISchedules()}
-  if(name==='bots')loadBots();
-  if(name==='assistant')loadAssistantSettings();
-  if(name==='evolution'&&typeof renderEvolutionView==='function')renderEvolutionView();
-  if(name==='sops'){if(!staying&&state.data){sopCatalogMotion.reset();renderSOPCatalog()}refreshWorkflowMetrics()}
   if(name==='dashboard')refreshDashboard()
-  if(name==='approvals')renderApprovals(false)
   if(name==='observability')refreshObs()
-  if(name==='agents'){api('/api/agents',{silent:true}).then(agents=>{state.data.agents=agents;renderAgents()}).catch(e=>toast(e.message));renderAgents();applyAgentRoute()}
   if(name==='settings')renderPersonalSettings();
   if(name==='platform')renderPlatformAdminPanel();
   if(name==='projects')renderProjectAdmin();
   if(name==='projectCredentials')loadProjectCredentialsPage();
-  if(assetViews.includes(name)){
-    if(staying&&state.assetType===name){if(state.selectedAsset)closeAssetDetail({force:true});else renderAssets()}
-    else{
-      if(state.assetType!==name)state.assetQuery='';
-      state.assetType=name;resetAssetDetailState();
-      if(routePart(0)===name&&assetRouteId())applyAssetRoute();else renderAssets();
-    }
-  }
-  if(name==='mcp')loadMCPMarket();
-  if(name==='knowledge'&&typeof loadKnowledgeView==='function')loadKnowledgeView();
   if(name==='runners')refreshRunners();
   if(name==='guide')renderGuide();
-  if(name==='flow'){if(!state.workflow?.nodes?.some(n=>n.id===state.selectedNode))state.selectedNode=null;renderWorkflowMeta();renderCanvas();renderProperties();setFlowView('canvas');refreshGenericWorkflowRoles()}
 }
-function renderAll(){renderUserBadge();renderPlatformNav();renderProjectSwitcher();renderIssues();renderSOPCatalog();renderWorkflowMeta();renderCanvas();renderProperties();renderAgents();renderAssets();renderMCPManagement();renderRuns();renderSync();renderProjectAdmin();renderDashboard();renderGuide();updateApprovalBadge();if($('#knowledgeView')?.classList.contains('active')&&typeof loadKnowledgeView==='function')loadKnowledgeView();showDirectRunButton($('#flowView').classList.contains('active'))}
+function renderAll(){renderUserBadge();renderPlatformNav();renderObsTabs();renderProjectSwitcher();renderIssues();renderSync();renderProjectAdmin();renderDashboard();renderGuide()}
