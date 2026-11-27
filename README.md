@@ -1,3 +1,7 @@
+> **MuseForge** — 个人精简版，源自 [Tencent/LoopForge](https://github.com/Tencent/LoopForge)。
+> 目标：去掉团队协作面（成员账号、项目成员与加入申请、共享任务市场、企业 IM 机器人、业务域报表、SSO/网关身份），只保留单人可长期使用的全部能力（对话工作台、LOOP 流程设计器、角色、审批关口、沙箱与执行器、成本统计、调度任务、知识库、MCP/HTTP API）。
+> 分支约定：`main` 持续跟随上游源码，`dev` 用于开发，`stable` 发布稳定版本。本 README 以下内容为上游原文。
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/hero-en-dark.svg">

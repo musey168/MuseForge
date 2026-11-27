@@ -7,6 +7,20 @@ Preserve the platform architecture; keep deployment-specific adapters isolated. 
 本文件面向所有在仓库内工作的 AI agent 与人类贡献者，约定 repo 层与 handler 层的结构规则。
 新增代码必须遵守；发现历史偏差时先归位再继续。
 
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub issues on `musey168/MuseForge` (this fork, not `Tencent/LoopForge`); use the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: root `GLOSSARY.md` plus `docs/adr/`. See `docs/agents/domain.md`.
+
 ## repo 层（internal/repo）
 
 每个领域一个 Repo，文件与方法一一归属：
