@@ -9,8 +9,17 @@ MuseForge 是 LoopForge 的个人版：一个人在自己的机器上管理项�
 
 **需求（Requirement）**:
 要交付的一件事。MuseForge 里它是待办条目：标题、描述、状态、优先级、
-所属项目、标签、备注，可以连到 GitHub 或 GitLab 的 issue。
+所属项目、标签、备注，可以从 GitHub 导入。
 _Avoid_: Issue, 任务, 工单
+
+**备注（Note）**:
+需求下的评论。上游存放在 `issue_comments` 表，是一条条追加的评论，
+不是需求上的一个文本字段。
+_Avoid_: 备注字段, Description
+
+**标签（Tag）**:
+贴在需求上的自由标签。**MuseForge 新增** —— 上游需求模型里没有这个字段。
+_Avoid_: Label, 分类, 优先级
 
 **项目（Project）**:
 一组需求的归属容器。个人版里项目只是分组，没有成员和权限。
@@ -22,11 +31,12 @@ _Avoid_: 统计, 报表, 效能看板
 
 **数据源（Data Source）**:
 一个允许向 MuseForge 上报用量的凭据。omp 推送时使用。
+存在 `insight_sources` 表，与访问密钥（`api_tokens`）是两回事。
 _Avoid_: 访问密钥, Token, 集成
 
 **执行机器（Runner）**:
 登记在 MuseForge 里的开发机器。个人版只用来查看机器清单和它们安装的
-Agent CLI 环境，不接受任务分发。
+Agent CLI 环境，不接受任务分发，也没有共享与名额概念。
 _Avoid_: Worker, 节点, 执行器
 
 **个人配置（Personal Settings）**:

@@ -43,21 +43,64 @@ Agent 执行交给 omp（你 Mac 本地的 `omp`），MuseForge 负责：
 | 21 | 环境资产（沙箱） | **删** | 截图⑩ |
 | 22 | 访问密钥（`api_tokens`） | **删** | 截图⑩ |
 | 23 | 平台管理 | **删** | 截图⑩ |
-| 24 | 执行机器 | **保留**（降级为机器清单 + CLI 环境） | 截图⑩ |
+| 24 | 执行机器 | **保留** | 截图⑩ |
 
-### 最后一批截图带来的两个后果（已核实，均不阻塞）
+### 需要向你确认的两点（我在整理时查证代码发现的偏差）
+
+**① 第 16 行的「标签」和「备注」在上游需求模型里不存在。**
+`internal/domain/issue.go` 的 `Issue` 结构体实际字段是：
+`id / projectId / number / title / description / status / closeSource / priority /
+assigneeType / assigneeId / assigneeUserId / workflowId / playbookId /
+sopBindings / sopMode / repositoryId / repositoryIds / baseBranch /
+repositoryBranches / latestTaskId / automationState / deliveryState /
+deliveryMrUrl / deliveryMrState / deliveryMrs / kind / clarification / source /
+tapdId / externalRef / conversationSessionId / createdAt / updatedAt / completedAt / operations`。
+
+- **优先级** ✅ 存在（`priority`）
+- **标签** ❌ 没有 tag/label 字段 —— 需要**新建**
+- **备注** ✅ 有，但形态是 `issue_comments` 表里的评论（`IssueComment`），
+  不是需求上的一个文本字段 —— 保留评论功能即可
+
+**② 上游没有「GitLab 需求同步」，只有 GitHub 的。**
+- GitHub 需求导入是现成的：`internal/tracker/github.go:260 pullGitHubIssues`
+  （入口 `internal/tracker/service.go:295 PullAll` 与 `:370` 的单源同步）
+- GitLab 在上游只出现在**凭据层**（`internal/httpapi/git_http_credentials.go:120`
+  「平台只能是 github、gitlab 或 other」）和 **MR 状态查询**
+  （`internal/tracker/external_mr.go` 刷 GitLab MR 状态）
+- `Issue.Source` 的取值是 `local / gongfeng / tapd / github` —— **没有 gitlab**
+
+→ 「连接 GitHub」保留现成实现；「连接 GitLab」是**新增功能**，
+上游没有需求同步的实现可抄，需要新建（GitLab Issues API 与 GitHub 形状不同：
+用 `GET /projects/:id/issues` + `private_token`，状态与标签映射也不同）。
+
+### 第 24 项「执行机器」保留，但页面内容需要拆
+
+截图⑩ 你标的是「执行机器**我需要**」，其余（角色定义 / 能力资产 / 环境资产 /
+访问密钥 / 平台管理）不需要。
+
+执行机器页面（`web/app/runners.js`）的内容是**混合**的：
+
+| 页面元素 | 依赖 | 个人版 |
+|---|---|---|
+| 机器清单（名称、地址、在线状态） | `runners` 表 | **保留** |
+| CLI 探测（装了哪些 Agent CLI、版本号、二进制路径） | runner daemon 的 `refreshRuntimes` + `internal/runner/detect.go` | **保留** |
+| CLI 登录态（用账号登录还是 API Key）、可用模型探测 | `internal/runner/login_models.go`、`/api/runners/:id/models/probe` | **保留** |
+| 运行限额、按顶层 LOOP 计名额 | `runnerRunLimitHTML` | **删**（没有 LOOP 就没有名额） |
+| 「共享项目」按钮、平台级名额 | `runner_sharing.go`、`platform_runner_settings` | **删**（团队功能） |
+| 平台 runner 栏 / 平台默认名额 | `web/app/runners.js` 的 platform 视图 | **删** |
+| 任务下发（claimLoop / executeTask / executeInvocation / executeTerminal） | `internal/runner/daemon.go` 的执行半边 | **删** |
+| 工作区、沙箱、产物传输、仓库缓存 | `internal/runner/{workspace*,run_sandbox,artifact_transfer,repository_*}.go` | **删** |
+
+`internal/runner` 的 15,840 行里，**执行那半边随 LOOP 一起删**，
+保留注册、心跳、CLI 探测、CLI 登录态、CLI 升级维护。
+`cmd/agentflow-runner` 二进制保留，但作为「机器注册客户端」而不是「任务执行器」。
+
+### 最后一批截图带来的一个后果（已核实，不阻塞）
 
 **访问密钥删掉不影响 omp 推送**：访问密钥页管的是 `api_tokens` 表，
 而 omp 推送用的是 `insight_sources` 表的数据源凭据 ——
 两张不同的表。数据源凭据在统计页的「外部数据源」对话框里管理
 （`web/app/observability.js:1626`），该入口保留。
-
-**执行机器保留但要降级**：Runner 的执行能力（`runner_tasks` /
-`runner_task_events` 表、`internal/runner` 的 task_lease / exec /
-run_sandbox / workspace_* / artifact_transfer / repository_* 共约 1.5 万行）
-全部服务于 LOOP 节点分发，随 LOOP 一并删除。保留的是：机器注册与清单、
-CLI 探测与版本、登录态模型、连接与维护。`internal/runner` 从 15,840 行
-降到约 3,000 行。
 
 ---
 
@@ -74,7 +117,31 @@ CLI 探测与版本、登录态模型、连接与维护。`internal/runner` 从 
 | internal/repo | 30,308 | 保留但大幅瘦身 |
 | internal/domain | 12,766 | 保留但大幅瘦身 |
 | internal/knowledge | 11,620 | **删** |
-| internal/mcpserver | 876 | 保留（omp 推送不需要，但 MCP API 是公开能力） |
+| internal/tracker | 3,742 | **部分删**：GitHub 需求同步保留，企微/TAPD/工蜂删 |
+| internal/mcpserver | 876 | **待定**（见下） |
+
+**`internal/tracker` 不能整体删** —— GitHub 需求同步在里面：
+- `internal/tracker/github.go:260 pullGitHubIssues`：
+  `GET /issues?state=all&per_page=100`（跳过带 `pull_request` 的 PR），
+  落成 `domain.Issue{ID:"gh-<repoID>-<number>", Source:"github",
+  Kind:"issue", Status:"todo"/"closed", ExternalRef{...}}`
+- 入口：`internal/tracker/service.go:295 PullAll`（全部仓库）、
+  `:366 PullScheduleJob`（按来源）
+- 需要的接口：`IssueStoreAdapter`（`service.go:62`）里的
+  `Issue / PutIssue / PutSyncedIssue / Repositories / Repository / Projects / Project`
+- 删掉的是：TAPD（`tapd_url.go`、`pullTAPDIssues`）、工蜂/GongFeng
+  （`pullGongfengIssues`、`CreateGongfengIssue`）、MR 交付状态回写
+  （`merge_mr.go` / `mr_delivery_sync.go` / `mr_state_lookup.go`，
+  这些服务于 LOOP 的「发起 MR」节点）、`catalog.go` 里的 MCP 绑定
+  （MCP 能力资产已删）、`delivery.go`、`mcp_client.go`
+
+**`internal/mcpserver` 待定**：它是把平台自己的 HTTP API 以 OpenAPI 契约
+暴露成 MCP 工具（`internal/mcpserver/schema.go` 读 `docs/api/openapi.yaml`，
+`server.go` 用 `application.Operation` 调度）。它的使用者是
+**聊天层的 agent 工具**（`assistant.go`、`agent_tool_mcp.go`）。
+聊天层删掉后它没有消费者 —— 但如果保留 MCP API，
+它就是 omp 或其他外部 agent 访问 MuseForge 的入口。
+**这一项我需要你定，见决策记录末尾的提问。**
 
 ### T2 — 统计页接 omp 用的现成机制
 
@@ -127,16 +194,29 @@ CLI 探测与版本、登录态模型、连接与维护。`internal/runner` 从 
 
 ### T5 — GitHub / GitLab 连接能力在代码里的位置
 
-- `internal/httpapi/git_http_credentials.go:120`：
-  「平台只能是 github、gitlab 或 other」—— GitLab 支持是现成的
-- `internal/tracker/github.go` —— GitHub tracker
-- `internal/httpapi/issues.go` 的 `source` 取值：
-  `local` / `github` / `gongfeng` / `tapd`（GongFeng 和 TAPD 是企业内网，
-  个人版不需要，删）
+**GitHub 需求同步：上游现成，保留。**
+- `internal/tracker/github.go:260 pullGitHubIssues` —— 导入实现
+- `internal/tracker/service.go:295 PullAll`、`:366 PullScheduleJob` —— 入口
+- `internal/httpapi/issues.go` 的 `source` 取值含 `github`
 - `internal/repo/models.go:306 issueRow` 已有 `source` / `external_id` /
   `kind` / `assignee_user_id` 字段，GitHub 同步落在这套结构里
 
-→ GitHub/GitLab 需求连接保留，去掉 GongFeng/TAPD。
+**GitLab 需求同步：上游没有，是新增功能。**
+上游的 GitLab 只出现在两处，都不是需求同步：
+- `internal/httpapi/git_http_credentials.go:120` ——
+  「平台只能是 github、gitlab 或 other」，这是 **git 凭据**（clone/push 用）
+- `internal/tracker/external_mr.go` / `internal/repo/../domain/mr.go:27`
+  （`MRProjectGitLab = "gitlab:"`）—— **MR 状态查询**
+
+`Issue.Source` 的完整取值是 `local / gongfeng / tapd / github` ——
+**没有 gitlab**。
+
+→ 若要「连接 GitLab」，需要新建：GitLab Issues API 用
+`GET /projects/:id/issues` + `private_token`（或 OAuth），
+返回形状与 GitHub 不同（无 `pull_request` 字段需要跳过），
+状态映射与标签体系也不同。这是新工作量，不是裁剪。
+
+**要删的外部源**：GongFeng（工蜂）和 TAPD —— 企业内网，个人版不需要。
 
 ### T6 — 鉴权免登录的安全边界
 
@@ -155,12 +235,34 @@ CLI 探测与版本、登录态模型、连接与维护。`internal/runner` 从 
 
 ```
 MuseForge
-├── 需求清单      标题/描述/状态/优先级/项目归属/标签/备注 + GitHub/GitLab 同步
+├── 需求清单      标题/描述/状态/优先级/项目归属/标签/备注 + GitHub 同步
 ├── 项目分组      项目列表、新建项目（无成员、无业务域）
 ├── 个人配置      模型 Key、GitHub 授权、SSH/HTTP 凭据
 ├── omp 用量台    Token/成本/缓存命中/趋势/需求关联（数据来自 omp 推送）
-├── 访问密钥      API Token（给 omp 推送和外部调用）
+├── 执行机器      机器清单 + CLI 探测/版本/登录态（无任务下发、无共享、无名额）
 └── omp 扩展      session_shutdown 时把用量 POST 到 MuseForge
 ```
 
 数据库：SQLite 单文件。部署：单容器。
+
+---
+
+## 待你确认（我查证代码后发现的偏差，不擅自决定）
+
+**Q-A. 「GitLab 需求同步」是新增功能，不是裁剪。**
+上游只有 GitHub 的需求导入（`internal/tracker/github.go:260`）。
+GitLab 在上游只用于 git 凭据和 MR 状态查询。
+选项：① 只做 GitHub（省掉新开发）② 也新建 GitLab 需求同步（新工作量）。
+
+**Q-B. 需求「标签」字段上游不存在**，需要新建。
+「备注」上游有，但是评论表（`issue_comments`）里的评论，不是需求上的文本字段。
+
+**Q-C. `internal/mcpserver`（平台自己的 MCP API）留不留？**
+它把 MuseForge 的 HTTP API 以 OpenAPI 契约暴露成 MCP 工具，
+供外部 agent 调用。上游的消费者是聊天层，聊天层删掉后就没有内部消费者了。
+但如果保留，omp 就能通过 MCP 直接读写 MuseForge 的需求和项目。
+选项：① 删（最轻量）② 保留，作为 omp 访问 MuseForge 的正式通道。
+
+**Q-D. 执行机器页面里「共享项目 / 运行名额 / 平台默认名额」这三个团队元素删掉后，
+页面只剩「机器清单 + CLI 环境」。这个形态你接受吗？**
+如果接受，执行机器页面会明显变简单 —— 这正是它变轻量的方式。
