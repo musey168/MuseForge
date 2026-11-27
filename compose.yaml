@@ -1,6 +1,9 @@
 name: loopforge
 services:
   mysql:
+    # MySQL stays supported next to SQLite. It is opt-in: start it with the
+    # "mysql" profile (docker compose --profile mysql up).
+    profiles: [mysql]
     image: mysql:8.4
     environment:
       MYSQL_DATABASE: loopforge
@@ -18,7 +21,7 @@ services:
       timeout: 3s
       retries: 60
   artifact-migration:
-    profiles: [platform]
+    profiles: [mysql]
     # Upgrade existing volumes before the platform starts. Fresh schemas are created by the platform.
     image: mysql:8.4
     entrypoint: ["sh", "-ec"]
@@ -47,6 +50,9 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       AGENTFLOW_HTTP_PORT: 8080
+      # The datasource: one SQLite file by default, no database server needed.
+      # An empty value falls back to AGENTFLOW_MYSQL_DSN (the MySQL profile).
+      AGENTFLOW_DATASOURCE_DSN: ${AGENTFLOW_DATASOURCE_DSN:-}
       AGENTFLOW_MYSQL_DSN: loopforge:${LOOPFORGE_DB_PASSWORD}@tcp(mysql:3306)/loopforge
       AGENTFLOW_SESSION_SECRET: ${AGENTFLOW_SESSION_SECRET:?Run scripts/configure.sh first}
       AGENTFLOW_PROJECT_CREDENTIAL_KEY: ${AGENTFLOW_PROJECT_CREDENTIAL_KEY:-}
@@ -95,10 +101,14 @@ services:
       - ${LOOPFORGE_DATA_DIR}:${LOOPFORGE_DATA_DIR}
       - ${LOOPFORGE_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
     depends_on:
+      # The database server is optional: without the "mysql" profile the
+      # platform runs on its SQLite file and needs no server at all.
       mysql:
         condition: service_healthy
+        required: false
       artifact-migration:
         condition: service_completed_successfully
+        required: false
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=2).close()"]
       interval: 3s

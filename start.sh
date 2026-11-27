@@ -25,6 +25,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 source scripts/docker-access.sh
 source scripts/ghcr-mirror.sh
+source scripts/datasource.sh
 
 compose() {
   [[ -f .env ]] || docker_access_fail 'Not installed yet. Run ./start.sh first.'
@@ -113,24 +114,34 @@ PY
     # Docker is selected before the speed test: a faster Nanjing mirror pulls
     # immediately, and the direct ghcr.io path needs it too.
     [[ -f .env ]] || docker_access_fail 'Not installed yet. Run ./start.sh first.'
+    # The .env names the datasource: a SQLite file needs no database server.
+    set -a; source .env; set +a
     select_docker_access || docker_access_fail 'Docker is not running, or this user cannot access it.'
     lock_compose_upgrade
     bash scripts/configure.sh --project-credential-key
     # An exported empty value would override the configured key in Compose.
     [[ -n "${AGENTFLOW_PROJECT_CREDENTIAL_KEY:-}" ]] || unset AGENTFLOW_PROJECT_CREDENTIAL_KEY
     if mirror_published_ghcr always; then
-      compose pull --policy always mysql
+      if datasource_is_mysql; then
+        compose pull --policy always mysql
+      fi
     else
       compose pull --ignore-buildable --policy always
     fi
-    upgrade_sandbox_catalog
+    if datasource_is_mysql; then
+      upgrade_sandbox_catalog
+    fi
     # Use the images just pulled and inspected, including for mutable tags.
     compose up -d --no-build --wait --wait-timeout 180 --pull never
     # A newer image may read generated columns the old volume never got.
-    bash scripts/install-schema-extensions.sh
+    if datasource_is_mysql; then
+      bash scripts/install-schema-extensions.sh
+    fi
     ;;
   migrate-sandboxes)
     [[ -f .env ]] || docker_access_fail 'Not installed yet. Run ./start.sh first.'
+    set -a; source .env; set +a
+    datasource_is_mysql || docker_access_fail 'This installation runs on a SQLite file; there is no MySQL sandbox catalog to migrate.'
     lock_compose_upgrade
     apply_sandbox_migration
     ;;

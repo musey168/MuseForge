@@ -5,10 +5,16 @@ import (
 	"time"
 )
 
-// gorm row models. These describe the physical tables shared by MySQL
-// (mysql_schema.sql) and the sqlite test database (AutoMigrate). Domain
-// entities live in a JSON payload column; only filterable/locking fields are
-// real columns.
+// gorm row models. These describe the physical tables shared by every
+// datasource: allModels() is the single manifest a fresh MySQL or SQLite
+// database is created from (see autoMigrateIncremental). Domain entities
+// live in a JSON payload column; only filterable/locking fields are real
+// columns.
+//
+// Column types must stay creatable on both dialects: the JSON payload
+// columns use the portable "json" type, blobs use "longblob"/"mediumblob"
+// and long text uses "mediumtext"; SQLite maps them onto its own storage
+// classes, and the sizes are advisory there.
 //
 // Time fields are deliberately named Created/Updated (not CreatedAt/UpdatedAt)
 // so gorm never auto-fills them; every writer sets them explicitly.

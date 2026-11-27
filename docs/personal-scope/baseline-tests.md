@@ -31,3 +31,21 @@
 ```bash
 GOCACHE=/tmp/agentflow-gocache go test ./internal/... ./cmd/... -count=1 -timeout=6m 2>&1 | grep -E "^--- FAIL|^FAIL"
 ```
+
+## 复核：本机实测基线（2026-11-28）
+
+裁剪开始前在**本机**（macOS 26.2 / arm64 / Go 1.27.2）实测的失败集合是 **19 个**，
+比上表记录的 15 个多 4 个。多出的 4 个都是环境/时序相关的，不在原表里：
+
+| 多出的用例 | 症状 |
+|---|---|
+| `TestLoopStartupCheckUsesFixtureAndIgnoresLegacyConfig` | 启动检查依赖固定的时序窗口 |
+| `TestLoopStartupCrossingWindowDoesNotSkipToday` | 同上 |
+| `TestLoopTimerStartsNextCheck` | 同上 |
+| `TestRunLeaseMutualExclusionAndExpiryTakeover` | 租约到期接管依赖墙钟精度 |
+
+复现命令同上。这 4 个分别属于 LOOP 引擎与运行租约 —— 两者都随裁剪被删除
+（见 #9 删执行引擎、#11 执行机器降级为清单），因此终态基线会比 19 更小。
+
+**判定标准不变**：每一阶段裁剪后，失败集合必须是上表的子集，且不得出现上表之外的
+任何新失败。逐阶段比较时用集合包含关系，而不是个数相等。
