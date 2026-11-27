@@ -80,16 +80,6 @@ func (d *deps) locking(q *gorm.DB) *gorm.DB {
 	return q
 }
 
-// CatalogRepo owns the reusable definitions: agents, rules, skills, MCP
-// servers, executors, sandboxes (with their Dockerfile or install), workflows,
-// repositories, sync config, schedule jobs and definition revisions.
-type CatalogRepo struct {
-	*deps
-	projects      *ProjectsRepo
-	notifications *NotificationsRepo
-	*BotInteractionsRepo
-}
-
 // ProjectsRepo owns projects.
 type ProjectsRepo struct {
 	*deps
@@ -101,12 +91,6 @@ type IssuesRepo struct {
 	mu       sync.Mutex
 	projects *ProjectsRepo
 	users    *UsersRepo
-	tasks    *TasksRepo
-}
-
-// TasksRepo owns tasks (the cross-instance idempotency records).
-type TasksRepo struct {
-	*deps
 }
 
 // UsersRepo owns users and their saved credentials.
@@ -123,40 +107,18 @@ type TokensRepo struct {
 	*deps
 }
 
-// RunsRepo owns runs, their children (nodes/events/telemetry/logs/artifacts),
-// run leases and workflow metrics.
-type RunsRepo struct {
-	*deps
-	issues        *IssuesRepo
-	catalog       *CatalogRepo
-	runners       *RunnersRepo
-	notifications *NotificationsRepo
-	*BotInteractionsRepo
-}
-
-// RunnersRepo owns the CLI runner registry, runner tasks and runner events.
+// RunnersRepo owns the CLI runner registry — the machine inventory.
 type RunnersRepo struct {
 	*deps
 	projects *ProjectsRepo
 }
 
-// DeliveryRepo owns MR delivery state and the delivery locking that follows.
-type DeliveryRepo struct {
-	*deps
-	issues  *IssuesRepo
-	tasks   *TasksRepo
-	catalog *CatalogRepo
-	runs    *RunsRepo
-}
-
-// AnalyticsRepo owns the read-only operational analytics view.
+// AnalyticsRepo owns the read-only operational analytics view. It aggregates
+// from the reported executions, not from internal runs — the platform does not
+// run anything itself.
 type AnalyticsRepo struct {
 	*deps
-	runs     *RunsRepo
-	catalog  *CatalogRepo
-	delivery *DeliveryRepo
 	issues   *IssuesRepo
-	tasks    *TasksRepo
 	projects *ProjectsRepo
 	insights *InsightsRepo
 }
@@ -165,29 +127,20 @@ type AnalyticsRepo struct {
 // 通过提升的方法调用，与现有调用形态完全兼容（方法提升对未导出类型同样生效）。
 type Store struct {
 	*deps
-	*CatalogRepo
 	*ProjectsRepo
 	*ProjectCredentialsRepo
+	*RepositoriesRepo
 	*IssuesRepo
-	*TasksRepo
 	*UsersRepo
 	*TokensRepo
-	*RunsRepo
 	*RunnersRepo
-	*DeliveryRepo
 	*AnalyticsRepo
 	*InsightsRepo
-	*PreviewsRepo
-	*EngineInstancesRepo
-	*KnowledgeRepo
 	*PlatformSettingsRepo
 	*TrackerRepo
 	*SSHHostTrustRepo
 	*HTTPSHostTrustRepo
 	*GitHTTPHostTrustRepo
-	*NotificationsRepo
-	*BotInteractionsRepo
-	*EvolutionRepo
 }
 
 // newStore wires the shared deps and every cross-domain pointer. Domains have
@@ -199,22 +152,12 @@ func newStore(db *gorm.DB) *Store {
 	s.ProjectCredentialsRepo = &ProjectCredentialsRepo{deps: d, projects: s.ProjectsRepo}
 	s.GitHTTPHostTrustRepo = &GitHTTPHostTrustRepo{deps: d}
 	s.UsersRepo = &UsersRepo{deps: d, gitHTTPHosts: s.GitHTTPHostTrustRepo}
-	s.BotInteractionsRepo = &BotInteractionsRepo{deps: d}
 	s.TokensRepo = &TokensRepo{deps: d}
-	s.TasksRepo = &TasksRepo{deps: d}
-	s.NotificationsRepo = &NotificationsRepo{deps: d, users: s.UsersRepo, projects: s.ProjectsRepo, interactions: s.BotInteractionsRepo}
-	s.CatalogRepo = &CatalogRepo{deps: d, projects: s.ProjectsRepo, notifications: s.NotificationsRepo}
-	s.IssuesRepo = &IssuesRepo{deps: d, projects: s.ProjectsRepo, users: s.UsersRepo, tasks: s.TasksRepo}
-	s.NotificationsRepo.issues = s.IssuesRepo
+	s.RepositoriesRepo = &RepositoriesRepo{deps: d, projects: s.ProjectsRepo}
+	s.IssuesRepo = &IssuesRepo{deps: d, projects: s.ProjectsRepo, users: s.UsersRepo}
 	s.RunnersRepo = &RunnersRepo{deps: d, projects: s.ProjectsRepo}
-	s.RunsRepo = &RunsRepo{deps: d, issues: s.IssuesRepo, catalog: s.CatalogRepo, runners: s.RunnersRepo, notifications: s.NotificationsRepo}
-	s.DeliveryRepo = &DeliveryRepo{deps: d, issues: s.IssuesRepo, tasks: s.TasksRepo, catalog: s.CatalogRepo, runs: s.RunsRepo}
 	s.InsightsRepo = &InsightsRepo{deps: d}
-	s.AnalyticsRepo = &AnalyticsRepo{deps: d, runs: s.RunsRepo, catalog: s.CatalogRepo, delivery: s.DeliveryRepo, issues: s.IssuesRepo, tasks: s.TasksRepo, projects: s.ProjectsRepo, insights: s.InsightsRepo}
-	s.PreviewsRepo = &PreviewsRepo{deps: d}
-	s.EngineInstancesRepo = &EngineInstancesRepo{deps: d}
-	s.KnowledgeRepo = &KnowledgeRepo{deps: d}
-	s.EvolutionRepo = &EvolutionRepo{deps: d, catalog: s.CatalogRepo}
+	s.AnalyticsRepo = &AnalyticsRepo{deps: d, issues: s.IssuesRepo, projects: s.ProjectsRepo, insights: s.InsightsRepo}
 	s.PlatformSettingsRepo = &PlatformSettingsRepo{deps: d}
 	s.TrackerRepo = &TrackerRepo{deps: d}
 	s.SSHHostTrustRepo = &SSHHostTrustRepo{deps: d}
