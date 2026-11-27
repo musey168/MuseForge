@@ -19,13 +19,13 @@ test('project header counts pending MRs instead of artifacts and filters by them
       {id:'d',projectId:'project-1',number:4,title:'four',status:'todo'}
     ];
     state.projectFilter='project-1';
-    state.issueRunFilter='';
+    state.issueDeliveryFilter='';
     const counts=state.data.issues.map(i=>pendingDeliveryMRCount(i));
     renderProjectContext(state.data.issues);
     const metrics=$('#projectContextMetrics').innerHTML;
-    state.issueRunFilter='mr';
+    state.issueDeliveryFilter='mr';
     const filtered=filteredIssues().map(i=>i.id);
-    state.issueRunFilter='';
+    state.issueDeliveryFilter='';
     return {counts,metrics,filtered};
   })()`);
   assert.deepEqual([...result.counts], [1, 0, 1, 0]);

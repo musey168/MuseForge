@@ -59,21 +59,6 @@ test('English mode translates every page title and the copy the app renders into
   window.close();
 });
 
-test('English mode translates the LOOP evaluation and writeback action', async (t) => {
-  const app = await loadApp({ dispatchReady: false });
-  t.after(app.close);
-  const window = await englishPage('<html><body></body></html>');
-  t.after(() => window.close());
-  const panel = window.document.createElement('div');
-  panel.innerHTML = app.evaluate("runEvalPaneHTML({id:'run-english',status:'succeeded'})");
-  window.document.body.append(panel);
-  await new Promise(resolve => window.setTimeout(resolve, 0));
-
-  assert.equal(panel.querySelector('h3').textContent, 'LOOP run evaluation');
-  assert.equal(window.lfTranslate('打开 LOOP'), 'Open LOOP');
-  assert.equal(window.lfTranslate('暂时无法打开回写后的 LOOP，请刷新后再试。'),
-    'Could not open the updated LOOP. Refresh and try again.');
-});
 
 test('English mode translates the 个人配置 credential panel and the hints that point to it', async (t) => {
   const app = await loadApp({ dispatchReady: false });
@@ -97,19 +82,3 @@ test('English mode translates the 个人配置 credential panel and the hints th
   window.close();
 });
 
-test('English mode translates how a requirement that never ran will be handled', async (t) => {
-  const app = await loadApp({ dispatchReady: false });
-  t.after(app.close);
-  const window = await englishPage('<html><body></body></html>');
-  const copy = JSON.parse(app.evaluate(`
-    const pid=state.projectFilter||state.data.projects[0].id;
-    const none={id:'iss-none',projectId:pid,number:61,kind:'requirement',source:'local',status:'backlog',title:'x',sopMode:'none'};
-    const bound={...none,id:'iss-sop',sopMode:'',workflowId:state.data.workflows[0].id};
-    state.data.tasks=[];state.data.runs=[];
-    const outcome=issueOutcome(none),actor=issueActor(none);
-    JSON.stringify([outcome.title,outcome.short,outcome.body,actor.title,actor.sub,
-      issueTriggerLabel(none,{issue:none},false),issueTriggerLabel(bound,{issue:bound},false)]);
-  `));
-  for (const text of copy) assert.doesNotMatch(window.lfTranslate(text), HAN, text);
-  window.close();
-});

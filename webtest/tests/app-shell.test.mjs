@@ -2,22 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chooseOption, loadApp, sampleBootstrap, settle } from '../lib/load-app.mjs';
 
-test('list paging, catalog visibility, URL safety, and workflow helpers return concrete domain results', async (t) => {
+test('list paging, URL safety, and shell helpers return concrete domain results', async (t) => {
   const app = await loadApp();
   t.after(app.close);
   const result = app.evaluate(`(() => {
     const page=paginateList('issues',Array.from({length:45},(_,i)=>i+1),20);
     state.listPages.issues=3;
     const last=paginateList('issues',Array.from({length:45},(_,i)=>i+1),20);
-    state.projectFilter='project-1';
-    state.currentUser={id:1,isGuest:false,isPlatformAdmin:true};
-    state.mcpMarket=[
-      {id:'market-gh',name:'GitHub',aliases:['github'],description:'Git'},
-      {id:'market-gf',name:'工蜂',aliases:['gongfeng'],description:'Git'},
-      {id:'market-wiki',name:'Wiki',aliases:['wiki-docs']}
-    ];
-    state.data.workflows.push({id:'generic-1',name:'Generic',generic:true,nodes:[]},{id:'shared-1',name:'Shared',projectId:'other',shared:true,nodes:[]});
-    const mcp=genericTemplateMCPOptions(['gongfeng','custom']);
     return {
       page:[page.page,page.pages,page.start,page.end,page.items[0]],
       last:[last.page,last.start,last.end,last.items],
@@ -27,9 +18,6 @@ test('list paging, catalog visibility, URL safety, and workflow helpers return c
         clarifyOptionLabel('{"text":"Choice B"}'),
         clarifyQuestionOptions({options:'[{"label":"One"},"Two"]'})
       ],
-      mcp,checked:genericMCPChecked('market-gf',['gongfeng']),
-      workflows:runnableWorkflowOptions().map(x=>x.name),
-      visible:[catalogOwned('project-1'),catalogForeign('other'),catalogShared('other',true),catalogVisible('other',true)],
       urls:[safeURL('https://example.com/a'),safeURL('javascript:alert(1)')],
       colors:[safeColor('#abc'),safeColor('red')],
       unconfigured:(state.appDomain='',isOAHost('loopforge.example.com')),
@@ -44,11 +32,6 @@ test('list paging, catalog visibility, URL safety, and workflow helpers return c
   assert.equal(result.labels[0], 'Choice A');
   assert.equal(result.labels[1], 'Choice B');
   assert.equal(JSON.stringify(result.labels[2]), JSON.stringify(['One', 'Two']));
-  assert.equal(result.mcp.length, 3);
-  assert.equal(JSON.stringify(result.mcp.map((item) => item.id)), JSON.stringify(['github', 'gongfeng', 'custom']));
-  assert.equal(result.checked, true);
-  assert.match(result.workflows.join(','), /通用 · Generic|Shared/);
-  assert.equal(JSON.stringify(result.visible), JSON.stringify([true, true, true, true]));
   assert.equal(result.urls[1], '#');
   assert.equal(JSON.stringify(result.colors), JSON.stringify(['#abc', '#74829a']));
   assert.equal(JSON.stringify(result.hosts), JSON.stringify([true, true, true]));
@@ -83,48 +66,21 @@ test('code editor keyboard controls indent, outdent, auto-indent, save, and clos
 
 
 
-test('generic workflow hydration, project switching, flow routes, and shell keyboard interactions update state', async (t) => {
+test('project switching and shell keyboard interactions update state', async (t) => {
   const app = await loadApp();
   t.after(app.close);
-  app.router.get('/api/workflows/generic-2/agents', [{ id: 'generic-agent', name: 'Template Developer', projectId: '' }]);
-  app.evaluate(`
-    state.data.projects.push({id:'project-2',name:'Beta',defaultRepositoryId:'repo-2'});
-    state.data.repositories.push({id:'repo-2',projectId:'project-2',name:'beta'});
-    state.data.workflows.push(
-      {id:'generic-2',name:'Generic Two',generic:true,nodes:[]},
-      {id:'flow-2',name:'Beta Flow',projectId:'project-2',nodes:[],edges:[]}
-    );
-    state.workflow=clone(state.data.workflows.find(x=>x.id==='generic-2'));
-  `);
-  assert.equal(await app.evaluate(`hydrateGenericWorkflowRoles()`), true);
-  assert.equal(app.evaluate(`state.genericTemplateAgents[0].name`), 'Template Developer');
-  assert.equal(await app.evaluate(`hydrateGenericWorkflowRoles()`), false);
-
+  app.evaluate(`state.data.projects=[...state.data.projects,{id:'project-2',name:'Second',identifier:'SEC',status:'active'}];`);
   const select = app.document.querySelector('#projectSwitcher');
   app.evaluate(`renderProjectSwitcher()`);
   chooseOption(select, 'project-2');
   await settle(6);
   assert.equal(app.evaluate(`state.projectFilter`), 'project-2');
-  assert.equal(app.evaluate(`state.workflow.id`), 'flow-2');
   assert.equal(app.window.localStorage.getItem('agentflow.activeProject'), 'project-2');
-
-  app.evaluate(`state.currentView='flow';location.hash='#/flow/flow-2';state.workflow=null`);
-  await app.evaluate(`applyFlowRoute()`);
-  assert.equal(app.evaluate(`state.workflow.id`), 'flow-2');
-  assert.equal(app.window.localStorage.getItem('agentflow.activeWorkflow'), 'flow-2');
 
   app.document.dispatchEvent(new app.window.KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
   assert.equal(app.document.querySelector('#commandPalette').hidden, false);
   app.document.dispatchEvent(new app.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(app.document.querySelector('#commandPalette').hidden, true);
-
-  const modal = app.document.querySelector('#artifactModal');
-  modal.getBoundingClientRect = () => ({ left: 100, top: 100, right: 500, bottom: 500 });
-  modal.showModal();
-  modal.dispatchEvent(new app.window.MouseEvent('pointerdown', { bubbles: true, clientX: 200, clientY: 200 }));
-  assert.equal(modal.open, true);
-  modal.dispatchEvent(new app.window.MouseEvent('pointerdown', { bubbles: true, clientX: 50, clientY: 50 }));
-  assert.equal(modal.open, false);
 
   const resize = app.document.querySelector('.sidebar-resize');
   resize.dispatchEvent(new app.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));

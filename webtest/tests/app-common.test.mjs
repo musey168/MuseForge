@@ -71,8 +71,6 @@ test('markdown renderer covers tables, alerts, quotes, lists, tasks, rules, link
   assert.equal(host.querySelectorAll('.md-code-block').length, 5);
   assert.match(html, /tok-kw|tok-comment|task-checkbox/);
   assert.equal(app.evaluate(`safeURL('javascript:alert(1)')`), '#');
-  assert.equal(app.evaluate(`isMarkdownArtifact({path:'README.md'},'')`), true);
-  assert.equal(app.evaluate(`isMarkdownArtifact({},'# inferred')`), true);
 });
 
 test('inline code and snake_case identifiers survive markdown emphasis rules', async (t) => {
@@ -126,7 +124,7 @@ test('global confirm, prompt, alert, toast, and code editor controls resolve thr
   assert.equal(app.evaluate(`window.__savedCode`), 'print(2)\n# done');
 });
 
-test('theme, settings sidebar, merged asset tabs, and route helpers persist UI state', async (t) => {
+test('theme, settings sidebar, and route helpers persist UI state', async (t) => {
   const app = await loadApp();
   t.after(app.close);
   app.evaluate(`
@@ -134,21 +132,14 @@ test('theme, settings sidebar, merged asset tabs, and route helpers persist UI s
     readThemePreference();applyTheme('system');applyTheme('light');toggleTheme();
     setSettingsSidebarExpanded(false);setSettingsSidebarExpanded(true);
     switchView('settings');startSettingsRouteTransition('access');cancelSettingsRouteTransition();
-    switchView('rules');
   `);
   app.window.dispatchEvent(new app.window.StorageEvent('storage', { key: 'agentflow.theme' }));
   app.window.dispatchEvent(new app.window.Event('resize'));
   assert.equal(app.document.documentElement.dataset.theme, 'dark');
-  assert.equal(app.document.querySelector('#configurationNav .nav[data-view="mcp"]')?.classList.contains('active'), true);
-  assert.equal(app.document.querySelector('#assetsView [data-asset-type-tab="rules"]')?.getAttribute('aria-selected'), 'true');
-  assert.equal(app.document.querySelector('#assetsView [data-asset-type-group="capability"]')?.hidden, false);
-  for (const legacy of ['dockerfiles', 'environments']) {
-    app.evaluate(`switchView(${JSON.stringify(legacy)})`);
-    assert.equal(app.evaluate('activeViewName()'), 'sandboxes', `${legacy} opens 沙箱管理`);
+  for (const removed of ['mcp', 'rules', 'skills', 'sandboxes', 'bots', 'sops', 'runs', 'flow', 'agents', 'knowledge', 'evolution', 'aiSchedules', 'approvals']) {
+    assert.equal(app.document.querySelector(`#configurationNav .nav[data-view="${removed}"]`), null, `${removed} has no nav entry`);
+    assert.equal(app.document.querySelector(`#${removed}View`), null, `${removed}View is gone`);
   }
-  assert.equal(app.document.querySelector('#assetsView [data-asset-type-group="capability"]')?.hidden, true, '沙箱管理 has no type tabs');
-  assert.equal(app.document.querySelector('#configurationNav .nav[data-view="sandboxes"]')?.classList.contains('active'), true);
-  assert.equal(app.document.querySelector('#assetPageTitle')?.textContent, '沙箱管理');
   assert.match(app.evaluate(`viewTitles().settings`), /个人配置/);
-  assert.equal(app.evaluate(`viewTitles().bots`), '通道管理');
+  assert.equal(app.evaluate(`viewTitles().bots`), undefined);
 });

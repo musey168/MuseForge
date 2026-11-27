@@ -7,7 +7,7 @@ function setIssueSelectionMode(enabled){
 }
 
 function issueSelectionFilterKey(){
-  return JSON.stringify([state.projectFilter||'',state.sourceFilter||'',state.issueStatusFilter||'',state.issueAssigneeFilter||'',state.issueRunFilter||'',state.issueQuery||'']);
+  return JSON.stringify([state.projectFilter||'',state.sourceFilter||'',state.issueStatusFilter||'',state.issueAssigneeFilter||'',state.issueDeliveryFilter||'',state.issueQuery||'']);
 }
 
 function syncIssueSelection(issues){
@@ -121,14 +121,12 @@ async function deleteSelectedIssues(){
         result.deleted++;
         state.issueSelection.delete(issue.id);
         state.data.issues=(state.data.issues||[]).filter(i=>i.id!==issue.id);
-        state.data.tasks=(state.data.tasks||[]).filter(t=>t.issueId!==issue.id);
         if(state.issueDetailData?.issue?.id===issue.id){closeIssueDrawer();state.issueDetailData=null;}
         if(state.selectedIssue===issue.id)state.selectedIssue=null;
       }catch(err){result.failures.push({id:issue.id,title:issue.title,message:err.message||String(err)})}
       state.issueBulkDeleteProgress.completed++;
       renderIssues();
     }
-    await refreshRuns();
     if(!result.failures.length)state.issueSelectionMode=false;
     toast(result.failures.length?`已删除 ${result.deleted} 条需求，${result.failures.length} 条未删除，请查看失败原因`:`已删除 ${result.deleted} 条需求`,result.failures.length?'warn':'ok');
   }catch(err){toast(err.message,'err')}

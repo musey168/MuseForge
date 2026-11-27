@@ -39,8 +39,7 @@ test('platform admin panel loads metrics, searches, filters, grants, revokes, an
   app.document.querySelector('#confirmOkBtn').click();
   await settle(6);
   assert.ok(app.router.calls.filter((call) => call.path === '/api/platform/admins' && call.method === 'PUT').length >= 2);
-  host.querySelector('[data-platform-nav="agents"]')?.click();
-  assert.equal(app.evaluate(`state.currentView`), 'agents');
+  assert.equal(app.evaluate(`state.currentView`), 'issues');
 });
 
 test('platform admin tabs separate all five settings sections and support keyboard navigation', async (t) => {

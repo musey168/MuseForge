@@ -480,7 +480,7 @@ function obsFilterBar(){
   return `<div class="obs-fbar"><div class="obs-fbar-row">${obsSeg('data-obs-scope',[['user','个人',0,'','user'],['project','项目',0,'','users']],scope)}${userFilter}${originFilter}${sourceFilter}<span class="obs-sp"></span>${obsSeg('data-obs-grain',[['all','全部'],['day','日'],['week','周'],['month','月']],grain)}${obsPeriodPicker()}${manage}</div><div class="obs-scopeline">${chips.join('')}</div></div>`;
 }
 function obsFilteredRuns(){
-  let runs=scopedRuns(state.data.runs||[]);
+  let runs=(state.data.runs||[]).filter(r=>!state.projectFilter||r.projectId===state.projectFilter||r.executionContext?.projectId===state.projectFilter);
   if(obsScope()==='user'&&state.obsUserFilter)runs=runs.filter(r=>obsRunMatchesUser(r,state.obsUserFilter));
   if(state.obsSourceFilter)runs=runs.filter(r=>String(obsLinkedIssue(r)?.source||'local').toLowerCase()===state.obsSourceFilter);
   return runs;
@@ -596,7 +596,6 @@ function obsBindActions(root){
   if(typeof obsBindVibeActions==='function')obsBindVibeActions(root);
   root.querySelectorAll('[data-obs-metric]').forEach(b=>b.onclick=()=>setObsTrendMetric(b.dataset.obsMetric));
   root.querySelectorAll('[data-obs-period]').forEach(el=>el.onclick=e=>{e.stopPropagation();const key=el.dataset.obsPeriod;if(key)obsSelectTrendPeriod(key)});
-  root.querySelectorAll('[data-open-run]').forEach(b=>b.onclick=e=>{if(e.target.closest&&e.target.closest('a'))return;obsCollapse();openRunFromId(b.dataset.openRun)});
   root.querySelectorAll('[data-jump]').forEach(b=>b.onclick=e=>{e.preventDefault();obsCollapse();switchView(b.dataset.jump)});
   root.querySelectorAll('[data-edit-issue]').forEach(b=>b.onclick=e=>{if(e.target.closest&&e.target.closest('a'))return;obsCollapse();const issue=(state.data.issues||[]).find(i=>i.id===b.dataset.editIssue);if(issue)openIssue(issue);else openIssueDetail(b.dataset.editIssue)});
   root.querySelectorAll('[data-obs-delivery]').forEach(b=>b.onclick=()=>obsSetDeliveryFilter(b.dataset.obsDelivery));

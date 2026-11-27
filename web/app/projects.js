@@ -9,10 +9,10 @@ function renderProjectContext(projectIssues){
   const projects=state.data.projects||[],project=projects.find(p=>p.id===state.projectFilter);renderProjectSwitcher();
   $('#projectContextMark').textContent=(project?.key||project?.name||'P').slice(0,2).toUpperCase();$('#projectContextMark').style.background=safeColor(project?.color);
   $('#projectContextName').textContent=project?.name||'暂无项目';$('#projectContextDescription').textContent=project?.description||'工作台数据会按项目整体切换';
-  const active=projectIssues.filter(i=>issueRunHealth(i)==='active').length,attention=projectIssues.filter(i=>issueRunHealth(i)==='attention').length,pendingMRs=projectIssues.reduce((n,i)=>n+pendingDeliveryMRCount(i),0),repo=(state.data.repositories||[]).find(r=>r.id===project?.defaultRepositoryId);
+  const active=projectIssues.filter(i=>issueCurrentStage(i).key==='active').length,attention=projectIssues.filter(i=>issueCurrentStage(i).key==='attention').length,pendingMRs=projectIssues.reduce((n,i)=>n+pendingDeliveryMRCount(i),0),repo=(state.data.repositories||[]).find(r=>r.id===project?.defaultRepositoryId);
   const repoCount=(state.data.repositories||[]).filter(r=>r.projectId===project?.id).length;
-  $('#projectContextMetrics').innerHTML=`<button type="button" data-issue-filter="" class="${!state.issueRunFilter?'on':''}"><span>工作项</span><b>${projectIssues.length}</b></button><button type="button" data-issue-filter="active" class="${state.issueRunFilter==='active'?'on':''}"><span>正在推进</span><b>${active}</b></button><button type="button" data-issue-filter="attention" class="${attention?'danger':''} ${state.issueRunFilter==='attention'?'on':''}" title="点此只看待确认澄清结论、门禁失败、运行失败或已中断的工作项"><span>需要介入</span><b>${attention}</b></button><button type="button" data-issue-filter="mr" class="${state.issueRunFilter==='mr'?'on':''}" title="已提 MR 但还没合入的 MR 数（按 MR 计，点击只看涉及的需求）"><span>待处理 MR</span><b>${pendingMRs}</b></button><div class="project-default-sop"><span>代码仓库（${repoCount}）</span><b title="${escapeHTML(repo?.gongfengProjectId||'未绑定')}">默认：${escapeHTML(repo?.name||'未绑定')}</b></div>`;
-  $('#projectContextMetrics').querySelectorAll('[data-issue-filter]').forEach(btn=>btn.onclick=()=>setIssueRunFilter(btn.dataset.issueFilter));
+  $('#projectContextMetrics').innerHTML=`<button type="button" data-issue-filter="" class="${!state.issueDeliveryFilter?'on':''}"><span>工作项</span><b>${projectIssues.length}</b></button><button type="button" data-issue-filter="active" class="${state.issueDeliveryFilter==='active'?'on':''}"><span>正在推进</span><b>${active}</b></button><button type="button" data-issue-filter="attention" class="${attention?'danger':''} ${state.issueDeliveryFilter==='attention'?'on':''}" title="点此只看待确认澄清结论、门禁失败、运行失败或已中断的工作项"><span>需要介入</span><b>${attention}</b></button><button type="button" data-issue-filter="mr" class="${state.issueDeliveryFilter==='mr'?'on':''}" title="已提 MR 但还没合入的 MR 数（按 MR 计，点击只看涉及的需求）"><span>待处理 MR</span><b>${pendingMRs}</b></button><div class="project-default-sop"><span>代码仓库（${repoCount}）</span><b title="${escapeHTML(repo?.gongfengProjectId||'未绑定')}">默认：${escapeHTML(repo?.name||'未绑定')}</b></div>`;
+  $('#projectContextMetrics').querySelectorAll('[data-issue-filter]').forEach(btn=>btn.onclick=()=>{state.issueDeliveryFilter=btn.dataset.issueFilter;resetListPage('issues');renderIssues()});
 }
 function clarificationNeedsConfirm(i){
   const c=i?.clarification||{};
@@ -105,7 +105,7 @@ function parseProjectAdminRoute(hash){
 }
 function projectAdminHash(id,tab){return id?`#/projects/${encodeURIComponent(id)}${id!=='new'&&tab&&tab!=='basic'?'/'+tab:''}`:'#/projects'}
 function projectPeopleIds(p){return [...new Set([p?.ownerId,...(p?.members||[]).map(m=>m.userId)].map(Number).filter(Boolean))]}
-function blankProjectDraft(){return {id:'',key:'',name:'',description:'',color:PROJECT_SWATCHES[0],ownerId:Number(state.currentUser?.id)||'',workflowId:'generic-backend-delivery',defaultRepositoryId:'',businessDomainId:'',members:[],runEval:defaultRunEval(),tapdWorkspaceId:'',tapdIterationId:'',tapdClear:false}}
+function blankProjectDraft(){return {id:'',key:'',name:'',description:'',color:PROJECT_SWATCHES[0],ownerId:Number(state.currentUser?.id)||'',workflowId:'generic-backend-delivery',defaultRepositoryId:'',businessDomainId:'',members:[],tapdWorkspaceId:'',tapdIterationId:'',tapdClear:false}}
 const PROJECT_MEMBER_ROLES=[{id:'maintainer',label:'维护者'},{id:'member',label:'成员'},{id:'viewer',label:'只读'}];
 function projectMemberRole(role){const r=String(role||'').trim().toLowerCase();return PROJECT_MEMBER_ROLES.some(x=>x.id===r)?r:'member'}
 function projectDraftFrom(project){const d=clone(project)||{};d.members=(d.members||[]).filter(m=>Number(m.userId)!==Number(d.ownerId)).map(m=>({userId:Number(m.userId)||0,role:projectMemberRole(m.role)}));d.tapdClear=false;return d}
@@ -119,7 +119,7 @@ function projectWorkflowName(id){const w=(state.data?.workflows||[]).find(x=>x.i
 
 function projectCardHTML(p,ctx={}){
   const repos=(ctx.repos||[]).filter(r=>r.projectId===p.id),issues=(ctx.issues||[]).filter(i=>i.projectId===p.id);
-  const active=issues.filter(i=>issueRunHealth(i)==='active').length,people=projectPeopleIds(p),def=repos.find(r=>r.id===p.defaultRepositoryId);
+  const active=issues.filter(i=>issueCurrentStage(i).key==='active').length,people=projectPeopleIds(p),def=repos.find(r=>r.id===p.defaultRepositoryId);
   const key=String(p.key||p.name||'P');
   const repoFact=repos.length
     ?`<span class="pa-fact" title="${def?'默认仓库':'已绑定仓库，未设默认'}">${paIcon('repo',12)}<span>${escapeHTML((def||repos[0]).name||'仓库')}${repos.length>1?` +${repos.length-1}`:''}</span></span>`
@@ -215,7 +215,7 @@ function renderProjectAdminHead(){
   const name=String(d.name||'').trim()||(creating?'新项目':saved?.name||''),key=String(d.key||'').trim().toUpperCase();
   const crumb=$('#projectAdminCrumb');if(crumb){crumb.textContent=creating?'新建项目':name;crumb.title=crumb.textContent}
   const head=$('#projectAdminHead');if(!head)return;
-  const issues=(state.data.issues||[]).filter(i=>!creating&&i.projectId===state.projectAdminDetailId),active=issues.filter(i=>issueRunHealth(i)==='active').length,sop=projectWorkflowName(d.workflowId);
+  const issues=(state.data.issues||[]).filter(i=>!creating&&i.projectId===state.projectAdminDetailId),active=issues.filter(i=>issueCurrentStage(i).key==='active').length,sop=projectWorkflowName(d.workflowId);
   head.innerHTML=`<span class="pa-mark lg" style="background:${safeColor(d.color)}">${escapeHTML((key||(creating?'NEW':name)||'P').slice(0,2).toUpperCase())}</span><div class="pa-dhd-m"><h1><span title="${escapeHTML(name)}">${escapeHTML(name)}</span>${key?`<span class="pa-chip">${escapeHTML(key)}</span>`:''}${!creating&&saved?.id===state.projectFilter?'<span class="pa-chip cur">当前工作台项目</span>':''}</h1><p>${escapeHTML(creating?'填写项目名称并创建，之后即可绑定代码仓库、邀请成员。':(d.description||''))}</p>${creating?'':`<div class="pa-dmeta"><span>${paIcon('user',12)}<b>${projectPeopleIds(d).length}</b> 位成员</span><span><b>${issues.length}</b> 个需求</span><span><b>${active}</b> 个推进中</span>${sop?`<span>${paIcon('flow',12)}${escapeHTML(sop)}</span>`:''}</div>`}</div>`;
 }
 function syncProjectAdminTabs(){

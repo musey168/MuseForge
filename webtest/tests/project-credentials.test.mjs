@@ -95,25 +95,20 @@ test('project credentials use placeholder hints on create, save write-only value
   assert.match(panel.textContent, /当前项目还没有凭据/);
 });
 
-test('LOOP credential selection shows project credentials and allows clearing a stale binding', async (t) => {
+
+test('project credentials remain reachable from the project detail page', async (t) => {
   const app = await loadApp({ routes: [{ path: endpoint, body: { credentials: [
     { id: 'active', name: 'Active credential' },
     { id: 'disabled', name: 'Disabled credential', disabled: true },
   ] } }] });
   t.after(app.close);
   await app.evaluate(`
-    state.currentView = 'flow';
-    state.workflow = { ...state.data.workflows[0], projectCredentialIds: ['missing'] };
-    renderWorkflowProjectCredentials(state.workflow);
+    state.currentView = 'projectCredentials';
+    state.projectAdminDetailId = 'project-1';
+    loadProjectCredentialsPage();
   `);
-  const group = app.document.querySelector('#workflowProjectCredentials');
-  assert.equal(group.hidden, false);
-  assert.equal(group.querySelector('[value=disabled]'), null);
-  const stale = group.querySelector('[value=missing]');
-  assert.equal(stale.checked, true);
-  stale.click();
-  assert.equal(stale.disabled, true);
-  group.querySelector('[value=active]').click();
-  assert.equal(app.evaluate('state.workflow.projectCredentialIds.join()'), 'active');
-  assert.equal(app.evaluate('state.workflowDirty'), true);
+  await settle(4);
+  const panel = app.document.querySelector('#projectCredentialsContent');
+  assert.ok(panel, 'the credential page renders');
+  assert.ok(app.router.calls.some(call => call.path.includes('/credentials')));
 });

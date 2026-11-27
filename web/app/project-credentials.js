@@ -501,37 +501,3 @@ function editProjectCredential(host, projectID, item, onClose) {
   form.elements.name.focus();
 }
 
-let workflowCredentialsRequest = 0;
-
-async function renderWorkflowProjectCredentials(workflow) {
-  const host = $('#workflowProjectCredentials');
-  if (!host) return;
-  const stamp = ++workflowCredentialsRequest;
-  const visible = state.currentView === 'flow' && workflow?.projectId && !catalogGeneric(workflow) && !catalogForeign(workflow.projectId);
-  host.hidden = !visible;
-  if (!visible) return;
-  const list = host.querySelector('[data-workflow-credential-list]');
-  list.textContent = '正在加载项目凭据…';
-  try {
-    const { credentials } = await api(projectCredentialsPath(workflow.projectId), { silent: true });
-    if (stamp !== workflowCredentialsRequest || state.workflow !== workflow) return;
-    const selected = new Set(workflow.projectCredentialIds || []);
-    const available = credentials.filter(item => !item.disabled || selected.has(item.id));
-    const missing = [...selected].filter(id => !available.some(item => item.id === id));
-    list.innerHTML = [...available, ...missing.map(id => ({ id, disabled: true }))].map(item => `
-      <label class="project-credential-choice"><input type="checkbox" value="${escapeHTML(item.id)}" ${selected.has(item.id) ? 'checked' : ''} ${item.disabled && !selected.has(item.id) ? 'disabled' : ''}>
-        <span>${item.name ? `<span data-i18n-skip>${escapeHTML(item.name)}</span>` : '凭据已不可用'}${item.disabled ? ' · 已停用或删除' : ''}</span>
-      </label>`).join('') || '<p>当前项目没有可用的凭据。</p>';
-    list.onchange = event => {
-      const input = event.target;
-      if (input.type !== 'checkbox' || state.workflow !== workflow) return;
-      if (input.checked) selected.add(input.value);
-      else selected.delete(input.value);
-      workflow.projectCredentialIds = Array.from(selected);
-      if (!input.checked && !credentials.some(item => item.id === input.value && !item.disabled)) input.disabled = true;
-      dirty();
-    };
-  } catch (error) {
-    if (stamp === workflowCredentialsRequest) list.textContent = error.message;
-  }
-}
