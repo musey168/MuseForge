@@ -12,6 +12,9 @@
 > releases. The upstream MIT license and original copyright notice are retained in
 > [LICENSE](./LICENSE).
 >
+> Fork point: upstream `Tencent/LoopForge` at `v0.4.3` (commit `fd039e51`),
+> marked in this repository by the tag `upstream-v0.4.3`.
+>
 > The rest of this README is upstream text and has not yet been rewritten for the
 > personal build.
 

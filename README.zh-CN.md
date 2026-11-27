@@ -9,6 +9,9 @@
 > 分支约定：`dev` 用于开发，`stable` 发布稳定版本。
 > 上游 MIT 许可证与原始版权声明保留在 [LICENSE](./LICENSE)。
 >
+> 分叉点：上游 `Tencent/LoopForge` 的 `v0.4.3`（提交 `fd039e51`），
+> 在本仓库标记为 tag `upstream-v0.4.3`。
+>
 > 本 README 以下内容为上游原文，尚未按个人版重写。
 
 <p align="center">
