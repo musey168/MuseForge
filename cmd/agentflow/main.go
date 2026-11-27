@@ -90,7 +90,7 @@ func main() {
 	mcpToken := flag.String("mcp-token", "", "MCP gateway bearer token (or set AGENTFLOW_MCP_TOKEN env)")
 	tlsCert := flag.String("tls-cert", "", "optional TLS certificate path")
 	tlsKey := flag.String("tls-key", "", "optional TLS private key path")
-	mysqlDSN := flag.String("mysql-dsn", "", "MySQL DSN; overrides AGENTFLOW_MYSQL_DSN. MySQL is the only data source.")
+	datasource := flag.String("datasource", "", "platform datasource: a SQLite file path or \"file:\" URI, or a MySQL DSN; overrides AGENTFLOW_DATASOURCE_DSN and AGENTFLOW_MYSQL_DSN")
 	roleFlag := flag.String("role", "", "process role: api, worker, or all (default all)")
 	cliAction := flag.String("cli-action", "", "local managed CLI administration: status, update, or rollback; exits without starting services")
 	cliProvider := flag.String("cli-provider", "", "managed CLI provider to roll back")
@@ -138,7 +138,7 @@ func main() {
 	if err := runtime.SetRepositoryCacheRoot(root); err != nil {
 		log.Printf("repository cache disabled: %v", err)
 	}
-	s, err := repo.Open(strings.TrimSpace(*mysqlDSN))
+	s, err := repo.Open(strings.TrimSpace(*datasource))
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -8,11 +8,14 @@ import (
 )
 
 // autoMigrateIncremental completes every incremental DDL the running database
-// is missing (columns, tables, indexes) using gorm's Migrator. Unlike a full
-// AutoMigrate — which would also ALTER existing columns to match model
-// defaults (e.g. rewriting JSON columns to longblob) — this only ever ADDS
-// what is absent, so a production schema migrated by the master binary is
-// left untouched except for genuinely missing objects.
+// is missing (columns, tables, indexes) using gorm's Migrator. It runs the
+// same way on every datasource: MySQL and SQLite both get their tables from
+// the model manifest alone, without a manual migration step.
+//
+// Unlike a full AutoMigrate — which would also ALTER existing columns to
+// match model defaults (e.g. rewriting JSON columns to longblob) — this only
+// ever ADDS what is absent, so a production schema migrated by the master
+// binary is left untouched except for genuinely missing objects.
 //
 // The runs.repositories / run_artifacts.repository_dir / runs.pause_requested
 // / runs.human_context / runs.cancel_requested / runs.sandbox_id additions

@@ -1,6 +1,7 @@
-// Package repo is the gorm-backed persistence layer of AgentFlow. MySQL is the
-// only production datasource; tests open an in-process sqlite database through
-// the same gorm code paths. There is no second in-memory implementation.
+// Package repo is the gorm-backed persistence layer of AgentFlow. MySQL and
+// SQLite are both production datasources; tests open an in-process sqlite
+// database through the same gorm code paths. There is no second in-memory
+// implementation.
 package repo
 
 import (
@@ -8,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -16,6 +18,7 @@ import (
 	"agentflow/internal/credcrypt"
 	"agentflow/internal/domain"
 
+	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -239,16 +242,83 @@ func newStore(db *gorm.DB) *Store {
 	return s
 }
 
-// Open connects the store to MySQL, which is where all state lives. An empty
-// DSN is a configuration error, not a reason to invent state somewhere else.
+// The datasources Open accepts. MySQL and SQLite are peers: the same gorm
+// code paths serve both.
+const (
+	datasourceMySQL  = "mysql"
+	datasourceSQLite = "sqlite"
+)
+
+// datasourceKind reports which datasource a DSN names.
+//
+// The two DSN shapes look nothing alike, so the rule is by shape:
+//
+//   - "file:" prefix        → SQLite. This is the explicit form: it carries
+//     the shared in-memory database ("file::memory:?cache=shared") and any
+//     URI parameters.
+//   - contains "@"          → MySQL (the user[:password]@ separator).
+//   - contains "(" or "://" → MySQL (the protocol(address)/dbname form).
+//   - anything else         → SQLite file path.
+//
+// A SQLite path that would be read as a MySQL DSN (it contains "@", "(" or
+// "://") must use the "file:" prefix; a MySQL DSN without credentials
+// ("/dbname") must use the "tcp(host:port)/dbname" form.
+func datasourceKind(dsn string) string {
+	if strings.HasPrefix(dsn, "file:") {
+		return datasourceSQLite
+	}
+	if strings.Contains(dsn, "@") || strings.Contains(dsn, "(") || strings.Contains(dsn, "://") {
+		return datasourceMySQL
+	}
+	return datasourceSQLite
+}
+
+// Open connects the store to the configured datasource and completes the
+// incremental DDL that database is missing. The DSN names either a MySQL
+// database or a SQLite file; datasourceKind tells them apart.
+//
+// An empty DSN is a configuration error, not a reason to invent state
+// somewhere else: the caller passes its flag value, and AGENTFLOW_DATASOURCE_DSN
+// (any datasource) and AGENTFLOW_MYSQL_DSN (MySQL) are the environment
+// fallbacks.
 func Open(dsn string) (*Store, error) {
 	dsn = strings.TrimSpace(dsn)
+	if dsn == "" {
+		dsn = strings.TrimSpace(os.Getenv("AGENTFLOW_DATASOURCE_DSN"))
+	}
 	if dsn == "" {
 		dsn = strings.TrimSpace(os.Getenv("AGENTFLOW_MYSQL_DSN"))
 	}
 	if dsn == "" {
-		return nil, errors.New("AGENTFLOW_MYSQL_DSN 未配置：MySQL 是唯一数据源，缺少 DSN 时拒绝启动")
+		return nil, errors.New("数据源未配置：请设置 AGENTFLOW_DATASOURCE_DSN（SQLite 文件路径或 MySQL DSN）")
 	}
+	var (
+		db  *gorm.DB
+		err error
+	)
+	if datasourceKind(dsn) == datasourceSQLite {
+		db, err = openSQLite(dsn)
+	} else {
+		db, err = openMySQL(dsn)
+	}
+	if err != nil {
+		return nil, err
+	}
+	s := newStore(db)
+	// Incremental DDL only (missing columns/tables/indexes) via gorm's
+	// migrator. Schema baselines, data migrations and seed data are NOT run
+	// from code: they are plain SQL scripts under migrations/, applied
+	// manually by the operator.
+	if err := autoMigrateIncremental(s.DB); err != nil {
+		s.Close()
+		return nil, fmt.Errorf("auto migrate: %w", err)
+	}
+	return s, nil
+}
+
+// openMySQL connects to a MySQL database. The DSN keeps the charset and
+// parseTime settings the schema needs.
+func openMySQL(dsn string) (*gorm.DB, error) {
 	if !strings.Contains(dsn, "charset=") {
 		if strings.Contains(dsn, "?") {
 			dsn += "&charset=utf8mb4&collation=utf8mb4_unicode_ci"
@@ -271,16 +341,90 @@ func Open(dsn string) (*Store, error) {
 			return nil, fmt.Errorf("mysql ping: %w", err)
 		}
 	}
-	s := newStore(db)
-	// Incremental DDL only (missing columns/tables/indexes) via gorm's
-	// migrator. Schema baselines, data migrations and seed data are NOT run
-	// from code: they are plain SQL scripts under migrations/, applied
-	// manually by the operator.
-	if err := autoMigrateIncremental(s.DB); err != nil {
-		s.Close()
-		return nil, fmt.Errorf("auto migrate: %w", err)
+	return db, nil
+}
+
+// sqliteBusyTimeout is the wait a SQLite connection spends on a locked
+// database before it gives up.
+const sqliteBusyTimeout = "10000"
+
+// openSQLite connects to a SQLite database. The target is either a "file:"
+// URI (which may be the shared in-memory database) or a filesystem path; a
+// path's parent directory is created, so a fresh install needs one file and
+// nothing else.
+func openSQLite(dsn string) (*gorm.DB, error) {
+	target, err := sqliteTarget(dsn)
+	if err != nil {
+		return nil, err
 	}
-	return s, nil
+	db, err := gorm.Open(sqlite.Open(target), &gorm.Config{TranslateError: true, Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		return nil, fmt.Errorf("sqlite open: %w", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("sqlite handle: %w", err)
+	}
+	// SQLite serializes writers. One connection keeps a transaction and the
+	// queries around it from interleaving, and matches the in-process test
+	// store that the whole suite runs against.
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
+	sqlDB.SetConnMaxLifetime(0)
+	if err := sqlDB.Ping(); err != nil {
+		return nil, fmt.Errorf("sqlite ping: %w", err)
+	}
+	return db, nil
+}
+
+// sqliteTarget turns a SQLite DSN into the driver DSN. A "file:" URI is
+// passed through; anything else is a filesystem path. Either way the file's
+// parent directory is created, so a fresh install needs one file and nothing
+// else — the "file:" form is what scripts/configure.sh writes, so it must
+// behave exactly like the bare path.
+func sqliteTarget(dsn string) (string, error) {
+	target := dsn
+	if !strings.HasPrefix(dsn, "file:") {
+		abs, err := filepath.Abs(dsn)
+		if err != nil {
+			return "", fmt.Errorf("sqlite path %q: %w", dsn, err)
+		}
+		target = "file:" + abs
+	}
+	if dir, ok := sqliteParentDir(target); ok {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return "", fmt.Errorf("sqlite directory %q: %w", dir, err)
+		}
+	}
+	// Every connection waits for a busy database instead of failing at once.
+	if strings.Contains(target, "?") {
+		target += "&_pragma=busy_timeout(" + sqliteBusyTimeout + ")"
+	} else {
+		target += "?_pragma=busy_timeout(" + sqliteBusyTimeout + ")"
+	}
+	return target, nil
+}
+
+// sqliteParentDir returns the directory that must exist for the SQLite file
+// behind a "file:" URI. It reports false for the in-memory forms, which have
+// no directory: "file::memory:..." and the empty-name form.
+func sqliteParentDir(target string) (string, bool) {
+	path := strings.TrimPrefix(target, "file:")
+	if i := strings.IndexAny(path, "?#"); i >= 0 {
+		path = path[:i]
+	}
+	if path == "" || path == ":memory:" {
+		return "", false
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", false
+	}
+	dir := filepath.Dir(abs)
+	if dir == "" {
+		return "", false
+	}
+	return dir, true
 }
 
 // Close releases the underlying connection pool. The gorm handle is kept so
@@ -296,10 +440,21 @@ func (s *Store) Close() {
 }
 
 func (s *Store) StorageInfo() map[string]any {
+	driver := ""
+	if s.DB != nil {
+		driver = s.DB.Dialector.Name()
+	}
+	note := "所有状态都直接读写数据源：项目、需求、运行记录、助手对话和定时任务都在同一个库里。"
+	switch driver {
+	case datasourceSQLite:
+		note = "所有状态都在 SQLite 文件里：项目、需求、运行记录、助手对话和定时任务都直接读写这个文件。"
+	case datasourceMySQL:
+		note = "所有状态都在 MySQL 里：项目、需求、运行记录、助手对话和定时任务都直接读写数据库。"
+	}
 	return map[string]any{
-		"driver":   s.DB.Dialector.Name(),
+		"driver":   driver,
 		"database": true,
-		"note":     "所有状态都在 MySQL：项目、Issue、LOOP、运行记录、助手对话和定时任务都直接读写数据库。",
+		"note":     note,
 	}
 }
 
