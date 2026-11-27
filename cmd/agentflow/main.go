@@ -3,29 +3,21 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	"agentflow/internal/config"
-	"agentflow/internal/credcrypt"
-	"agentflow/internal/engine"
 	"agentflow/internal/httpapi"
-	"agentflow/internal/managedcli"
-	"agentflow/internal/notification"
-	"agentflow/internal/preview"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -76,40 +68,19 @@ func loadDotEnv() {
 }
 
 func main() {
-	if runtime.RunMCPCallCLI(os.Args[1:]) {
-		return
-	}
-	if runtime.RunGitHelperCLI(os.Args[1:]) {
-		return
-	}
 	addr := flag.String("addr", "", "HTTP listen address; overrides AGENTFLOW_HTTP_PORT")
-	workspaces := flag.String("workspaces", "", "sandbox workspace root")
-	workerConcurrency := flag.Int("worker-concurrency", 8, "maximum concurrent node sandboxes for this worker")
 	basicUser := flag.String("basic-user", "", "optional HTTP Basic Auth username")
 	basicPass := flag.String("basic-pass", "", "optional HTTP Basic Auth password")
 	mcpToken := flag.String("mcp-token", "", "MCP gateway bearer token (or set AGENTFLOW_MCP_TOKEN env)")
 	tlsCert := flag.String("tls-cert", "", "optional TLS certificate path")
 	tlsKey := flag.String("tls-key", "", "optional TLS private key path")
 	datasource := flag.String("datasource", "", "platform datasource: a SQLite file path or \"file:\" URI, or a MySQL DSN; overrides AGENTFLOW_DATASOURCE_DSN and AGENTFLOW_MYSQL_DSN")
-	roleFlag := flag.String("role", "", "process role: api, worker, or all (default all)")
 	cliAction := flag.String("cli-action", "", "local managed CLI administration: status, update, or rollback; exits without starting services")
 	cliProvider := flag.String("cli-provider", "", "managed CLI provider to roll back")
 	cliTimeout := flag.Duration("cli-timeout", 80*time.Minute, "total managed CLI operation timeout")
-	browserImage := flag.Bool("browser-image", false, "build or pull the agent browser sidecar image, print its name and exit")
-	credentialAction := flag.String("credential-action", "", "Bot credential administration: status or reencrypt; exits without starting services")
 	flag.Parse()
 	loadDotEnv()
-	if *browserImage {
-		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-		image, err := runtime.EnsureBrowserImage(ctx)
-		stop()
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println(image)
-		return
-	}
-	if os.Getenv("AGENTFLOW_SESSION_SECRET") == "" && *cliAction == "" && *credentialAction == "" {
+	if os.Getenv("AGENTFLOW_SESSION_SECRET") == "" && *cliAction == "" {
 		log.Fatal("AGENTFLOW_SESSION_SECRET is required; generate with openssl rand -hex 32")
 	}
 	if os.Getenv("AGENTFLOW_AUTH_REQUIRED") == "" {
@@ -127,169 +98,56 @@ func main() {
 		}
 		return
 	}
-	role, err := resolveRole(*roleFlag)
-	if err != nil {
-		log.Fatal(err)
-	}
-	root, err := resolveWorkspaceRoot(*workspaces)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := runtime.SetRepositoryCacheRoot(root); err != nil {
-		log.Printf("repository cache disabled: %v", err)
-	}
 	s, err := repo.Open(strings.TrimSpace(*datasource))
 	if err != nil {
 		log.Fatal(err)
 	}
-	keyring, err := credcrypt.FromEnv()
-	if err != nil {
-		log.Fatal(err)
-	}
-	s.SetCredentialKeyring(keyring)
-	if *credentialAction != "" {
-		if err := runCredentialAction(s, *credentialAction, os.Stdout); err != nil {
-			log.Fatal(err)
-		}
-		return
-	}
-	if keyring == nil {
-		log.Printf("%s is not set: stored plaintext Bot secrets stay readable, saving a new secret returns credential_key_missing", credcrypt.EnvKeys)
-	} else {
-		log.Printf("bot credential keyring current_kid=%s", keyring.CurrentKID())
-	}
-	log.Printf("storage driver=%v database=%v role=%s", s.StorageInfo()["driver"], s.StorageInfo()["database"], role)
-	e := engine.New(s, runtime.NewManagerWithLimit(root, *workerConcurrency))
-	host, _ := os.Hostname()
-	instanceID := strings.TrimSpace(os.Getenv("AGENTFLOW_INSTANCE_ID"))
-	if instanceID == "" {
-		instanceID = fmt.Sprintf("%s-%s-%d", role, host, os.Getpid())
-	}
-	leaseTTL := 30 * time.Second
-	if raw := strings.TrimSpace(os.Getenv("AGENTFLOW_RUN_LEASE_TTL")); raw != "" {
-		parsed, parseErr := time.ParseDuration(raw)
-		if parseErr != nil || parsed <= 0 {
-			log.Fatalf("invalid AGENTFLOW_RUN_LEASE_TTL %q", raw)
-		}
-		leaseTTL = parsed
-	}
-	executeRuns := role != "api"
-	if role == "all" {
-		if raw := strings.TrimSpace(os.Getenv("AGENTFLOW_EXECUTE_RUNS")); raw != "" {
-			parsed, parseErr := strconv.ParseBool(raw)
-			if parseErr != nil {
-				log.Fatalf("invalid AGENTFLOW_EXECUTE_RUNS %q", raw)
-			}
-			executeRuns = parsed
-		}
-	}
-	e.ConfigureExecution(instanceID, host, leaseTTL, executeRuns)
-	e.ConfigureCloudRunnerPool(engine.CloudRunnerPool{
-		Label:    os.Getenv("AGENTFLOW_CLOUD_RUNNER_LABEL"),
-		Projects: engine.ParseCloudRunnerProjects(os.Getenv("AGENTFLOW_CLOUD_RUNNER_PROJECTS")),
-		// AGENTFLOW_LOCAL_EXECUTION=false keeps this host from running nodes
-		// of pool projects: they wait for, or move to, a pool runner.
-		Required: strings.EqualFold(strings.TrimSpace(os.Getenv("AGENTFLOW_LOCAL_EXECUTION")), "false"),
-	})
-	attachPreviewStore(e, s)
-	log.Printf("engine instance=%s role=%s execute_runs=%t run_lease_ttl=%s", instanceID, role, executeRuns, leaseTTL)
-	claimCtx, stopClaim := context.WithCancel(context.Background())
-	defer stopClaim()
-	endpoints, err := config.LoadEndpoints(role, strings.TrimSpace(*addr))
+	log.Printf("storage driver=%v database=%v", s.StorageInfo()["driver"], s.StorageInfo()["database"])
+	endpoints, err := config.LoadEndpoints("api", strings.TrimSpace(*addr))
 	if err != nil {
 		log.Fatal(err)
 	}
 	config.SetCurrent(endpoints)
-	e.ConfigurePlatformMCP(endpoints.PlatformBase, endpoints.PlatformMCPToken)
-	if endpoints.PlatformBase == "" {
-		log.Printf("platform MCP / knowledge proxy: no sandbox-reachable platform URL; cloud runs skip them (set AGENTFLOW_PLATFORM_MCP_URL)")
-	} else {
-		log.Printf("platform MCP / knowledge proxy base=%s", endpoints.PlatformBase)
-	}
 
 	mainLn, inherited, err := listenMain(endpoints.ListenAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
-	var srv *http.Server
-	var syncSvc *tracker.Service
-	var background *httpapi.Background
-	var agentToolSrv *http.Server
-	readyStatus := "serving"
-	switch role {
-	case "worker":
-		httpapi.ConfigureWorkerSOPHelpers(s, e)
-		e.ConfigureControl(engine.ControlConfig{Role: role, URL: endpoints.ControlURL, Token: endpoints.ControlToken, APIURL: endpoints.APIBase})
-		e.StartInstanceHeartbeat(claimCtx)
-		srv = &http.Server{Addr: endpoints.ListenAddr, Handler: workerHandler(e), ReadHeaderTimeout: 10 * time.Second}
-	default:
-		readyStatus = handoverStatus
-		agentToolLn, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			log.Fatal(err)
-		}
-		endpoints = endpoints.WithPrivateAgentToolGateway("http://" + agentToolLn.Addr().String())
-		config.SetCurrent(endpoints)
-		log.Printf("agent tool gateway=%s", endpoints.AgentToolGateway)
-		e.ConfigureControl(engine.ControlConfig{Token: endpoints.ControlToken, FallbackURL: endpoints.WorkerFallbackURL, APIURL: endpoints.APIBase})
-		listenAddr := endpoints.ListenAddr
-		syncSvc = tracker.NewService()
-		token := *mcpToken
-		if token == "" {
-			token = os.Getenv("AGENTFLOW_MCP_TOKEN")
-		}
-		if token != "" {
-			syncSvc.SetAuthToken(token)
-		}
-		gin.SetMode(gin.ReleaseMode)
-		cfg := s.SyncConfig()
-		syncSvc.ConfigureWithStore(cfg, s)
-		if cfg.AutoSyncEnabled {
-			syncSvc.StartAutoSync(s)
-		}
-		syncSvc.StartMRStateSync(s)
-		notifications := notification.New(s)
-		opts := httpapi.BackgroundOptions{}
-		if inherited {
-			log.Printf("taking over listener %s from pid %d; startup recovery waits for it to exit", mainLn.Addr(), os.Getppid())
-			opts.RecoveryGate = predecessorExited()
-		}
-		handler, bg := httpapi.NewWithNotificationsAndBackground(claimCtx, s, e, syncSvc, *basicUser, *basicPass, notifications, opts)
-		background = bg
-		defer background.Stop()
-		notifications.Start(claimCtx)
-		srv = &http.Server{Addr: listenAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
-		agentToolSrv = &http.Server{Handler: httpapi.AgentToolHandler(handler), ReadHeaderTimeout: 10 * time.Second}
-		go func() {
-			if err := agentToolSrv.Serve(agentToolLn); err != nil && err != http.ErrServerClosed {
-				log.Printf("agent tool gateway: %v", err)
-			}
-		}()
+	syncSvc := tracker.NewService()
+	token := *mcpToken
+	if token == "" {
+		token = os.Getenv("AGENTFLOW_MCP_TOKEN")
+	}
+	if token != "" {
+		syncSvc.SetAuthToken(token)
+	}
+	gin.SetMode(gin.ReleaseMode)
+	cfg := s.SyncConfig()
+	syncSvc.ConfigureWithStore(cfg, s)
+	if cfg.AutoSyncEnabled {
+		syncSvc.StartAutoSync(s)
 	}
 
-	// Configure control endpoints and wire the API's Runner transport before
-	// claiming work: startup must not execute nodes against an unconfigured engine.
-	e.StartMaintenance(claimCtx)
-	if executeRuns {
-		e.StartClaimLoop(claimCtx)
+	handler := httpapi.New(s, syncSvc, *basicUser, *basicPass)
+	srv := &http.Server{Addr: endpoints.ListenAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+
+	readyStatus := handoverStatus
+	if inherited {
+		log.Printf("taking over listener %s from pid %d", mainLn.Addr(), os.Getppid())
 	}
-	stopCLIUpdates := startManagedCLIUpdates(claimCtx, role, executeRuns)
-	defer stopCLIUpdates()
+
 	var handedOver atomic.Bool
 	stopped := make(chan struct{})
 	go func() {
 		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-		if role != "worker" {
-			signal.Notify(sig, syscall.SIGHUP)
-		}
+		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	wait:
 		for received := range sig {
 			if received != syscall.SIGHUP {
-				log.Printf("shutting down %s on %s: stop claiming, drain local work, then stop HTTP...", role, received)
+				log.Printf("shutting down on %s", received)
 				break
 			}
-			log.Printf("%s: handing listener %s over to a new process...", received, mainLn.Addr())
+			log.Printf("handing listener %s over to a new process...", mainLn.Addr())
 			successor, err := handover(mainLn, handoverReadyTimeout)
 			if err != nil {
 				log.Printf("handover failed, this process keeps serving: %v", err)
@@ -298,48 +156,14 @@ func main() {
 			handedOver.Store(true)
 			srv.SetKeepAlivesEnabled(false)
 			_ = mainLn.Close()
-			background.HandedOver()
-			log.Printf("handover complete: pid %d serves new requests; draining in-flight work", successor.Pid)
+			log.Printf("handover complete: pid %d serves new requests", successor.Pid)
 			break wait
 		}
-		go func() {
-			for received := range sig {
-				log.Printf("ignoring %s while draining", received)
-			}
-		}()
-		stopClaim()
-		background.StopClaiming()
-		if syncSvc != nil {
-			syncSvc.StopMRStateSync()
-			syncSvc.StopAutoSync()
-		}
-		stopCLIUpdates() // Cancel updater subprocesses and join before draining.
-		drainTimeout := resolveDrainTimeout()
-		drainCtx, cancelDrain := context.WithTimeout(context.Background(), drainTimeout)
-		defer cancelDrain()
-		if err := e.Drain(drainCtx); err != nil {
-			log.Printf("drain timeout with %d active run(s): %v", e.ActiveRunCount(), err)
-		} else {
-			log.Printf("all local runs drained")
-		}
-		if background != nil {
-			if n := background.Inflight(); n > 0 {
-				log.Printf("waiting up to %s for %d in-process task(s) (conversations, clarifications, follow-ups, handoffs)", drainTimeout, n)
-			}
-			if err := background.WaitInflight(drainCtx); err != nil {
-				log.Printf("drain timeout with %d in-process task(s): %v", background.Inflight(), err)
-			} else {
-				log.Printf("all in-process tasks drained")
-			}
-		}
+		syncSvc.StopAutoSync()
 		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancelShutdown()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			log.Printf("http shutdown: %v", err)
-		}
-		background.Stop()
-		if agentToolSrv != nil {
-			_ = agentToolSrv.Shutdown(shutdownCtx)
 		}
 		s.Close()
 		close(stopped)
@@ -349,94 +173,15 @@ func main() {
 		displayAddr = "localhost" + displayAddr
 	}
 	serve := func() error { return srv.Serve(mainLn) }
-	if role != "worker" && *tlsCert != "" && *tlsKey != "" {
-		log.Printf("LoopForge %s listening on https://%s", role, displayAddr)
+	if *tlsCert != "" && *tlsKey != "" {
+		log.Printf("MuseForge api listening on https://%s", displayAddr)
 		serve = func() error { return srv.ServeTLS(mainLn, *tlsCert, *tlsKey) }
 	} else {
-		log.Printf("LoopForge %s listening on http://%s", role, displayAddr)
+		log.Printf("MuseForge api listening on http://%s", displayAddr)
 	}
 	signalReady(readyStatus)
 	if err := serve(); err != nil && err != http.ErrServerClosed && !handedOver.Load() {
-		stopClaim()
-		stopCLIUpdates() // log.Fatal bypasses deferred cleanup.
 		log.Fatal(err)
 	}
 	<-stopped
-}
-
-// resolveDrainTimeout bounds how long a stopping or handed-over process waits
-// for local runs and in-process tasks; long tasks may outlive several deploys.
-func resolveDrainTimeout() time.Duration {
-	drainTimeout := 120 * time.Minute
-	if raw := strings.TrimSpace(os.Getenv("AGENTFLOW_DRAIN_TIMEOUT")); raw != "" {
-		if parsed, parseErr := time.ParseDuration(raw); parseErr == nil && parsed > 0 {
-			drainTimeout = parsed
-		}
-	}
-	return drainTimeout
-}
-
-func startManagedCLIUpdates(ctx context.Context, role string, executeRuns bool) func() {
-	root := strings.TrimSpace(os.Getenv("AGENTFLOW_MANAGED_CLI_ROOT"))
-	// Never infer a root or opt personal runners/API-only processes into updates.
-	if !executeRuns || (role != "worker" && role != "all") || root == "" {
-		return func() {}
-	}
-	return managedcli.Start(ctx, root)
-}
-
-func workerHandler(e *engine.Engine) http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_, _ = fmt.Fprintf(w, `{"status":"ok","role":"worker","activeRuns":%d}`, e.ActiveRunCount())
-	})
-	mux.HandleFunc("POST /internal/runs/{id}/interrupt", e.HandleRunInterrupt)
-	mux.HandleFunc("POST /internal/runs/promote", e.HandleQueuedRunPromotion)
-	mux.HandleFunc("POST /internal/workspace-checkpoint", e.HandleWorkspaceCheckpoint)
-	return mux
-}
-
-func resolveRole(override string) (string, error) {
-	role := strings.ToLower(strings.TrimSpace(override))
-	if role == "" {
-		role = strings.ToLower(strings.TrimSpace(os.Getenv("AGENTFLOW_ROLE")))
-	}
-	if role == "" {
-		role = "all"
-	}
-	switch role {
-	case "api", "worker", "all":
-		return role, nil
-	default:
-		return "", fmt.Errorf("invalid role %q (want api, worker, or all)", role)
-	}
-}
-
-func resolveWorkspaceRoot(override string) (string, error) {
-	if root := strings.TrimSpace(override); root != "" {
-		return root, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve default sandbox workspace root: %w", err)
-	}
-	if strings.TrimSpace(home) == "" {
-		return "", fmt.Errorf("resolve default sandbox workspace root: user home is empty")
-	}
-	return filepath.Join(home, ".agentflow", "workspace"), nil
-}
-
-func attachPreviewStore(e *engine.Engine, s *repo.Store) {
-	cfg := preview.LoadConfig()
-	e.SetPreview(preview.NewService(s, preview.NewDBStore(s), cfg))
-	if cfg.PublicHost != "" {
-		log.Printf("preview gateway path=/preview/{token}/ public=%s://%s", cfg.PublicScheme, cfg.PublicHost)
-	} else {
-		log.Printf("preview gateway path=/preview/{token}/")
-	}
 }

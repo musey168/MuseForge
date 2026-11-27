@@ -4,12 +4,30 @@ import (
 	"fmt"
 	"maps"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/runtime"
 )
+
+// resolveMCPHeaders expands the credential placeholders an MCP asset carries.
+// The personal build keeps no MCP catalogue, so this only ever serves a
+// definition injected by a test or a hand-written sync config.
+func resolveMCPHeaders(m domain.MCPServerDefinition) (map[string]string, error) {
+	out := maps.Clone(m.Headers)
+	for key, value := range out {
+		out[key] = os.Expand(value, func(placeholder string) string {
+			for _, prefix := range []string{"secret:", "env:"} {
+				if name, ok := strings.CutPrefix(placeholder, prefix); ok {
+					return os.Getenv(name)
+				}
+			}
+			return os.Getenv(placeholder)
+		})
+	}
+	return out, nil
+}
 
 type mcpBinding struct {
 	URL     string
@@ -34,7 +52,7 @@ func bindTrackerMCP(kind string, cfg domain.SyncConfig, servers []domain.MCPServ
 		if u := strings.TrimSpace(catalog.URL); u != "" {
 			out.URL = u
 		}
-		if hdrs, err := runtime.ResolveMCPHeaders(catalog); err == nil && len(hdrs) > 0 {
+		if hdrs, err := resolveMCPHeaders(catalog); err == nil && len(hdrs) > 0 {
 			out.Headers = maps.Clone(hdrs)
 			out.Source = "catalog:" + catalog.ID
 		}
@@ -47,7 +65,7 @@ func bindTrackerMCP(kind string, cfg domain.SyncConfig, servers []domain.MCPServ
 				gfURL = strings.TrimSpace(cfg.GongfengMCPURL)
 			}
 			if out.URL != "" && sameMCPHost(out.URL, gfURL) {
-				if hdrs, err := runtime.ResolveMCPHeaders(gf); err == nil && headerHas(hdrs, "Authorization") {
+				if hdrs, err := resolveMCPHeaders(gf); err == nil && headerHas(hdrs, "Authorization") {
 					out.Headers = maps.Clone(hdrs)
 					out.Source = "catalog:" + gf.ID + "+tapd-url"
 				}

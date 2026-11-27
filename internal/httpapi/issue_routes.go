@@ -39,123 +39,6 @@ func (h issuesHandlers) addIssueComment(c *gin.Context, issue domain.Issue) {
 	}
 }
 
-func (h issuesHandlers) issueRuns(c *gin.Context, issue domain.Issue) {
-	// 返回该 issue 的所有历史 runs（按时间倒序）
-	allRuns, err := h.repo.RunSummariesFor(domain.AnalyticsFilter{}, issue.ID)
-	if err != nil {
-		respond(c, err)
-		return
-	}
-	var issueRuns []domain.Run
-	for _, r := range allRuns {
-		if r.ExecutionContext.IssueID == issue.ID {
-			issueRuns = append(issueRuns, r)
-		}
-	}
-	c.JSON(200, runSummaries(issueRuns))
-}
-
-// clarificationSubmission is the clarify panel's save payload: a draft
-// (Ready false), a final summary (Ready true), or a write-back retry.
-type clarificationSubmission struct {
-	Summary   string                         `json:"summary"`
-	Ready     bool                           `json:"ready"`
-	History   []domain.ClarificationMessage  `json:"history"`
-	Questions []domain.ClarificationQuestion `json:"questions"`
-	Retry     bool                           `json:"retry"`
-}
-
-func (h issuesHandlers) submitIssueClarification(c *gin.Context, issue domain.Issue) {
-	var request clarificationSubmission
-	if !decode(c, &request) {
-		return
-	}
-	issue, err := applyClarificationSubmission(issue, request)
-	if err != nil {
-		respond(c, err)
-		return
-	}
-	if err := h.repo.PutIssue(issue); err != nil {
-		respond(c, err)
-		return
-	}
-	assessment := issue.Clarification
-	if request.Retry && assessment.WriteBackStatus == "pending" {
-		if !issueSyncedFromTracker(issue) {
-			assessment.WriteBackStatus = "skipped"
-		} else {
-			body := clarificationComment(issue, assessment.Summary)
-			if err := h.sync.WriteBackClarification(h.repo, issue, body); err != nil {
-				assessment.WriteBackStatus = "failed"
-				assessment.WriteBackError = err.Error()
-			} else {
-				assessment.WriteBackStatus = "succeeded"
-				assessment.WriteBackError = ""
-				assessment.WriteBackAt = time.Now().UTC()
-			}
-		}
-		issue.Clarification = assessment
-		if err := h.repo.PutIssue(issue); err != nil {
-			respond(c, err)
-			return
-		}
-	} else if request.Ready && assessment.WriteBackStatus == "pending" && !issueSyncedFromTracker(issue) {
-		assessment.WriteBackStatus = "skipped"
-		issue.Clarification = assessment
-		if err := h.repo.PutIssue(issue); err != nil {
-			respond(c, err)
-			return
-		}
-	}
-	stored, _ := h.repo.Issue(issue.ID)
-	c.JSON(200, stored)
-}
-
-// applyClarificationSubmission updates the issue's clarification state for a
-// submission: drafts only record progress, a final summary is appended to the
-// description, and final/retry
-// submissions mark tracker write-back pending unless this exact summary was
-// already written back.
-func applyClarificationSubmission(issue domain.Issue, request clarificationSubmission) (domain.Issue, error) {
-	summary := strings.TrimSpace(request.Summary)
-	if request.Ready && !request.Retry && summary == "" {
-		return issue, HTTPError{Status: http.StatusBadRequest, Message: "clarification summary is required"}
-	}
-	assessment := issue.Clarification
-	if !request.Retry {
-		assessment.Summary = summary
-		assessment.History = request.History
-		assessment.Questions = request.Questions
-		if request.Ready {
-			assessment.Status = domain.ClarificationReady
-			promoteClarifiedIssueTodo(&issue)
-		} else {
-			assessment.Status = "in_progress"
-		}
-	}
-	if request.Ready || request.Retry {
-		if strings.TrimSpace(assessment.Summary) == "" {
-			return issue, HTTPError{Status: http.StatusBadRequest, Message: "clarification summary is required"}
-		}
-		fingerprint := fmt.Sprintf("%x", sha256.Sum256([]byte(assessment.Summary)))
-		if assessment.WriteBackStatus != "succeeded" || assessment.WriteBackFingerprint != fingerprint {
-			assessment.WriteBackStatus = "pending"
-			assessment.WriteBackError = ""
-			assessment.WriteBackFingerprint = fingerprint
-		}
-	}
-	issue.Clarification = assessment
-	if request.Ready || request.Retry {
-		issue.Description = appendClarificationDescription(issue.Description, assessment.Summary)
-	}
-	return issue, nil
-}
-
-// issueSyncedFromTracker reports whether clarification can be written back
-// to an external tracker ticket.
-func issueSyncedFromTracker(issue domain.Issue) bool {
-	return issue.ExternalRef != nil && (issue.Source == "gongfeng" || issue.Source == "tapd")
-}
 
 func (h issuesHandlers) reopenIssue(c *gin.Context, issue domain.Issue) {
 	reopened, err := h.repo.ReopenDeliveredIssue(issue.ID)
@@ -173,11 +56,6 @@ func (h issuesHandlers) reopenIssue(c *gin.Context, issue domain.Issue) {
 
 func (h issuesHandlers) closeIssue(c *gin.Context, issue domain.Issue) {
 	alreadyClosed := issue.ManuallyClosed()
-	// The busy guard reads Task status, which trails a finished Run until the
-	// next sync; without this a just-succeeded requirement answers 409.
-	if h.tasks != nil {
-		h.tasks.settleIssueTasks(issue.ID)
-	}
 	closed, err := h.repo.CloseIssue(issue.ID)
 	if err != nil {
 		status := http.StatusInternalServerError
@@ -198,29 +76,6 @@ func (h issuesHandlers) closeIssue(c *gin.Context, issue domain.Issue) {
 	h.writeIssueView(c, 200, closed)
 }
 
-func (h issuesHandlers) resyncTAPDIssue(c *gin.Context, issue domain.Issue) {
-	if issue.Source != "tapd" || issue.ExternalRef == nil || strings.TrimSpace(issue.ExternalRef.ExternalID) == "" {
-		c.JSON(400, map[string]string{"error": "仅 TAPD 来源的需求支持重新同步"})
-		return
-	}
-	if h.sync == nil {
-		c.JSON(400, map[string]string{"error": "TAPD 同步未配置"})
-		return
-	}
-	h.configureSync(h.repo.SyncConfig())
-	updated, err := h.sync.ResyncTAPDIssue(h.repo, issue)
-	if err != nil {
-		respond(c, err)
-		return
-	}
-	saved, err := h.appendStoredOperation(c, updated.ID, "resync-tapd", "从 TAPD 重新同步需求内容")
-	if err != nil {
-		respond(c, err)
-		return
-	}
-	h.writeIssueView(c, 200, saved)
-}
-
 func (h issuesHandlers) issueRequirement(c *gin.Context, issue domain.Issue) {
 	snap, ok := h.repo.RequirementSnapshot(issue.ID)
 	if !ok {
@@ -230,136 +85,15 @@ func (h issuesHandlers) issueRequirement(c *gin.Context, issue domain.Issue) {
 	c.JSON(http.StatusOK, snap)
 }
 
-func (h issuesHandlers) issueSOPs(c *gin.Context, issue domain.Issue) {
-	if c.Request.Method == http.MethodGet {
-		project, _ := h.repo.Project(issue.ProjectID)
-		c.JSON(http.StatusOK, map[string]any{
-			"playbookId": issue.PlaybookID,
-			"playbooks":  project.Playbooks(),
-			"bindings":   domain.ResolveSOPBindings(issue, project),
-		})
-		return
-	}
-	var request struct {
-		PlaybookID string                    `json:"playbookId"`
-		Bindings   *[]domain.IssueSOPBinding `json:"bindings"`
-	}
-	if !decode(c, &request) {
-		return
-	}
-	project, _ := h.repo.Project(issue.ProjectID)
-	if id := strings.TrimSpace(request.PlaybookID); id != "" {
-		if _, ok := project.Playbook(id); !ok {
-			c.JSON(http.StatusBadRequest, map[string]string{"error": "未知的需求套餐"})
-			return
-		}
-		issue.PlaybookID = id
-		if request.Bindings == nil {
-			issue.SOPBindings = nil
-		}
-		if book, ok := project.Playbook(id); ok && len(book.Bindings) > 0 {
-			issue.WorkflowID = book.Bindings[0].WorkflowID
-		}
-	}
-	if request.Bindings != nil {
-		bindings, err := h.normalizeIssueSOPBindings(issue.ProjectID, *request.Bindings)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		if bindings == nil {
-			bindings = []domain.IssueSOPBinding{}
-		}
-		issue.SOPBindings = bindings
-		if len(bindings) > 0 {
-			issue.WorkflowID = bindings[0].WorkflowID
-		}
-	}
-	if issue.WithoutSOP() && strings.TrimSpace(issue.WorkflowID) != "" {
-		issue.SOPMode, issue.AutomationState = domain.IssueSOPUse, "eligible"
-	}
-	if err := h.repo.PutIssue(issue); err != nil {
-		respond(c, err)
-		return
-	}
-	stored, _ := h.repo.Issue(issue.ID)
-	c.JSON(http.StatusOK, stored)
-}
-
-func (h issuesHandlers) dispatchIssueRoute(c *gin.Context, issue domain.Issue) {
-	var request struct {
-		Rerun      bool   `json:"rerun"`
-		WorkflowID string `json:"workflowId"`
-	}
-	if !decodeOptional(c, &request) {
-		return
-	}
-	var triggerUserID int64
-	if current, ok := h.requestUser(c.Request, true); ok && current != nil && current.ID > 0 {
-		triggerUserID = current.ID
-	}
-	req := dispatchRequest{
-		IssueID: issue.ID, WorkflowID: request.WorkflowID, Rerun: request.Rerun, TriggerUserID: triggerUserID,
-	}
-	if origin, ok := botStartOriginFrom(c.Request.Context()); ok {
-		req.ChatOrigin = &origin
-	}
-	task, err := dispatchIssue(h.deps, req)
-	if err != nil {
-		respond(c, err)
-		return
-	}
-	detail := "触发 LOOP"
-	if request.Rerun {
-		detail = "重新运行 LOOP"
-	}
-	_, _ = h.appendStoredOperation(c, issue.ID, "dispatch", detail)
-	c.JSON(201, publicTask(task))
-}
-
-// deleteIssue checks all execution history before cleaning any settled run.
+// deleteIssue removes a requirement and its notes. Nothing executes it, so
+// there is no run history to check first.
 func (h issuesHandlers) deleteIssue(c *gin.Context, issue domain.Issue) {
-	mode := repo.IssueDeleteNormal
-	if c.Query("force") == "true" {
-		mode = repo.IssueDeleteForce
-	}
-	// Same as close: Task status trails a just-cancelled Run until the next
-	// sync, which would answer 409 "正在执行 LOOP" for a stopped requirement.
-	if h.tasks != nil {
-		h.tasks.settleIssueTasks(issue.ID)
-	}
-	ids, err := h.repo.IssueDeletionRuns(issue.ID, mode)
-	if err == nil {
-		for _, id := range ids {
-			if err = h.engine.DeleteRun(id); err != nil {
-				break
-			}
-		}
-	}
-	if err == nil {
-		err = h.repo.DeleteIssueAfterRunCleanup(issue.ID, mode)
-	}
-	if err != nil {
-		switch {
-		case errors.Is(err, repo.ErrIssueForceRequired):
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "deletionRequiresForce": true})
-		case errors.Is(err, repo.ErrIssueBusy):
-			// Report the same concrete reason shown by list/detail affordances,
-			// including when execution history changed after the menu was opened.
-			if current, ok := h.repo.Issue(issue.ID); ok {
-				if states, checkErr := h.repo.IssueDeletionStates([]domain.Issue{current}); checkErr == nil {
-					if block := states[issue.ID].Block; block != nil {
-						c.JSON(http.StatusConflict, gin.H{"error": block.Reason, "deletionBlock": block})
-						return
-					}
-				}
-			}
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-		case errors.Is(err, repo.ErrIssueNotFound):
+	if err := h.repo.DeleteIssue(issue.ID); err != nil {
+		if errors.Is(err, repo.ErrIssueNotFound) {
 			c.JSON(http.StatusNotFound, map[string]string{"error": "issue not found"})
-		default:
-			respond(c, err)
+			return
 		}
+		respond(c, err)
 		return
 	}
 	c.Status(http.StatusNoContent)

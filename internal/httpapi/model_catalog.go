@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/runtime"
+	"agentflow/internal/agentcli"
 
 )
 
@@ -379,7 +379,7 @@ func assistantModelFamily(id, engine string) string {
 		return "grok"
 	case id == "muse" || strings.HasPrefix(id, "muse-"):
 		return "muse"
-	case id == "composer" || strings.HasPrefix(id, "composer-") || (engine == runtime.AgentCLICursor && (id == "auto" || id == "auto-smart")):
+	case id == "composer" || strings.HasPrefix(id, "composer-") || (engine == agentcli.AgentCLICursor && (id == "auto" || id == "auto-smart")):
 		return "cursor"
 	case strings.HasPrefix(id, "kimi") || id == "k3" || strings.HasPrefix(id, "k3-") || strings.HasPrefix(id, "k3."):
 		return "kimi"

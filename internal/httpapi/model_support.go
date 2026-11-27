@@ -20,7 +20,7 @@ import (
 	"agentflow/internal/domain"
 	"agentflow/internal/managedcli"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
+	"agentflow/internal/agentcli"
 
 	"github.com/gin-gonic/gin"
 
@@ -86,7 +86,7 @@ func resolveCodeBuddyBin() (string, error) {
 			return c, nil
 		}
 	}
-	if path, ok := runtime.OnDemandCLIPath("codebuddy"); ok {
+	if path, ok := agentcli.OnDemandCLIPath("codebuddy"); ok {
 		return path, nil
 	}
 	return "", assistantCLIMissingError{engine: assistantEngineCodeBuddy, binary: "codebuddy"}
@@ -170,26 +170,6 @@ func scheduleLoginRunner(r *repo.Store, userID int64, projectID, engine string) 
 	return machine
 }
 
-func scheduledAssistantDefault(r *repo.Store, user domain.User, projectID, model string) string {
-	model = strings.TrimSpace(model)
-	if !assistantModelUnspecified(model) {
-		return model
-	}
-	if preferred := personalDefaultModel(user); preferred != "" {
-		return preferred
-	}
-	for _, option := range assistantEngineOptions(user, false) {
-		if !scheduleHasPersonalCredential(r, user, projectID, option.ID) {
-			continue
-		}
-		if option.ID == assistantEngineCodeBuddy {
-			// Resolve the legacy default with this account's CodeBuddy catalog.
-			return model
-		}
-		return featureDefaultModel(user, option.ID)
-	}
-	return model
-}
 
 func scheduleCredentialUser(r *repo.Store, user domain.User, projectID, engine string) (domain.User, []string, bool) {
 	if scheduleHasPersonalCredential(r, user, projectID, engine) {
@@ -352,7 +332,7 @@ func assistantSystemPromptText() string {
 
 func decodeAssistantCLIResult(final string, resultError bool, processErr error, stderr []string) (string, error) {
 	if assistantCLIMaxTurns(final) {
-		return "", runtime.ErrMaxTurns
+		return "", agentcli.ErrMaxTurns
 	}
 	if processErr != nil {
 		if len(stderr) > 0 {
@@ -411,9 +391,6 @@ func assistantExecutor(id string) string {
 	}
 }
 
-// errAssistantCredentialRejected means CodeBuddy answered the turn with an
-// authorization failure instead of model output; retrying cannot help.
-var errAssistantCredentialRejected = errors.New("CodeBuddy 拒绝了你的 API Key（401/403）：请在「个人配置 → CodeBuddy API Key」确认网络环境与创建 Key 的站点一致，且填的是 CodeBuddy 的 Key，而不是 DeepSeek、OpenAI 等第三方模型的 Key")
 
 // dropNativeArg removes a flag and its value from an argument list.
 func dropNativeArg(argv []string, flag string) []string {
@@ -500,7 +477,7 @@ func assistantEngineBinary(kind string) string {
 	case assistantEngineClaude:
 		return "claude"
 	default:
-		return runtime.AgentCLIBinary(kind)
+		return agentcli.AgentCLIBinary(kind)
 	}
 }
 
@@ -517,32 +494,6 @@ func workbenchProjectAllowed(d *deps, c *gin.Context, projectID string, userID i
 	return workbenchProjectAllowsUser(p, userID, d.isPlatformAdmin(c.Request))
 }
 
-// errAssistantExecutionUnavailable means the machine that owns the work is
-// not reachable right now.
-var errAssistantExecutionUnavailable = errors.New("conversation execution machine unavailable")
-
-func validateUserKnowledgeRefsWithDeps(d *deps, uid int64, refs []domain.KnowledgeRef) error {
-	if len(refs) == 0 {
-		return nil
-	}
-	if err := domain.ValidateKnowledgeRefs(refs); err != nil {
-		return err
-	}
-	if d == nil {
-		return nil
-	}
-	svc := d.knowledgeService()
-	if svc == nil {
-		return nil
-	}
-	for _, ref := range refs {
-		conn, ok := svc.GetConnector(uid, ref.ConnectorID)
-		if !ok || !conn.Enabled {
-			return fmt.Errorf("所选知识库连接器 %s 不存在、已停用或不属于当前用户", ref.ConnectorID)
-		}
-	}
-	return nil
-}
 func repositoryBaseBranchName(rc domain.RepositoryContext) string {
 	if branch := strings.TrimSpace(rc.BaseBranch); branch != "" {
 		return branch

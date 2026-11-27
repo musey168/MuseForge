@@ -7,18 +7,18 @@ import (
 	"strings"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/runtime"
+	"agentflow/internal/agentcli"
 )
 
 // assistantModelEfforts resolves the same capabilities as the picker for
 // custom gateways. Cursor uses the saved family mapping that drives its CLI.
 func assistantModelEfforts(ctx context.Context, user domain.User, model string) []string {
 	engine, _ := assistantModelEngine(model)
-	if engine == assistantEngineCodeBuddy || engine == runtime.AgentCLICursor {
+	if engine == assistantEngineCodeBuddy || engine == agentcli.AgentCLICursor {
 		return assistantModelEffortsIn(model, assistantEngineCustomModels(user, engine))
 	}
 	_, baseURL := assistantEngineCredential(user, engine)
-	if engine == runtime.AgentCLIKimi && baseURL != "" {
+	if engine == agentcli.AgentCLIKimi && baseURL != "" {
 		return nil
 	}
 	models, _ := assistantDiscoveredModelsFor(ctx, user, engine)
@@ -26,7 +26,7 @@ func assistantModelEfforts(ctx context.Context, user domain.User, model string) 
 }
 
 func assistantModelEffortsForBaseURL(model string, catalog []domain.CLIModel, baseURL string) []string {
-	if baseURL != "" && strings.HasPrefix(strings.TrimSpace(model), runtime.AgentCLIKimi+":") {
+	if baseURL != "" && strings.HasPrefix(strings.TrimSpace(model), agentcli.AgentCLIKimi+":") {
 		return nil
 	}
 	return assistantModelEffortsIn(model, catalog)
@@ -45,11 +45,11 @@ func assistantModelEffortsInCatalog(model string, catalog []domain.CLIModel, run
 	supported := domain.ExecutorEffortLevels[engine]
 	builtins := builtinExecutorModels[engine]
 	builtin := slices.IndexFunc(builtins, func(model builtinExecutorModel) bool { return model.id == id })
-	if engine == runtime.AgentCLICursor {
-		supported = runtime.CursorModelEfforts(id, catalog)
-	} else if engine == runtime.AgentCLIAntigravity {
-		supported = runtime.AgyModelEfforts(id)
-	} else if engine == runtime.AgentCLIKimi && builtin >= 0 {
+	if engine == agentcli.AgentCLICursor {
+		supported = agentcli.CursorModelEfforts(id, catalog)
+	} else if engine == agentcli.AgentCLIAntigravity {
+		supported = agentcli.AgyModelEfforts(id)
+	} else if engine == agentcli.AgentCLIKimi && builtin >= 0 {
 		supported = builtins[builtin].efforts
 	}
 	for _, item := range catalog {
@@ -60,9 +60,9 @@ func assistantModelEffortsInCatalog(model string, catalog []domain.CLIModel, run
 		if configured == nil {
 			configured = item.DiscoveredReasoningEfforts
 		}
-		if runnerLogin && engine == runtime.AgentCLIAntigravity && len(item.Efforts) > 0 {
+		if runnerLogin && engine == agentcli.AgentCLIAntigravity && len(item.Efforts) > 0 {
 			supported = nil
-			for _, level := range runtime.AgyAccountModelEfforts(id) {
+			for _, level := range agentcli.AgyAccountModelEfforts(id) {
 				if item.Efforts[level] != "" {
 					supported = append(supported, level)
 				}
@@ -75,7 +75,7 @@ func assistantModelEffortsInCatalog(model string, catalog []domain.CLIModel, run
 			continue
 		}
 		advertised := *configured
-		if engine == runtime.AgentCLIKimi || engine == runtime.AgentCLIDeepSeek {
+		if engine == agentcli.AgentCLIKimi || engine == agentcli.AgentCLIDeepSeek {
 			advertised = slices.Clone(advertised)
 			for i, level := range advertised {
 				switch level {
@@ -97,7 +97,7 @@ func assistantModelEffortsInCatalog(model string, catalog []domain.CLIModel, run
 	if builtin >= 0 {
 		return builtins[builtin].efforts
 	}
-	if runtime.IsAgentCLI(engine) {
+	if agentcli.IsAgentCLI(engine) {
 		if len(builtins) > 0 {
 			return nil
 		}
@@ -152,5 +152,5 @@ func validateAssistantModelEffort(model, effort string, efforts []string) error 
 
 // assistantCursorCatalog is the user's saved Cursor model list.
 func assistantCursorCatalog(user domain.User) []domain.CLIModel {
-	return user.AgentCLICredentials[runtime.AgentCLICursor].Models
+	return user.AgentCLICredentials[agentcli.AgentCLICursor].Models
 }
