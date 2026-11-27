@@ -18,12 +18,6 @@ import (
 
 const assistantDefaultModel = "default"
 
-// assistantChatDefaultModel is the model the legacy sponsor account lends.
-// New chat conversations preselect the shared key's default model when one is
-// configured; otherwise chat uses the operator's default, like clarification,
-// scheduled prompts, reports and executors.
-const assistantChatDefaultModel = assistantSponsoredModel
-
 type assistantModel struct {
 	ID      string   `json:"id"`
 	Name    string   `json:"name"`
@@ -39,11 +33,6 @@ type assistantModelCatalog struct {
 	Preferences    *domain.ExecutorDefaults `json:"preferences,omitempty"`
 	DefaultEfforts []string         `json:"defaultEfforts,omitempty"`
 	Models         []assistantModel `json:"models"`
-	// SponsoredModels is set when users without their own CodeBuddy API Key
-	// may still chat on the platform's shared key, limited to these models;
-	// SponsoredModel is the first (the default).
-	SponsoredModel  string   `json:"sponsoredModel,omitempty"`
-	SponsoredModels []string `json:"sponsoredModels,omitempty"`
 	// Engines lists the CLIs a signed-in user can switch between.
 	Engines             []assistantEngineOption   `json:"engines,omitempty"`
 	CursorModelsPending bool                      `json:"cursorModelsPending,omitempty"`
@@ -215,7 +204,7 @@ func personalCodeBuddyCatalog(ctx context.Context, user domain.User) assistantMo
 		return assistantModelCatalog{Default: assistantDefaultModel}
 	}
 	refreshOfficialCodeBuddyModels(ctx, user)
-	catalog := assistantChatCatalog(user.CodeBuddyInternetEnvironment, user.CodeBuddyAPIKey, nil)
+	catalog := loadAssistantModels(user.CodeBuddyInternetEnvironment, user.CodeBuddyAPIKey)
 	if personal := codeBuddyPersonalModels(ctx, user); len(personal) > 0 {
 		catalog.Default = personal[0].ID
 		if listed := selectableCodeBuddyModels(personal); len(listed) > 0 {
@@ -272,31 +261,6 @@ func codeBuddyPersonalModels(ctx context.Context, user domain.User) []assistantM
 	return models
 }
 
-// assistantChatCatalog is the catalog used by chat conversations: the same
-// models, with the shared key's models listed and its default preselected.
-// Pass shared only for turns that run on the shared key (see chatCatalog).
-func assistantChatCatalog(environment, apiKey string, shared []string) assistantModelCatalog {
-	catalog := loadAssistantModels(environment, apiKey)
-	if len(shared) == 0 {
-		return catalog
-	}
-	listed := map[string]bool{}
-	for _, model := range catalog.Models {
-		listed[model.ID] = true
-	}
-	for _, id := range shared {
-		if !listed[id] {
-			name := id
-			if id == assistantChatDefaultModel {
-				name = "Deepseek-V4.1-Flash"
-			}
-			catalog.Models = append(catalog.Models, assistantListedModel(id, name, ""))
-			listed[id] = true
-		}
-	}
-	catalog.Default = shared[0]
-	return catalog
-}
 
 // loadAssistantModels never blocks on discovery; validation accepts models the
 // caller's environment has advertised.

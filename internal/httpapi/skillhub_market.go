@@ -47,7 +47,7 @@ type skillhubHandlers struct {
 }
 
 func (h *skillhubHandlers) userKey(c *gin.Context) string {
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok || user == nil {
 		return ""
 	}

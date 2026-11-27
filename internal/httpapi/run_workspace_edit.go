@@ -33,7 +33,7 @@ func (h *runsHandlers) workspaceEditActor(c *gin.Context) (domain.Run, int64, bo
 // workspace, including restoring its snapshot. Editing also needs the
 // coordination checks in workspaceEditAccess.
 func (h *runsHandlers) workspaceOwnerAccess(r *http.Request, run domain.Run) (int64, int, string) {
-	user, ok := h.requestUser(r, true)
+	user, ok := h.requestUser(r)
 	if !ok {
 		return 0, http.StatusUnauthorized, "请先登录"
 	}
@@ -148,7 +148,7 @@ func (h *runsHandlers) workspaceEditAllowed(r *http.Request, run domain.Run, use
 	if run.IsPersonalWorkspace() {
 		return userID > 0 && userID == run.ExecutionContext.ResponsibleUserID
 	}
-	if h.isPlatformAdmin(r) {
+	if h.isAccount(r) {
 		return true
 	}
 	project, ok := h.repo.Project(run.ExecutionContext.ProjectID)

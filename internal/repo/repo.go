@@ -112,15 +112,9 @@ type TasksRepo struct {
 // UsersRepo owns users and their saved credentials.
 type UsersRepo struct {
 	*deps
-	gitHTTPHosts *GitHTTPHostTrustRepo
 	// keyring seals Bot credentials; installed by SetCredentialKeyring.
 	keyringMu sync.RWMutex
 	keyring   *credcrypt.Keyring
-}
-
-// TokensRepo owns API tokens.
-type TokensRepo struct {
-	*deps
 }
 
 // RunsRepo owns runs, their children (nodes/events/telemetry/logs/artifacts),
@@ -171,7 +165,6 @@ type Store struct {
 	*IssuesRepo
 	*TasksRepo
 	*UsersRepo
-	*TokensRepo
 	*RunsRepo
 	*RunnersRepo
 	*DeliveryRepo
@@ -180,11 +173,7 @@ type Store struct {
 	*PreviewsRepo
 	*EngineInstancesRepo
 	*KnowledgeRepo
-	*PlatformSettingsRepo
 	*TrackerRepo
-	*SSHHostTrustRepo
-	*HTTPSHostTrustRepo
-	*GitHTTPHostTrustRepo
 	*NotificationsRepo
 	*BotInteractionsRepo
 	*EvolutionRepo
@@ -197,10 +186,8 @@ func newStore(db *gorm.DB) *Store {
 	s := &Store{deps: d}
 	s.ProjectsRepo = &ProjectsRepo{deps: d}
 	s.ProjectCredentialsRepo = &ProjectCredentialsRepo{deps: d, projects: s.ProjectsRepo}
-	s.GitHTTPHostTrustRepo = &GitHTTPHostTrustRepo{deps: d}
-	s.UsersRepo = &UsersRepo{deps: d, gitHTTPHosts: s.GitHTTPHostTrustRepo}
+	s.UsersRepo = &UsersRepo{deps: d}
 	s.BotInteractionsRepo = &BotInteractionsRepo{deps: d}
-	s.TokensRepo = &TokensRepo{deps: d}
 	s.TasksRepo = &TasksRepo{deps: d}
 	s.NotificationsRepo = &NotificationsRepo{deps: d, users: s.UsersRepo, projects: s.ProjectsRepo, interactions: s.BotInteractionsRepo}
 	s.CatalogRepo = &CatalogRepo{deps: d, projects: s.ProjectsRepo, notifications: s.NotificationsRepo}
@@ -215,10 +202,7 @@ func newStore(db *gorm.DB) *Store {
 	s.EngineInstancesRepo = &EngineInstancesRepo{deps: d}
 	s.KnowledgeRepo = &KnowledgeRepo{deps: d}
 	s.EvolutionRepo = &EvolutionRepo{deps: d, catalog: s.CatalogRepo}
-	s.PlatformSettingsRepo = &PlatformSettingsRepo{deps: d}
 	s.TrackerRepo = &TrackerRepo{deps: d}
-	s.SSHHostTrustRepo = &SSHHostTrustRepo{deps: d}
-	s.HTTPSHostTrustRepo = &HTTPSHostTrustRepo{deps: d}
 	return s
 }
 

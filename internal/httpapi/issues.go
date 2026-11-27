@@ -82,7 +82,7 @@ func (h issuesHandlers) importTAPD(c *gin.Context) {
 	}
 	h.configureSync(h.repo.SyncConfig())
 	var fallbackUserID int64
-	if current, ok := h.requestUser(c.Request, true); ok {
+	if current, ok := h.requestUser(c.Request); ok {
 		fallbackUserID = current.ID
 	}
 	issue, err := h.sync.ImportTAPDStory(h.repo, req.ProjectID, req.URL, fallbackUserID)
@@ -267,7 +267,7 @@ func (h issuesHandlers) issues(c *gin.Context) {
 			h.normalizeLegacyIssueBaseBranch(&v)
 		}
 		if !found && v.AssigneeUserID == 0 {
-			if current, ok := h.requestUser(c.Request, true); ok && current != nil && current.ID > 0 {
+			if current, ok := h.requestUser(c.Request); ok && current != nil && current.ID > 0 {
 				v.AssigneeUserID = current.ID
 			}
 		}
@@ -512,7 +512,7 @@ func (h issuesHandlers) recordIssueOperation(c *gin.Context, issue *domain.Issue
 	if issue == nil {
 		return
 	}
-	user, _ := h.requestUser(c.Request, true)
+	user, _ := h.requestUser(c.Request)
 	actor, id := actorLabel(user)
 	op := domain.IssueOperation{Actor: actor, ActorUserID: id, Action: action, Detail: detail}
 	issue.AppendOperation(op)

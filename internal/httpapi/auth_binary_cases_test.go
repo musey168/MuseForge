@@ -60,7 +60,7 @@ func TestAuthTokenPureBranches(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req = req.WithContext(context.WithValue(req.Context(), requestUserContextKey{}, domainUserToAuth(f.user)))
-	if resolved, ok := d.requestUser(req, true); !ok || resolved.ID != f.user.ID {
+	if resolved, ok := d.requestUser(req); !ok || resolved.ID != f.user.ID {
 		t.Fatalf("context user: %+v %v", resolved, ok)
 	}
 
@@ -320,7 +320,7 @@ func TestTokenZeroIDAndEmptyDelete(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/", nil)
 	req.AddCookie(&http.Cookie{Name: authCookieName, Value: "invalid"})
-	if _, ok := h.requestUser(req, false); ok {
+	if _, ok := h.requestUser(req); ok {
 		t.Fatal("invalid signed cookie authenticated")
 	}
 	rec = httptest.NewRecorder()

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"agentflow/internal/domain"
@@ -17,16 +18,14 @@ import (
 // account.
 //
 // The personal build runs as one person. There is no project membership, no
-// member role and no join request any more, so the guard no longer asks "is
-// this user a member of this project" — it asks "is this the account that
-// holds this project", and it is asked here, in one place, for every caller.
-// Ticket #7 reuses this guard for platform-wide writes; ticket #12 removes it
-// together with the login machinery.
+// member role and no platform administrator, so the guard asks only "is this
+// the account" — once, here, for project-scoped and platform-wide writes
+// alike. Callers with no project IDs get the platform-wide form.
 func (d deps) requireAccountWrite(c *gin.Context, projectIDs ...string) bool {
 	if !authRequired() {
 		return true
 	}
-	user, ok := d.requestUser(c.Request, true)
+	user, ok := d.requestUser(c.Request)
 	if !ok {
 		// A request without a user identity carries its own authorization
 		// (service tokens, the ingestion endpoint).
@@ -58,7 +57,7 @@ func (d deps) accountHoldsProject(projectID string, userID int64) bool {
 // Read access does not grant permission to execute agents in a run workspace.
 // Keep the same predicate for HTTP writes and assistant execution preparation.
 func (d deps) projectWriterAllowed(c *gin.Context, projectID string, userID int64) bool {
-	if !authRequired() || projectID == "" || d.isPlatformAdmin(c.Request) {
+	if !authRequired() || projectID == "" {
 		return true
 	}
 	return d.accountHoldsProject(projectID, userID)
@@ -68,9 +67,6 @@ func (d deps) projectWriterAllowed(c *gin.Context, projectID string, userID int6
 // agent tool session, which carries the user instead of an HTTP request.
 func (d deps) speakerAccountWriter(projectID string, user domain.User, userID int64) bool {
 	if !authRequired() || projectID == "" {
-		return true
-	}
-	if login := strings.TrimSpace(user.LoginName); login != "" && d.repo.IsPlatformAdmin(login) {
 		return true
 	}
 	return d.accountHoldsProject(projectID, userID)
@@ -114,7 +110,7 @@ func (d deps) runWriteGuard() gin.HandlerFunc {
 			return
 		}
 		if run.IsPersonalWorkspace() {
-			user, ok := d.requestUser(c.Request, true)
+			user, ok := d.requestUser(c.Request)
 			if !ok || user.ID <= 0 || user.ID != run.ExecutionContext.ResponsibleUserID {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "无权访问个人工作区"})
 				return
@@ -136,15 +132,15 @@ func (d deps) runWriteGuard() gin.HandlerFunc {
 	}
 }
 
-func (d deps) requirePlatformAdmin(c *gin.Context) bool {
-	if !authRequired() || d.isPlatformAdmin(c.Request) {
-		return true
+// requireWriteOrigin admits a same-origin browser write; the session cookie
+// alone is not enough.
+func requireWriteOrigin(c *gin.Context) bool {
+	origin, err := url.Parse(c.GetHeader("Origin"))
+	if err != nil || origin.Host != c.Request.Host || (origin.Scheme != "http" && origin.Scheme != "https") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "invalid request origin"})
+		return false
 	}
-	if _, ok := d.requestUser(c.Request, true); !ok {
-		return true
-	}
-	c.JSON(403, gin.H{"error": "只有平台管理员可以修改平台级配置"})
-	return false
+	return true
 }
 
 // assetOwner returns the project of a stored asset and whether it is a
@@ -198,7 +194,7 @@ func (d deps) assetWriteGuard() gin.HandlerFunc {
 func (d deps) allowAssetWrite(c *gin.Context, path string) bool {
 	switch path {
 	case "/api/sync/config", "/api/sync/now":
-		return d.requirePlatformAdmin(c)
+		return d.requireAccountWrite(c)
 	case "/api/sync/create":
 		var body struct {
 			IssueID string `json:"issueId"`
@@ -227,7 +223,7 @@ func (d deps) allowAssetWrite(c *gin.Context, path string) bool {
 			return true
 		}
 		if strings.TrimSpace(body.Scope) != "project" {
-			return d.requirePlatformAdmin(c)
+			return d.requireAccountWrite(c)
 		}
 		return d.requireAccountWrite(c, strings.TrimSpace(body.ProjectID))
 	case "/api/schedule-jobs/:id", "/api/schedule-jobs/:id/run":
@@ -268,7 +264,7 @@ func (d deps) allowAssetWrite(c *gin.Context, path string) bool {
 			return false
 		}
 		if reserved {
-			return d.requirePlatformAdmin(c)
+			return d.requireAccountWrite(c)
 		}
 	}
 	if !d.allowStoredAsset(c, kind, id) {
@@ -278,7 +274,7 @@ func (d deps) allowAssetWrite(c *gin.Context, path string) bool {
 		if storedProject, _, found := d.assetOwner(kind, id); found && storedProject != "" {
 			return true
 		}
-		return d.requirePlatformAdmin(c)
+		return d.requireAccountWrite(c)
 	}
 	return d.requireAccountWrite(c, project)
 }
@@ -289,7 +285,7 @@ func (d deps) allowStoredAsset(c *gin.Context, kind, id string) bool {
 		return true
 	}
 	if global {
-		return d.requirePlatformAdmin(c)
+		return d.requireAccountWrite(c)
 	}
 	return d.requireAccountWrite(c, project)
 }

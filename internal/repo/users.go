@@ -24,7 +24,6 @@ type userWithConfig struct {
 	ChineseName                  string     `gorm:"column:chinese_name"`
 	DeptID                       int        `gorm:"column:dept_id"`
 	DeptName                     string     `gorm:"column:dept_name"`
-	PlatformRole                 string     `gorm:"column:platform_role"`
 	GitToken                     *string    `gorm:"column:git_token"`
 	GitSSHKeyConfigured          bool       `gorm:"column:git_ssh_key_configured"`
 	GitHTTPCredentialsConfigured bool       `gorm:"column:git_http_credentials_configured"`
@@ -48,7 +47,6 @@ type userWithConfig struct {
 }
 
 const userSelectColumns = `u.id, u.staff_id, u.login_name, u.chinese_name, u.dept_id, u.dept_name,
-	COALESCE(u.platform_role, '') AS platform_role,
 	c.git_token, EXISTS (SELECT 1 FROM user_git_ssh_keys k WHERE k.user_id = u.id) AS git_ssh_key_configured,
 	EXISTS (SELECT 1 FROM user_git_http_credentials h WHERE h.user_id = u.id) AS git_http_credentials_configured,
 	EXISTS (SELECT 1 FROM user_git_http_credentials h WHERE h.user_id = u.id AND h.host = 'github.com') AS github_credential_configured,
@@ -61,7 +59,7 @@ const userSelectColumns = `u.id, u.staff_id, u.login_name, u.chinese_name, u.dep
 func (r userWithConfig) toDomain() domain.User {
 	u := domain.User{
 		ID: r.ID, StaffID: r.StaffID, LoginName: r.LoginName, ChineseName: r.ChineseName,
-		DeptID: r.DeptID, DeptName: r.DeptName, PlatformRole: r.PlatformRole,
+		DeptID: r.DeptID, DeptName: r.DeptName,
 		CodeBuddyInternetEnvironment: r.CodeBuddyInternetEnvironment,
 		CodeBuddyModels:              decodeCLIModels(r.CodeBuddyModels),
 		GitSSHKeyConfigured:          r.GitSSHKeyConfigured,
@@ -185,14 +183,8 @@ func (r *UsersRepo) PutUser(v domain.User) error {
 		v.CodeBuddyInternetEnvironment = old.CodeBuddyInternetEnvironment
 		v.CodeBuddyModels = old.CodeBuddyModels
 		v.AgentCLICredentials = old.AgentCLICredentials
-		if strings.TrimSpace(v.PlatformRole) == "" {
-			v.PlatformRole = old.PlatformRole
-		}
 	} else {
 		v.CreatedAt = now
-	}
-	if IsAllowlistedPlatformAdmin(v.LoginName) {
-		v.PlatformRole = domain.PlatformRoleAdmin
 	}
 	v.UpdatedAt = now
 	saved, err := r.writeUser(v)
@@ -211,14 +203,14 @@ func (r *UsersRepo) writeUser(v domain.User) (domain.User, error) {
 	if v.ID > 0 {
 		err := upsert(r.DB, "users", map[string]any{
 			"id": v.ID, "staff_id": v.StaffID, "login_name": v.LoginName, "chinese_name": v.ChineseName,
-			"dept_id": v.DeptID, "dept_name": v.DeptName, "platform_role": v.PlatformRole,
+			"dept_id": v.DeptID, "dept_name": v.DeptName,
 			"created_at": timePtr(v.CreatedAt), "updated_at": timePtr(v.UpdatedAt),
 		})
 		return v, err
 	}
 	inserted, err := insertIgnore(r.DB, "users", map[string]any{
 		"staff_id": v.StaffID, "login_name": v.LoginName, "chinese_name": v.ChineseName,
-		"dept_id": v.DeptID, "dept_name": v.DeptName, "platform_role": v.PlatformRole,
+		"dept_id": v.DeptID, "dept_name": v.DeptName,
 		"created_at": timePtr(v.CreatedAt), "updated_at": timePtr(v.UpdatedAt),
 	})
 	if err != nil {
@@ -232,7 +224,7 @@ func (r *UsersRepo) writeUser(v domain.User) (domain.User, error) {
 		}
 		if err := r.DB.Model(&userRow{}).Where("id = ?", existing.ID).Updates(map[string]any{
 			"staff_id": v.StaffID, "chinese_name": v.ChineseName, "dept_id": v.DeptID,
-			"dept_name": v.DeptName, "platform_role": v.PlatformRole, "updated_at": timePtr(v.UpdatedAt),
+			"dept_name": v.DeptName, "updated_at": timePtr(v.UpdatedAt),
 		}).Error; err != nil {
 			return domain.User{}, err
 		}

@@ -21,7 +21,7 @@ func (e *Engine) ResolveRunProjectCredentialEnv(ctx context.Context, run domain.
 	if !found || project.ID != projectID || !signedIn {
 		return nil, fmt.Errorf("运行责任人无权使用项目凭据")
 	}
-	use, _ := domain.ProjectCredentialAccess(project, user.ID, e.repo.IsPlatformAdmin(user.LoginName))
+	use, _ := domain.ProjectCredentialAccess(project, user.ID)
 	if !use {
 		return nil, fmt.Errorf("运行责任人无权使用项目凭据")
 	}

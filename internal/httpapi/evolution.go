@@ -98,10 +98,10 @@ func (h *evolutionHandlers) requireProjectReader(c *gin.Context, projectID strin
 		c.JSON(http.StatusNotFound, gin.H{"error": "项目不存在"})
 		return false
 	}
-	if !authRequired() || h.isPlatformAdmin(c.Request) {
+	if h.isAccount(c.Request) {
 		return true
 	}
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
 		return false
@@ -117,13 +117,13 @@ func (h *evolutionHandlers) requireProjectReader(c *gin.Context, projectID strin
 // project assets need a project writer.
 func (h *evolutionHandlers) requireAssetWriter(c *gin.Context, asset evoAsset) bool {
 	if asset.Global {
-		return h.requirePlatformAdmin(c)
+		return h.requireAccountWrite(c)
 	}
 	return h.requireAccountWrite(c, asset.ProjectID)
 }
 
 func (h *evolutionHandlers) currentUserID(c *gin.Context) int64 {
-	if user, ok := h.requestUser(c.Request, true); ok {
+	if user, ok := h.requestUser(c.Request); ok {
 		return user.ID
 	}
 	return 0
@@ -665,7 +665,7 @@ func (h *evolutionHandlers) createProposal(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "该资产的进化级别不允许生成提案，请先在策略中调到 L2"})
 		return
 	}
-	current, loggedIn := h.requestUser(c.Request, true)
+	current, loggedIn := h.requestUser(c.Request)
 	if !loggedIn {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录后再生成提案"})
 		return
@@ -753,7 +753,7 @@ func (h *evolutionHandlers) approveProposal(c *gin.Context) {
 	if mode == "canary" {
 		out, err = h.startCanary(p, asset, h.currentUserID(c), req.Percent, req.MinRuns, req.Note, false)
 	} else {
-		out, err = h.releaseProposal(p, asset, h.currentUserID(c), strings.TrimSpace(req.Note), req.Force && (!authRequired() || h.isPlatformAdmin(c.Request)))
+		out, err = h.releaseProposal(p, asset, h.currentUserID(c), strings.TrimSpace(req.Note), req.Force && h.isAccount(c.Request))
 	}
 	if err != nil {
 		respondEvoError(c, err)
@@ -879,7 +879,7 @@ func (h *evolutionHandlers) assetReadable(c *gin.Context, asset evoAsset) bool {
 		if !authRequired() {
 			return true
 		}
-		if _, ok := h.requestUser(c.Request, true); !ok {
+		if _, ok := h.requestUser(c.Request); !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
 			return false
 		}

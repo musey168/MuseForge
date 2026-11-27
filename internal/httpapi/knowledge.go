@@ -45,7 +45,7 @@ func (h *knowledgeHandlers) executor() *knowledge.Executor {
 
 func (h *knowledgeHandlers) ownerUserID(c *gin.Context) (int64, bool) {
 	if h != nil && h.deps != nil {
-		if user, ok := h.requestUser(c.Request, true); ok && user != nil && user.ID > 0 {
+		if user, ok := h.requestUser(c.Request); ok && user != nil && user.ID > 0 {
 			return user.ID, true
 		}
 	}

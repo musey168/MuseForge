@@ -3,7 +3,7 @@ package httpapi
 import "github.com/gin-gonic/gin"
 
 func (h *runsHandlers) projectRunUser(c *gin.Context, project string) (int64, bool) {
-	u, ok := h.requestUser(c.Request, true)
+	u, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(401, gin.H{"error": "请先登录"})
 		return 0, false

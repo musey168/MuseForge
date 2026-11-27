@@ -6,22 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 )
-
-// PlatformSettings holds the platform-wide settings a platform administrator
-// maintains on the platform management page, for values that must be
-// changeable without a redeploy. It is stored as one row and read on use, so
-// a change applies to the next operation rather than the next restart.
-type PlatformSettings struct {
-	// PublicURL is the address users reach this platform on. It is the one
-	// the platform puts into links it sends elsewhere: the account binding
-	// link and the write confirmation link of chat Bots, and the run detail
-	// link of notifications. Empty falls back to AGENTFLOW_PUBLIC_URL.
-	PublicURL string    `json:"publicUrl,omitempty"`
-	UpdatedBy string    `json:"updatedBy,omitempty"`
-	UpdatedAt time.Time `json:"updatedAt,omitempty"`
-}
 
 // PublicURLMaxLen bounds the stored address.
 const PublicURLMaxLen = 512

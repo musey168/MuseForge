@@ -101,7 +101,7 @@ func (h *authHandlers) authLocal(c *gin.Context) {
 		return
 	}
 	h.setAuthCookie(c.Writer, c.Request, token)
-	c.JSON(http.StatusOK, map[string]any{"user": h.annotateUser(user)})
+	c.JSON(http.StatusOK, map[string]any{"user": user})
 }
 
 func getHeaderCaseInsensitive(r *http.Request, key string) string {
@@ -231,7 +231,7 @@ func (h *authHandlers) authCurrent(c *gin.Context) {
 		if token, signErr := h.getAuthClient().SignUser(user); signErr == nil && token != "" {
 			h.setAuthCookie(c.Writer, c.Request, token)
 		}
-		c.JSON(http.StatusOK, map[string]any{"user": h.annotateUser(user), "authRequired": authRequired(), "appDomain": h.getAuthClient().Config().AppDomain})
+		c.JSON(http.StatusOK, map[string]any{"user": user, "authRequired": authRequired(), "appDomain": h.getAuthClient().Config().AppDomain})
 		return
 	}
 
@@ -253,7 +253,7 @@ func (h *authHandlers) authCurrent(c *gin.Context) {
 				if token, signErr := h.getAuthClient().SignUser(user); signErr == nil && token != "" {
 					h.setAuthCookie(c.Writer, c.Request, token)
 				}
-				c.JSON(http.StatusOK, map[string]any{"user": h.annotateUser(user), "authRequired": authRequired(), "appDomain": h.getAuthClient().Config().AppDomain})
+				c.JSON(http.StatusOK, map[string]any{"user": user, "authRequired": authRequired(), "appDomain": h.getAuthClient().Config().AppDomain})
 				return
 			}
 		}
@@ -266,7 +266,7 @@ func (h *authHandlers) authCurrent(c *gin.Context) {
 		if token, signErr := h.getAuthClient().SignUser(user); signErr == nil && token != "" {
 			h.setAuthCookie(c.Writer, c.Request, token)
 		}
-		c.JSON(http.StatusOK, map[string]any{"user": h.annotateUser(user), "authRequired": false, "appDomain": h.getAuthClient().Config().AppDomain})
+		c.JSON(http.StatusOK, map[string]any{"user": user, "authRequired": false, "appDomain": h.getAuthClient().Config().AppDomain})
 		return
 	}
 
@@ -315,7 +315,7 @@ func (h *authHandlers) authExchange(c *gin.Context) {
 	if signErr == nil && token != "" {
 		h.setAuthCookie(c.Writer, c.Request, token)
 	}
-	c.JSON(http.StatusOK, map[string]any{"user": h.annotateUser(user), "authRequired": authRequired(), "appDomain": h.getAuthClient().Config().AppDomain})
+	c.JSON(http.StatusOK, map[string]any{"user": user, "authRequired": authRequired(), "appDomain": h.getAuthClient().Config().AppDomain})
 }
 
 func (h *authHandlers) authLogout(c *gin.Context) {
@@ -379,7 +379,7 @@ func (h *authHandlers) authPhoto(c *gin.Context) {
 
 	if username == "" {
 		// 未显式指定用户名时，尝试拉取当前登录用户的头像
-		if curUser, ok := h.requestUser(c.Request, false); ok && curUser != nil && !curUser.IsGuest && curUser.LoginName != "" {
+		if curUser, ok := h.requestUser(c.Request); ok && curUser != nil && !curUser.IsGuest && curUser.LoginName != "" {
 			username = curUser.LoginName
 		}
 	}

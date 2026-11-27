@@ -43,7 +43,7 @@ func (h *evolutionHandlers) putSOPDetection(c *gin.Context) {
 	}
 	config := domain.SOPDetectionConfig{}
 	if setting.Enabled {
-		current, loggedIn := h.requestUser(c.Request, true)
+		current, loggedIn := h.requestUser(c.Request)
 		if !loggedIn {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "请登录并选择检测模型"})
 			return

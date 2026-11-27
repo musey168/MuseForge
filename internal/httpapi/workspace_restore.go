@@ -153,7 +153,7 @@ func (h *runsHandlers) workspaceLifecycleInfo(c *gin.Context, run domain.Run, pa
 }
 
 func (h *runsHandlers) touchWorkspaceBrowse(c *gin.Context, run domain.Run) {
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
 		return
 	}

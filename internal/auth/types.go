@@ -23,7 +23,6 @@ type User struct {
 	DeptID          int       `json:"deptId"`
 	DeptName        string    `json:"deptName"`
 	IsGuest         bool      `json:"isGuest"`
-	IsPlatformAdmin bool      `json:"isPlatformAdmin,omitempty"`
 	AuthTime        time.Time `json:"authTime"`
 	AvatarURL       string    `json:"avatarUrl,omitempty"`
 }

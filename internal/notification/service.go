@@ -22,24 +22,14 @@ type Service struct {
 	GenerateReport ReportGenerator
 	Interactions   *botinteraction.Service
 	// PublicURL is the address AGENTFLOW_PUBLIC_URL configured at startup.
-	// Read it through PublicAddress, which lets a platform administrator
-	// override it on the management page without a redeploy.
 	PublicURL string
 }
 
-// PublicAddress is the platform's external address: what a platform
-// administrator saved on the management page, else AGENTFLOW_PUBLIC_URL, else
-// empty. It is read on every use (a single primary-key row) so a change on the
-// page applies to the next link the platform builds, and it is the only reader
-// of PublicURL that link builders should use.
+// PublicAddress is the platform's external address from AGENTFLOW_PUBLIC_URL,
+// or empty. It is the only reader of PublicURL that link builders use.
 func (s *Service) PublicAddress() string {
 	if s == nil {
 		return ""
-	}
-	if s.Store != nil {
-		if stored := strings.TrimRight(strings.TrimSpace(s.Store.PlatformSettings().PublicURL), "/"); stored != "" {
-			return stored
-		}
 	}
 	return strings.TrimRight(strings.TrimSpace(s.PublicURL), "/")
 }

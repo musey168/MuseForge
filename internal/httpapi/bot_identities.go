@@ -33,7 +33,7 @@ func (h *botIdentityHandlers) currentUser(c *gin.Context) (domain.User, bool) {
 		c.JSON(401, gin.H{"error": "请使用平台网页登录确认身份"})
 		return domain.User{}, false
 	}
-	current, ok := h.requestUser(c.Request, false)
+	current, ok := h.requestUser(c.Request)
 	if !ok || current == nil || current.IsGuest || current.ID <= 0 {
 		c.JSON(401, gin.H{"error": "请先登录平台"})
 		return domain.User{}, false
@@ -107,17 +107,16 @@ func (h *botIdentityHandlers) bindingMeta(token string, user domain.User) (gin.H
 		return nil, errors.New("该机器人已停用或删除，绑定链接失效")
 	}
 	project, ok := h.repo.Project(bot.ProjectID)
-	if !ok || !botProjectMember(project, user, h.repo.IsPlatformAdmin(user.LoginName)) {
+	if !ok || !botProjectMember(project, user) {
 		return nil, errors.New("当前平台账号没有该机器人所属项目的执行权限")
 	}
 	meta["botName"], meta["projectName"] = bot.Name, project.Name
 	return meta, nil
 }
 
-// botProjectMember mirrors botExecutionUser: the project owner or a platform
-// administrator.
-func botProjectMember(project domain.Project, user domain.User, admin bool) bool {
-	return admin || project.AccountOwns(user.ID)
+// botProjectMember mirrors botExecutionUser: the project's single account.
+func botProjectMember(project domain.Project, user domain.User) bool {
+	return project.AccountOwns(user.ID)
 }
 func botBindingSameOrigin(c *gin.Context) bool {
 	origin, err := url.Parse(c.GetHeader("Origin"))

@@ -223,8 +223,8 @@ func newRunnerSessionToken() (string, string, error) {
 func (h *runnersHandlers) runners(c *gin.Context) {
 	projectID := strings.TrimSpace(c.Query("projectId"))
 	mine := strings.TrimSpace(c.Query("mine")) == "1"
-	user, signedIn := h.requestUser(c.Request, true)
-	if !mine && projectID == "" && (!signedIn || h.isPlatformAdmin(c.Request)) {
+	user, signedIn := h.requestUser(c.Request)
+	if !mine && projectID == "" && (!signedIn || h.isAccount(c.Request)) {
 		list := domain.PublicRunners(h.repo.Runners())
 		if !signedIn {
 			for i := range list {
@@ -286,7 +286,7 @@ func runnerViewForUser(runner domain.Runner, userID int64) domain.Runner {
 // runnerDefault returns the user's default execution machine (执行机器).
 // 路由: g.GET("/api/runners/default", h.runnerDefault)
 func (h *runnersHandlers) runnerDefault(c *gin.Context) {
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, map[string]string{"error": "请先登录后管理执行机器"})
 		return
@@ -299,7 +299,7 @@ func (h *runnersHandlers) runnerDefault(c *gin.Context) {
 		defaults = h.repo.ResolveRunnerDefaults(user.ID, projectID)
 	}
 	runner := defaults.Runner
-	platform, err := h.platformRunnerStatus(c.Request.Context(), projectID, h.isPlatformAdmin(c.Request))
+	platform, err := h.platformRunnerStatus(c.Request.Context(), projectID, h.isAccount(c.Request))
 	if err != nil {
 		respond(c, err)
 		return
@@ -349,7 +349,7 @@ func (h *runnersHandlers) platformRunnerStatus(ctx context.Context, projectID st
 
 // 路由: g.PUT("/api/runners/:id/shared-projects", h.runnerSharedProjectsSet)
 func (h *runnersHandlers) runnerSharedProjectsSet(c *gin.Context) {
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录后管理执行机器"})
 		return
@@ -391,7 +391,7 @@ func runnerPreferenceError(c *gin.Context, err error) {
 // that is gone for good and can no longer deregister itself.
 // 路由: g.DELETE("/api/runners/:id", h.runnerRemove)
 func (h *runnersHandlers) runnerRemove(c *gin.Context) {
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, map[string]string{"error": "请先登录后管理执行机器"})
 		return
@@ -420,7 +420,7 @@ func (h *runnersHandlers) runnerRemove(c *gin.Context) {
 // machines may hold at once. 0 sets unlimited mode.
 // 路由: g.PUT("/api/runners/:id/run-limit", h.runnerRunLimitSet)
 func (h *runnersHandlers) runnerRunLimitSet(c *gin.Context) {
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, map[string]string{"error": "请先登录后管理执行机器"})
 		return
@@ -463,7 +463,7 @@ func (h *runnersHandlers) platformRunnerRunLimitSet(c *gin.Context) {
 	if !h.platformAdminWrite(c) {
 		return
 	}
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "只有平台管理员可以执行该操作"})
 		return
@@ -497,7 +497,7 @@ func (h *runnersHandlers) platformRunnerRunLimitSet(c *gin.Context) {
 // runnerDefaultSet selects the user's personal default or a project override.
 // 路由: g.PUT("/api/runners/default", h.runnerDefaultSet)
 func (h *runnersHandlers) runnerDefaultSet(c *gin.Context) {
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, map[string]string{"error": "请先登录后管理执行机器"})
 		return
@@ -608,7 +608,7 @@ func (h *runnersHandlers) runnerRuntimeStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, map[string]string{"error": "status 和 authMode 至少提供一个"})
 		return
 	}
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, map[string]string{"error": "请先登录后管理执行机器"})
 		return
@@ -711,7 +711,7 @@ func (h *runnersHandlers) consumeRunnerBindCode(code string) (int64, bool) {
 // login so the machine's owner is unambiguous.
 // 路由: g.POST("/api/runners/bind-codes", h.issueRunnerBindCode)
 func (h *runnersHandlers) issueRunnerBindCode(c *gin.Context) {
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok || user.ID <= 0 {
 		c.JSON(http.StatusUnauthorized, map[string]string{"error": "请先登录后生成接入命令"})
 		return
@@ -756,7 +756,7 @@ func (h *runnersHandlers) resolveRunnerRegistrant(r *http.Request) (ownerUserID 
 	if bootstrap := runnerBootstrapToken(); bootstrap != "" && constantTimeEqual(provided, bootstrap) {
 		return 0, true
 	}
-	if user, userOK := h.requestUser(r, true); userOK && user.ID > 0 {
+	if user, userOK := h.requestUser(r); userOK && user.ID > 0 {
 		return user.ID, true
 	}
 	return 0, false
@@ -1224,7 +1224,7 @@ func runnerMaySeeTask(runner domain.Runner, task domain.RunnerTask) bool {
 // exposes every project's prompts. Only platform admins may use it once
 // authentication is enabled; the engine dispatches workflow tasks directly.
 func (h *runnersHandlers) requireRunnerTaskAdmin(c *gin.Context) bool {
-	if !authRequired() || h.isPlatformAdmin(c.Request) {
+	if h.isAccount(c.Request) {
 		return true
 	}
 	c.JSON(http.StatusForbidden, map[string]string{"error": "只有平台管理员可以直接管理执行机器任务"})

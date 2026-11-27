@@ -60,10 +60,10 @@ func (h *botInteractionHandlers) projectManager(c *gin.Context, projectID string
 	if !h.notifications.access(c, projectID, true) {
 		return false
 	}
-	if !authRequired() || h.isPlatformAdmin(c.Request) {
+	if h.isAccount(c.Request) {
 		return true
 	}
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	project, _ := h.repo.Project(projectID)
 	if ok && user != nil && project.AccountOwns(user.ID) {
 		return true
@@ -113,7 +113,7 @@ func (h *botInteractionHandlers) act(c *gin.Context) {
 		return
 	}
 	actor := int64(0)
-	if user, ok := h.requestUser(c.Request, true); ok && user != nil {
+	if user, ok := h.requestUser(c.Request); ok && user != nil {
 		actor = user.ID
 	}
 	var out domain.BotInteraction

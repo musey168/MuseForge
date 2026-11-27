@@ -221,7 +221,7 @@ func (h *catalogHandlers) executorModels(c *gin.Context) {
 		return
 	}
 	var user domain.User
-	if current, ok := h.requestUser(c.Request, true); ok {
+	if current, ok := h.requestUser(c.Request); ok {
 		if stored, found := h.repo.User(current.ID); found {
 			user = stored
 			refreshOfficialCodeBuddyModels(c.Request.Context(), user)

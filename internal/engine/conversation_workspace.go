@@ -174,7 +174,7 @@ func (e *Engine) MaterializeConversationWorkspace(ctx context.Context, id string
 	credentials := env.credentialSnapshot()
 	ctx = e.withPreparationProgress(ctx, run.ID)
 	ctx = withRunGitCredentials(ctx, credentials)
-	ctx = gitwork.WithSSHKeys(e.withSSHKnownHosts(ctx), credentials.GitSSHKeys)
+	ctx = gitwork.WithSSHKeys(ctx, credentials.GitSSHKeys)
 	ctx = runtime.WithRepositoryCacheIn(ctx, env.Unwrap())
 	return env.prepareRepositoriesOnce(func() error {
 		if err := prepareRepositories(ctx, env.Workspace(), run.RepositoryContexts()); err != nil {

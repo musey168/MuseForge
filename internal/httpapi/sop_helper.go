@@ -80,18 +80,6 @@ func (h *sopHelper) run(ctx context.Context, execution domain.TelemetryContext, 
 	if !ok || defaults.Executor == "" {
 		return "", errSOPHelperCredentials
 	}
-	if defaults.Executor == assistantEngineCodeBuddy && user.CodeBuddyAPIKey == "" {
-		shared, ok := h.repo.SharedCodeBuddyKey()
-		if !ok || shared.SponsorID == user.ID {
-			return "", errSOPHelperCredentials
-		}
-		model, allowed := shared.Model(defaults.Model)
-		if !allowed {
-			return "", fmt.Errorf("所选模型未在平台共享 CodeBuddy Key 中启用")
-		}
-		user.CodeBuddyAPIKey, user.CodeBuddyInternetEnvironment, user.CodeBuddyBaseURL = shared.APIKey, shared.InternetEnvironment, ""
-		defaults.Model = model
-	}
 	if key, _ := assistantEngineCredential(user, defaults.Executor); key == "" {
 		return "", errSOPHelperCredentials
 	}

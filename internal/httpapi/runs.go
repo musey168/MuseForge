@@ -41,7 +41,7 @@ func (h *runsHandlers) runs(c *gin.Context) {
 	if r.Method == http.MethodGet {
 		filter := domain.AnalyticsFilter{ProjectID: c.Query("projectId")}
 		if c.Query("responsible") == "me" {
-			user, ok := h.requestUser(r, true)
+			user, ok := h.requestUser(r)
 			if !ok {
 				c.JSON(401, gin.H{"error": "请先登录"})
 				return
@@ -53,7 +53,7 @@ func (h *runsHandlers) runs(c *gin.Context) {
 			respond(c, err)
 			return
 		}
-		user, authenticated := h.requestUser(r, true)
+		user, authenticated := h.requestUser(r)
 		visible := runs[:0]
 		for _, run := range runs {
 			if run.IsPersonalWorkspace() && (!authenticated || user.ID <= 0 || user.ID != run.ExecutionContext.ResponsibleUserID) {
@@ -92,7 +92,7 @@ func (h *runsHandlers) runs(c *gin.Context) {
 			return
 		}
 		executionContext := domain.TelemetryContext{ProjectID: req.ProjectID, ResponsibleUserID: project.OwnerID}
-		if current, ok := h.requestUser(r, true); ok {
+		if current, ok := h.requestUser(r); ok {
 			executionContext.ResponsibleUserID = current.ID
 		}
 		if executionContext.ResponsibleUserID == 0 {

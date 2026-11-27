@@ -22,7 +22,7 @@ func ProjectVisible(store *repo.Store, projectID string, userID int64) bool {
 	if !ok {
 		return false
 	}
-	if project.AccountOwns(user.ID) || store.IsPlatformAdmin(user.LoginName) {
+	if project.AccountOwns(user.ID) {
 		return true
 	}
 	return false

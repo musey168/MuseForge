@@ -295,7 +295,7 @@ func (h issuesHandlers) dispatchIssueRoute(c *gin.Context, issue domain.Issue) {
 		return
 	}
 	var triggerUserID int64
-	if current, ok := h.requestUser(c.Request, true); ok && current != nil && current.ID > 0 {
+	if current, ok := h.requestUser(c.Request); ok && current != nil && current.ID > 0 {
 		triggerUserID = current.ID
 	}
 	req := dispatchRequest{

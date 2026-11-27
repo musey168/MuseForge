@@ -20,7 +20,7 @@ func (h *usersHandlers) gitSSHKeys(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "valid user id is required"})
 		return
 	}
-	if user, ok := h.requestUser(c.Request, false); !ok || user.ID != id {
+	if user, ok := h.requestUser(c.Request); !ok || user.ID != id {
 		c.JSON(http.StatusForbidden, gin.H{"error": "只能管理当前登录用户的 Git SSH 密钥"})
 		return
 	}

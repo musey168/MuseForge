@@ -16,7 +16,7 @@ import (
 const runnerRuntimeTestTimeout = 30 * time.Second
 
 func (h *runnersHandlers) runnerRuntimeTest(c *gin.Context) {
-	current, authenticated := h.requestUser(c.Request, true)
+	current, authenticated := h.requestUser(c.Request)
 	if !authenticated {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录后测试执行机器"})
 		return

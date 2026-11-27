@@ -45,7 +45,7 @@ func (h *authHandlers) gongfengOAuthStart(c *gin.Context) {
 		gongfengOAuthPage(c, http.StatusServiceUnavailable, "工蜂授权还没配好", "请由管理员配置工蜂主机、OAuth 应用和回调地址。")
 		return
 	}
-	user, ok := h.requestUser(c.Request, false)
+	user, ok := h.requestUser(c.Request)
 	if !ok || user == nil || user.IsGuest || user.ID <= 0 {
 		gongfengOAuthPage(c, http.StatusUnauthorized, "请先登录", "登录平台后再授权工蜂仓库访问。")
 		return

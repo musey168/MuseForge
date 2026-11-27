@@ -14,7 +14,7 @@ import (
 )
 
 func (h *runnersHandlers) runnerMaintenance(c *gin.Context) {
-	user, authenticated := h.requestUser(c.Request, true)
+	user, authenticated := h.requestUser(c.Request)
 	if !authenticated {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录后管理执行机器"})
 		return

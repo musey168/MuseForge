@@ -248,7 +248,7 @@ func (h *scheduleHandlers) bindScheduleRunAs(c *gin.Context, job *domain.Schedul
 	if !job.SkipDispatch {
 		return true
 	}
-	current, ok := h.requestUser(c.Request, true)
+	current, ok := h.requestUser(c.Request)
 	if !ok || current == nil || current.ID <= 0 {
 		return true
 	}
@@ -279,7 +279,7 @@ func (h *scheduleHandlers) bindScheduleRunAs(c *gin.Context, job *domain.Schedul
 		c.JSON(200, stored)
 		return true
 	}
-	_, shared, ok := scheduleCredentialUser(h.repo, self, job.ProjectID, engine)
+	_, ok := scheduleCredentialUser(h.repo, self, job.ProjectID, engine)
 	if !ok {
 		if stopOnly() {
 			return false
@@ -290,17 +290,6 @@ func (h *scheduleHandlers) bindScheduleRunAs(c *gin.Context, job *domain.Schedul
 		}
 		c.JSON(400, gin.H{"error": scheduleMissingKeyError(engine)})
 		return false
-	}
-	if shared != nil {
-		model, allowed := assistantSponsoredModelFor(shared, scheduleSharedRequestedModel(requestedModel))
-		if !allowed {
-			if stopOnly() {
-				return false
-			}
-			c.JSON(400, gin.H{"error": "你还没有配置个人 CodeBuddy API Key，定时任务会使用平台共享 Key，只能选平台管理员允许的模型（" + strings.Join(shared, "、") + "）；要用其他模型，请先在个人配置中填写自己的 Key"})
-			return false
-		}
-		job.AssistantModel = model
 	}
 	job.RunAsUserID, job.RunAsName = self.ID, scheduleUserName(self)
 	return true
@@ -327,18 +316,6 @@ func scheduleRunConfigUnchanged(prior, job domain.ScheduleJob) bool {
 		maps.Equal(prior.ParameterValues, job.ParameterValues)
 }
 
-// scheduleSharedRequestedModel treats the CLI-default placeholder as "no
-// model chosen", which the shared key resolves to its own default.
-func scheduleSharedRequestedModel(model string) string {
-	engine, id := assistantModelEngine(model)
-	if engine == assistantEngineCodeBuddy {
-		if codeBuddyIsDefaultModel(id) {
-			return ""
-		}
-		return id
-	}
-	return strings.TrimSpace(model)
-}
 
 func scheduleMissingKeyError(engine string) string {
 	if assistantSupportsRunnerLogin(engine) {

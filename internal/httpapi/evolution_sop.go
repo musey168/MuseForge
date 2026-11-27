@@ -117,20 +117,12 @@ func (h *evolutionHandlers) putSOPPolicy(c *gin.Context) {
 					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 					return
 				}
-				if current, loggedIn := h.requestUser(c.Request, true); loggedIn {
+				if current, loggedIn := h.requestUser(c.Request); loggedIn {
 					if user, ok := h.repo.User(current.ID); ok {
 						resolved, err := resolveFeatureModel(user, norm)
 						catalog := assistantModelsForRequest(c.Request.Context(), user, norm)
 						inCatalog := func(id string) bool {
-							if assistantCatalogLists(catalog, id) {
-								return true
-							}
-							if key, found := h.repo.SharedCodeBuddyKey(); found && strings.TrimSpace(key.APIKey) != "" {
-								if m, ok := key.Model(id); ok && m != "" {
-									return true
-								}
-							}
-							return false
+							return assistantCatalogLists(catalog, id)
 						}
 						if err == nil && resolved != "" {
 							if len(catalog.Models) > 0 && !inCatalog(resolved) && !inCatalog(norm) {
@@ -184,7 +176,7 @@ func (h *evolutionHandlers) optimizeSOP(c *gin.Context) {
 	if !h.requireProjectReader(c, req.ProjectID) || !h.requireAccountWrite(c, req.ProjectID) {
 		return
 	}
-	current, loggedIn := h.requestUser(c.Request, true)
+	current, loggedIn := h.requestUser(c.Request)
 	if !loggedIn {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录后再发起优化"})
 		return
@@ -353,23 +345,6 @@ func (h *evolutionHandlers) applySOPModelCredentials(ctx context.Context, user d
 		catalog := assistantModelsForRequest(ctx, user, model)
 		return user, assistantAllowedModel(model, catalog), true
 	}
-	// Fall back to platform shared CodeBuddy key when the policy owner has no personal CLI credentials.
-	if key, found := h.repo.SharedCodeBuddyKey(); found && strings.TrimSpace(key.APIKey) != "" && len(key.Models) > 0 {
-		if key.SponsorID == 0 || key.SponsorID != user.ID {
-			sharedUser := user
-			sharedUser.CodeBuddyAPIKey = key.APIKey
-			sharedUser.CodeBuddyBaseURL = ""
-			sharedUser.CodeBuddyInternetEnvironment = key.InternetEnvironment
-			sharedUser.CodeBuddyModels = nil
-			chosen := ""
-			if m, ok := key.Model(model); ok && m != "" {
-				chosen = m
-			} else if len(key.Models) > 0 {
-				chosen = key.Models[0]
-			}
-			return sharedUser, chosen, true
-		}
-	}
 	return user, "", false
 }
 
@@ -385,8 +360,7 @@ func (h *evolutionHandlers) resolveSOPActorUser(policy domain.EvoSOPPolicy, wf d
 	if !ok {
 		return domain.User{}, "", false
 	}
-	isAdmin := strings.TrimSpace(user.LoginName) != "" && h.repo.IsPlatformAdmin(strings.TrimSpace(user.LoginName))
-	if !isAdmin && !h.accountHoldsProject(policy.ProjectID, user.ID) {
+	if !h.accountHoldsProject(policy.ProjectID, user.ID) {
 		return domain.User{}, "", false
 	}
 	reqModel := strings.TrimSpace(policy.Model)

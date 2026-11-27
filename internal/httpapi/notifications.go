@@ -25,7 +25,7 @@ func (h *notificationHandlers) access(c *gin.Context, projectID string, write bo
 		c.JSON(404, gin.H{"error": "项目不存在"})
 		return false
 	}
-	user, authenticated := h.requestUser(c.Request, true)
+	user, authenticated := h.requestUser(c.Request)
 	if !authenticated || user == nil {
 		if !authRequired() {
 			return true
@@ -33,7 +33,7 @@ func (h *notificationHandlers) access(c *gin.Context, projectID string, write bo
 		c.JSON(401, gin.H{"error": "请先登录"})
 		return false
 	}
-	if h.isPlatformAdmin(c.Request) || project.AccountOwns(user.ID) {
+	if h.isAccount(c.Request) || project.AccountOwns(user.ID) {
 		return true
 	}
 	c.JSON(403, gin.H{"error": "你没有该项目的通知管理权限"})
@@ -43,10 +43,10 @@ func (h *notificationHandlers) managed(c *gin.Context, bot domain.NotificationBo
 	if !h.access(c, bot.ProjectID, true) {
 		return false
 	}
-	if !authRequired() || h.isPlatformAdmin(c.Request) {
+	if h.isAccount(c.Request) {
 		return true
 	}
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok || user == nil {
 		return false
 	}
@@ -212,7 +212,7 @@ func (h *notificationHandlers) save(c *gin.Context, old *domain.NotificationBot)
 			return
 		case corp != "":
 			bot.TenantExpected = corp
-			if user, ok := h.requestUser(c.Request, true); ok && user != nil {
+			if user, ok := h.requestUser(c.Request); ok && user != nil {
 				bot.TenantExpectedBy = user.ID
 			}
 		}
@@ -247,7 +247,7 @@ func (h *notificationHandlers) save(c *gin.Context, old *domain.NotificationBot)
 		return
 	}
 	if old == nil {
-		if user, ok := h.requestUser(c.Request, true); ok && user != nil {
+		if user, ok := h.requestUser(c.Request); ok && user != nil {
 			bot.OwnerID = user.ID
 		}
 		if req.Secret == "" {
@@ -447,7 +447,7 @@ func (h *notificationHandlers) tenantConfirm(c *gin.Context) {
 		saved, err = h.repo.RediscoverBotTenant(bot.ID, req.ConfigVersion)
 	} else {
 		actor := int64(0)
-		if user, ok := h.requestUser(c.Request, true); ok && user != nil {
+		if user, ok := h.requestUser(c.Request); ok && user != nil {
 			actor = user.ID
 		}
 		saved, err = h.repo.ConfirmBotTenant(bot.ID, strings.TrimSpace(req.TenantKey), req.ConfigVersion, actor)
@@ -624,7 +624,7 @@ func (h *notificationHandlers) retry(c *gin.Context) {
 			}
 			if c.Request.URL.Path == "/api/notification-deliveries/"+item.ID+"/confirm" {
 				actor := int64(0)
-				if user, ok := h.requestUser(c.Request, true); ok && user != nil {
+				if user, ok := h.requestUser(c.Request); ok && user != nil {
 					actor = user.ID
 				}
 				err = h.repo.ConfirmNotificationReceived(projectID, item.ID, actor)

@@ -349,7 +349,7 @@ func (h *marketHandlers) mcpCustomInstall(c *gin.Context) {
 		}
 		ownerKey = server.ProjectID
 	} else if server.Scope == "personal" {
-		user, authenticated := h.requestUser(c.Request, true)
+		user, authenticated := h.requestUser(c.Request)
 		if !authenticated || user.ID <= 0 {
 			c.JSON(http.StatusUnauthorized, map[string]string{"error": "添加个人 MCP 前请先登录"})
 			return

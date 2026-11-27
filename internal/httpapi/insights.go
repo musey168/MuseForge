@@ -23,7 +23,7 @@ type insightsHandlers struct{ *deps }
 const insightIngestPath = "/api/insights/v1/ingest"
 
 func (h *insightsHandlers) manageProject(c *gin.Context, projectID string) bool {
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(401, gin.H{"error": "请先登录"})
 		return false
@@ -33,7 +33,7 @@ func (h *insightsHandlers) manageProject(c *gin.Context, projectID string) bool 
 		c.JSON(404, gin.H{"error": "项目不存在"})
 		return false
 	}
-	if h.isPlatformAdmin(c.Request) || project.AccountOwns(user.ID) {
+	if h.isAccount(c.Request) || project.AccountOwns(user.ID) {
 		return true
 	}
 	c.JSON(403, gin.H{"error": "只有项目负责人或平台管理员可以管理上报数据源"})

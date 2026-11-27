@@ -92,13 +92,8 @@ func (e *Engine) checkSOPWorkBranchCollision(ctx context.Context, userID int64, 
 	defer cancel()
 	ctx = withRepositoryGit(ctx, repository)
 	if gitwork.UsesSSH(ctx) {
-		ctx = gitwork.WithSSHKeys(e.withSSHKnownHosts(ctx), e.repo.GitSSHKeysForRemotes(userID, []string{remote}))
+		ctx = gitwork.WithSSHKeys(ctx, e.repo.GitSSHKeysForRemotes(userID, []string{remote}))
 	} else if endpoint, ok := gitwork.GitHTTPRemoteEndpoint(remote); ok {
-		if endpoint.Scheme == "http" {
-			if allowed, err := e.repo.PlatformGitHTTPHostAuthorized(ctx, endpoint.Authority); err != nil || !allowed {
-				return nil
-			}
-		}
 		if credential, ok := e.repo.GitHTTPCredentialForHost(ctx, userID, endpoint.Scope()); ok {
 			ctx = gitwork.WithHTTPCredentials(ctx, map[string]gitwork.HTTPCredential{
 				endpoint.Scope(): {Username: credential.GitUsername(), Token: credential.Token},

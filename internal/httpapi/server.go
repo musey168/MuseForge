@@ -73,10 +73,6 @@ type Server struct {
 	auth            *authHandlers // auth.go
 	github          *githubHandlers
 	users           *usersHandlers // users.go
-	sshHostTrust    *sshHostTrustHandlers
-	httpsHostTrust  *httpsHostTrustHandlers
-	platformSetting *platformSettingsHandlers
-	httpHostTrust   *gitHTTPHostTrustHandlers
 	projects        *projectsHandlers
 	credentials     *projectCredentialsHandlers
 	insights        *insightsHandlers
@@ -137,7 +133,6 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 	}
 	tasks := &tasksHandlers{deps: d}
 	runnerControls := newRunnerControlHub()
-	runnerControls.sshHostLookup = s.PlatformSSHKnownHosts
 	runnerControls.successor = relayRunnerWorkspaceToSuccessor(e)
 	if bg != nil {
 		bg.runnerControls = runnerControls
@@ -159,10 +154,6 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 		auth:            &authHandlers{deps: d},
 		github:          newGitHubHandlers(d),
 		users:           &usersHandlers{deps: d},
-		sshHostTrust:    &sshHostTrustHandlers{deps: d, hosts: s.SSHHostTrustRepo, runnerControls: runnerControls},
-		httpsHostTrust:  &httpsHostTrustHandlers{deps: d, hosts: s.HTTPSHostTrustRepo, lookupIP: net.DefaultResolver.LookupNetIP},
-		platformSetting: &platformSettingsHandlers{deps: d, envPublicURL: func() string { return notifications.PublicURL }},
-		httpHostTrust:   &gitHTTPHostTrustHandlers{deps: d, hosts: s.GitHTTPHostTrustRepo},
 		catalog:         &catalogHandlers{deps: d},
 		insights:        &insightsHandlers{deps: d},
 		projects:        &projectsHandlers{deps: d},
@@ -260,37 +251,6 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 	g.POST("/api/auth/logout", api.auth.authLogout)
 	g.GET("/api/auth/photo", api.auth.authPhoto)
 	g.GET("/api/auth/photo/:spec/:username", api.auth.authPhoto)
-	g.GET("/api/auth/tokens", api.tokens.authTokens)
-	g.POST("/api/auth/tokens", api.tokens.authTokens)
-	g.DELETE("/api/auth/tokens/:id", api.tokens.authToken)
-	g.GET("/api/users", api.users.users)
-	g.GET("/api/platform/admins", api.users.platformAdmins)
-	g.PUT("/api/platform/admins", api.users.platformAdmins)
-	g.GET("/api/platform/accounts", api.users.platformAccounts)
-	g.POST("/api/platform/accounts", api.users.platformAccounts)
-	g.PUT("/api/platform/accounts/:id/password", api.users.resetPlatformAccountPassword)
-	g.GET("/api/platform/codebuddy-key", api.users.platformCodeBuddyKey)
-	g.PUT("/api/platform/codebuddy-key", api.users.platformCodeBuddyKey)
-	g.DELETE("/api/platform/codebuddy-key", api.users.platformCodeBuddyKey)
-	g.GET("/api/platform/git-ssh-hosts", api.sshHostTrust.list)
-	g.POST("/api/platform/git-ssh-hosts", api.sshHostTrust.save)
-	g.DELETE("/api/platform/git-ssh-hosts", api.sshHostTrust.remove)
-	g.POST("/api/platform/git-ssh-hosts/preview", api.sshHostTrust.preview)
-	g.PUT("/api/platform/git-ssh-hosts/:host", api.sshHostTrust.save)
-	g.DELETE("/api/platform/git-ssh-hosts/:host", api.sshHostTrust.remove)
-	g.GET("/api/platform/git-https-hosts", api.httpsHostTrust.list)
-	g.POST("/api/platform/git-https-hosts/preview", api.httpsHostTrust.preview)
-	g.POST("/api/platform/git-https-hosts", api.httpsHostTrust.save)
-	g.PUT("/api/platform/git-https-hosts/:host", api.httpsHostTrust.save)
-	g.DELETE("/api/platform/git-https-hosts/:host", api.httpsHostTrust.remove)
-	g.GET("/api/git-https-hosts", api.httpsHostTrust.choices)
-	g.GET("/api/platform/public-url", api.platformSetting.publicURL)
-	g.PUT("/api/platform/public-url", api.platformSetting.publicURL)
-	g.DELETE("/api/platform/public-url", api.platformSetting.publicURL)
-	g.GET("/api/platform/git-http-hosts", api.httpHostTrust.list)
-	g.POST("/api/platform/git-http-hosts", api.httpHostTrust.save)
-	g.DELETE("/api/platform/git-http-hosts/:host", api.httpHostTrust.remove)
-	g.GET("/api/git-http-hosts", api.httpHostTrust.choices)
 	// master(net/http) 的 /api/users/ 子树只接受 PUT /api/users/<id>/credentials
 	// 一种形态，其余任何方法/子路径都走 method(w) → 405 JSON。
 	g.Any("/api/users/:id/credentials", func(c *gin.Context) {
@@ -719,15 +679,10 @@ func (s *Server) bootstrap(c *gin.Context) {
 	go func() { defer load.Done(); users = s.repo.Users() }()
 	load.Wait()
 	var currentUserID int64
-	if current, ok := s.requestUser(c.Request, true); ok {
+	if current, ok := s.requestUser(c.Request); ok {
 		currentUserID = current.ID
 	}
 	mcpServers = domain.PublicMCPServers(withMarketIcons(visibleMCPServersForUser(mcpServers, currentUserID)))
-	sharedModels := s.repo.SharedCodeBuddyModels()
-	sponsoredModel := ""
-	if len(sharedModels) > 0 {
-		sponsoredModel = sharedModels[0]
-	}
 	c.JSON(200, map[string]any{
 		"projects": domain.PublicProjects(projects), "repositories": domain.PublicRepositories(repositories),
 		"agents": catalogAgents(agents), "rules": rules, "skills": skills, "mcpServers": mcpServers,
@@ -736,11 +691,6 @@ func (s *Server) bootstrap(c *gin.Context) {
 		"users":        domain.PublicUsers(users),
 		"storage":      s.repo.StorageInfo(),
 		"capabilities": map[string]bool{"docker": runtime.DockerReady()},
-		// Set when users without their own CodeBuddy API Key can still chat
-		// and run LOOPs on the platform's shared key, limited to these models
-		// (sponsoredModel is the default).
-		"sponsoredModel":    sponsoredModel,
-		"sponsoredModels":   sharedModels,
 		"gongfengHost":      config.GongfengHost(),
 	})
 }

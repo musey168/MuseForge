@@ -21,7 +21,7 @@ func (h *mcpHandlers) mcpServers(c *gin.Context) {
 	switch c.Request.Method {
 	case http.MethodGet:
 		items := h.repo.MCPServers()
-		if current, ok := h.requestUser(c.Request, true); ok {
+		if current, ok := h.requestUser(c.Request); ok {
 			items = visibleMCPServersForUser(items, current.ID)
 		} else {
 			items = visibleMCPServersForUser(items, 0)
@@ -70,7 +70,7 @@ func (h *mcpHandlers) mcpServers(c *gin.Context) {
 // allowMCPServerWrite checks the scope of a stored definition.
 func (d deps) allowMCPServerWrite(c *gin.Context, server domain.MCPServerDefinition) bool {
 	if server.Scope == "personal" {
-		user, ok := d.requestUser(c.Request, true)
+		user, ok := d.requestUser(c.Request)
 		if ok && user.ID > 0 && user.ID == server.OwnerUserID {
 			return true
 		}
@@ -80,7 +80,7 @@ func (d deps) allowMCPServerWrite(c *gin.Context, server domain.MCPServerDefinit
 	if project := strings.TrimSpace(server.ProjectID); project != "" {
 		return d.requireAccountWrite(c, project)
 	}
-	return d.requirePlatformAdmin(c)
+	return d.requireAccountWrite(c)
 }
 
 func (h *mcpHandlers) authorizeMCPDestination(c *gin.Context, server *domain.MCPServerDefinition) bool {
@@ -88,7 +88,7 @@ func (h *mcpHandlers) authorizeMCPDestination(c *gin.Context, server *domain.MCP
 	if server.Scope != "personal" {
 		return h.allowMCPServerWrite(c, *server)
 	}
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok || user.ID <= 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "添加个人 MCP 前请先登录"})
 		return false

@@ -28,11 +28,11 @@ func (h *knowledgeHandlers) legacyService() *knowledge.LegacyService {
 }
 
 func (h *knowledgeHandlers) canManageLegacy(r *http.Request) bool {
-	return !authRequired() || h.isPlatformAdmin(r)
+	return h.isAccount(r)
 }
 
 func (h *knowledgeHandlers) legacyActor(r *http.Request) string {
-	if user, ok := h.requestUser(r, true); ok && user != nil && user.LoginName != "" {
+	if user, ok := h.requestUser(r); ok && user != nil && user.LoginName != "" {
 		return user.LoginName
 	}
 	return "local"

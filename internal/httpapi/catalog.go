@@ -27,12 +27,12 @@ func (h *catalogHandlers) canManageProjectRepositories(c *gin.Context, projectID
 	if !authRequired() {
 		return true
 	}
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(401, gin.H{"error": "请先登录"})
 		return false
 	}
-	if h.isPlatformAdmin(c.Request) {
+	if h.isAccount(c.Request) {
 		return true
 	}
 	if project, ok := h.repo.Project(projectID); ok && project.OwnerID == user.ID {
@@ -112,7 +112,7 @@ func (h *catalogHandlers) repositories(c *gin.Context) {
 	}
 	// localPath copies a directory from the executing host into the task
 	// workspace, so only platform administrators may set it.
-	if authRequired() && !h.isPlatformAdmin(c.Request) {
+	if authRequired() && !h.isAccount(c.Request) {
 		v.LocalPath = ""
 		if existing, ok := h.repo.Repository(v.ID); ok {
 			v.LocalPath = existing.LocalPath
@@ -302,7 +302,7 @@ func (h *catalogHandlers) repositories(c *gin.Context) {
 			c.JSON(400, map[string]string{"error": "cloneUrl 不能包含账号、密码或 Token，请去掉 @ 前的部分，并在个人配置中填写 Git Token"})
 			return
 		}
-		if err := gitwork.ValidateRemoteURL(v.CloneURL, !authRequired() || h.isPlatformAdmin(c.Request)); err != nil {
+		if err := gitwork.ValidateRemoteURL(v.CloneURL, !authRequired() || h.isAccount(c.Request)); err != nil {
 			c.JSON(400, map[string]string{"error": "cloneUrl 无效：" + err.Error()})
 			return
 		}
@@ -349,7 +349,7 @@ func (h *catalogHandlers) agents(c *gin.Context) {
 				// A role without a project is platform-wide: every project can
 				// use it, so only administrators may change it, as for rules
 				// and skills (assetWriteGuard).
-				if strings.TrimSpace(existing.ProjectID) == "" && !h.requirePlatformAdmin(c) {
+				if strings.TrimSpace(existing.ProjectID) == "" && !h.requireAccountWrite(c) {
 					return
 				}
 				if v.ProjectID == "" {
@@ -397,7 +397,7 @@ func (h *catalogHandlers) agents(c *gin.Context) {
 			if hadExisting && existing.Prompt != v.Prompt {
 				source, note := catalogEditSource(c.Request.Context())
 				var uid int64
-				if user, ok := h.requestUser(c.Request, true); ok {
+				if user, ok := h.requestUser(c.Request); ok {
 					uid = user.ID
 				}
 				_, _, _ = h.repo.RecordAssetEdit(domain.EvoAssetAgent, v.ID, existing.Prompt, v.Prompt, source, note, uid)
@@ -413,7 +413,7 @@ func (h *catalogHandlers) agents(c *gin.Context) {
 // project and are limited to platform administrators.
 func (h *catalogHandlers) requireAgentWriter(c *gin.Context, agent domain.AgentDefinition) bool {
 	if strings.TrimSpace(agent.ProjectID) == "" {
-		return h.requirePlatformAdmin(c)
+		return h.requireAccountWrite(c)
 	}
 	return h.requireAccountWrite(c, agent.ProjectID)
 }
@@ -545,7 +545,7 @@ func (h *catalogHandlers) agent(c *gin.Context) {
 			return
 		}
 		userID := int64(0)
-		if user, ok := h.requestUser(c.Request, true); ok {
+		if user, ok := h.requestUser(c.Request); ok {
 			userID = user.ID
 		}
 		sourceWritable := h.projectWriterAllowed(c, v.ProjectID, userID)
@@ -746,7 +746,7 @@ func (h *catalogHandlers) rules(c *gin.Context) {
 			if hadExisting && existing.Content != v.Content {
 				source, note := catalogEditSource(c.Request.Context())
 				var uid int64
-				if user, ok := h.requestUser(c.Request, true); ok {
+				if user, ok := h.requestUser(c.Request); ok {
 					uid = user.ID
 				}
 				_, _, _ = h.repo.RecordAssetEdit(domain.EvoAssetRule, v.ID, existing.Content, v.Content, source, note, uid)
@@ -1080,7 +1080,7 @@ func (h *catalogHandlers) workflows(c *gin.Context) {
 				return
 			}
 			if _, generic := h.repo.GenericTemplateByWorkflow(v.ID); generic {
-				if !h.isPlatformAdmin(c.Request) {
+				if !h.isAccount(c.Request) {
 					c.JSON(http.StatusConflict, map[string]string{"error": "通用模板为只读，请先复制到本项目再修改"})
 					return
 				}
@@ -1256,7 +1256,7 @@ func (h *catalogHandlers) workflow(c *gin.Context) {
 		}
 		var userID int64
 		projectID := strings.TrimSpace(c.Query("projectId"))
-		if user, ok := h.requestUser(c.Request, true); ok {
+		if user, ok := h.requestUser(c.Request); ok {
 			userID = user.ID
 		} else if project, ok := h.repo.Project(projectID); ok && !authRequired() {
 			userID = project.OwnerID
@@ -1278,7 +1278,7 @@ func (h *catalogHandlers) workflow(c *gin.Context) {
 			c.JSON(200, template.Agents)
 			return
 		}
-		if !h.isPlatformAdmin(c.Request) {
+		if !h.isAccount(c.Request) {
 			c.JSON(http.StatusConflict, map[string]string{"error": "只有平台管理员可以编辑通用模板角色"})
 			return
 		}
@@ -1309,7 +1309,7 @@ func (h *catalogHandlers) workflow(c *gin.Context) {
 			return
 		}
 		if v.Generic {
-			if !h.isPlatformAdmin(c.Request) {
+			if !h.isAccount(c.Request) {
 				c.JSON(http.StatusConflict, map[string]string{"error": "通用模板为只读，请先复制到本项目再修改"})
 				return
 			}
@@ -1404,7 +1404,7 @@ func (h *catalogHandlers) validateWorkflowProjectCredentials(c *gin.Context, wf 
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请复制通用模板到当前项目后绑定项目凭据"})
 		return false
 	}
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	use, _ := h.projectCredentialAccess(c.Request, wf.ProjectID, user.ID)
 	if !ok || !use {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权在该 LOOP 中绑定项目凭据"})

@@ -16,7 +16,7 @@ import (
 // keys), so only the project's writers may create, edit, run or delete them,
 // and only its members may read their prompts.
 func (h *scheduleHandlers) scheduleProjectAllowed(r *http.Request, id string, write bool) bool {
-	user, authenticated := h.requestUser(r, true)
+	user, authenticated := h.requestUser(r)
 	if !authenticated || user == nil {
 		return !authRequired()
 	}
@@ -24,9 +24,9 @@ func (h *scheduleHandlers) scheduleProjectAllowed(r *http.Request, id string, wr
 	if !ok {
 		// A job can outlive its project (or use the default "platform" id);
 		// only platform admins manage those.
-		return h.isPlatformAdmin(r)
+		return h.isAccount(r)
 	}
-	if h.isPlatformAdmin(r) || project.AccountOwns(user.ID) {
+	if h.isAccount(r) || project.AccountOwns(user.ID) {
 		return true
 	}
 	return false
@@ -48,7 +48,7 @@ func (h *scheduleHandlers) scheduleJobAllowed(r *http.Request, job domain.Schedu
 	if _, exists := h.repo.Project(job.ProjectID); exists || job.OwnerUserID == 0 {
 		return false
 	}
-	user, ok := h.requestUser(r, true)
+	user, ok := h.requestUser(r)
 	return ok && user != nil && user.ID == job.OwnerUserID
 }
 func (h *scheduleHandlers) requireScheduleJob(c *gin.Context, job domain.ScheduleJob, write bool) bool {
@@ -79,7 +79,7 @@ func (h *scheduleHandlers) visibleScheduleJobs(r *http.Request, jobs []domain.Sc
 }
 func (h *scheduleHandlers) sharedScheduleTasks(c *gin.Context) {
 	if authRequired() {
-		if _, ok := h.requestUser(c.Request, true); !ok {
+		if _, ok := h.requestUser(c.Request); !ok {
 			c.JSON(401, gin.H{"error": "请先登录"})
 			return
 		}
@@ -93,7 +93,7 @@ func (h *scheduleHandlers) sharedScheduleTasks(c *gin.Context) {
 }
 func (h *scheduleHandlers) sharedScheduleVersions(c *gin.Context) {
 	if authRequired() {
-		if _, ok := h.requestUser(c.Request, true); !ok {
+		if _, ok := h.requestUser(c.Request); !ok {
 			c.JSON(401, gin.H{"error": "请先登录"})
 			return
 		}

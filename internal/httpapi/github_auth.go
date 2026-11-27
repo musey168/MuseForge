@@ -43,7 +43,7 @@ func newGitHubHandlers(shared *deps) *githubHandlers {
 
 func (h *githubHandlers) current(c *gin.Context) (int64, bool) {
 	c.Header("Cache-Control", "no-store")
-	user, ok := h.requestUser(c.Request, false)
+	user, ok := h.requestUser(c.Request)
 	if !ok || user == nil || user.IsGuest || user.ID <= 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录 LoopForge，再连接 GitHub"})
 		return 0, false
@@ -67,9 +67,9 @@ func (h *githubHandlers) status(c *gin.Context) {
 		respond(c, err)
 		return
 	}
-	admin := h.isPlatformAdmin(c.Request)
-	result := gin.H{"enabled": clientID != "", "canConfigure": admin, "managed": strings.TrimSpace(os.Getenv("AGENTFLOW_GITHUB_CLIENT_ID")) != ""}
-	if admin {
+	account := h.isAccount(c.Request)
+	result := gin.H{"enabled": clientID != "", "canConfigure": account, "managed": strings.TrimSpace(os.Getenv("AGENTFLOW_GITHUB_CLIENT_ID")) != ""}
+	if account {
 		result["clientId"] = clientID
 	}
 	c.JSON(http.StatusOK, result)
@@ -86,7 +86,7 @@ func (h *githubHandlers) configure(c *gin.Context) {
 	if _, ok := h.current(c); !ok {
 		return
 	}
-	if !h.isPlatformAdmin(c.Request) {
+	if !h.isAccount(c.Request) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "仅平台管理员可以配置 GitHub 授权应用"})
 		return
 	}

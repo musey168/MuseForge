@@ -89,7 +89,7 @@ func (h *runsHandlers) startRunEval(c *gin.Context) {
 		c.JSON(http.StatusConflict, map[string]string{"error": "请等 LOOP 跑完后再评测"})
 		return
 	}
-	current, loggedIn := h.requestUser(c.Request, true)
+	current, loggedIn := h.requestUser(c.Request)
 	if !loggedIn {
 		c.JSON(http.StatusUnauthorized, map[string]string{"error": "请先登录后评测"})
 		return
@@ -241,7 +241,7 @@ func (h *runsHandlers) applyRunEval(c *gin.Context) {
 		c.JSON(http.StatusNotFound, map[string]string{"error": "run not found"})
 		return
 	}
-	if _, loggedIn := h.requestUser(c.Request, true); !loggedIn {
+	if _, loggedIn := h.requestUser(c.Request); !loggedIn {
 		c.JSON(http.StatusUnauthorized, map[string]string{"error": "请先登录后再应用评测建议"})
 		return
 	}

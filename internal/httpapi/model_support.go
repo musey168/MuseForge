@@ -108,14 +108,6 @@ func newAssistantSessionID() string {
 	return "af" + strconv.FormatInt(time.Now().UnixNano(), 36)
 }
 
-func errAssistantSponsoredModel(models []string) string {
-	return "未配置个人 CodeBuddy API Key 时只能使用平台管理员允许的模型（" + strings.Join(models, "、") + "）。要使用其他模型，请先在个人配置中配置自己的 CodeBuddy API Key"
-}
-
-func assistantSponsoredModelFor(shared []string, requested string) (string, bool) {
-	return repo.SharedCodeBuddyKey{Models: shared}.Model(requested)
-}
-
 func assistantCatalogLists(catalog assistantModelCatalog, id string) bool {
 	for _, model := range catalog.Models {
 		if model.ID == id {
@@ -125,24 +117,6 @@ func assistantCatalogLists(catalog assistantModelCatalog, id string) bool {
 	return false
 }
 
-func restrictAssistantCatalog(catalog assistantModelCatalog, allowed []string) assistantModelCatalog {
-	byID := map[string]assistantModel{}
-	for _, model := range catalog.Models {
-		byID[model.ID] = model
-	}
-	restricted := assistantModelCatalog{SponsoredModel: catalog.SponsoredModel, SponsoredModels: catalog.SponsoredModels}
-	for _, id := range allowed {
-		model, ok := byID[id]
-		if !ok {
-			model = assistantListedModel(id, id, "")
-		}
-		restricted.Models = append(restricted.Models, model)
-	}
-	if len(allowed) > 0 {
-		restricted.Default = allowed[0]
-	}
-	return restricted
-}
 
 func runnerUsesLocalLogin(runner domain.Runner, engine string) bool {
 	return assistantSupportsRunnerLogin(engine) &&
@@ -191,21 +165,8 @@ func scheduledAssistantDefault(r *repo.Store, user domain.User, projectID, model
 	return model
 }
 
-func scheduleCredentialUser(r *repo.Store, user domain.User, projectID, engine string) (domain.User, []string, bool) {
-	if scheduleHasPersonalCredential(r, user, projectID, engine) {
-		return user, nil, true
-	}
-	if engine != assistantEngineCodeBuddy || r == nil {
-		return user, nil, false
-	}
-	key, found := r.SharedCodeBuddyKey()
-	if !found || strings.TrimSpace(key.APIKey) == "" || len(key.Models) == 0 || (key.SponsorID != 0 && key.SponsorID == user.ID) {
-		return user, nil, false
-	}
-	user.CodeBuddyAPIKey = key.APIKey
-	user.CodeBuddyBaseURL = ""
-	user.CodeBuddyInternetEnvironment = key.InternetEnvironment
-	return user, key.Models, true
+func scheduleCredentialUser(r *repo.Store, user domain.User, projectID, engine string) (domain.User, bool) {
+	return user, scheduleHasPersonalCredential(r, user, projectID, engine)
 }
 
 func sameScheduleReferenceIDs(a, b []domain.AssetReference) bool {
@@ -486,7 +447,7 @@ func botExecutionUser(store *repo.Store, bot domain.NotificationBot, senderID st
 	if !ok {
 		return user, errors.New("Bot 项目不存在")
 	}
-	if project.AccountOwns(user.ID) || store.IsPlatformAdmin(user.LoginName) {
+	if project.AccountOwns(user.ID) {
 		return user, nil
 	}
 	return user, errors.New("你的平台账号没有该项目的执行权限")
@@ -505,7 +466,7 @@ func assistantEngineBinary(kind string) string {
 }
 
 // workbenchProjectAllowed reports whether the caller may work in a project:
-// its owner, a maintainer, or a platform administrator.
+// its owner.
 func workbenchProjectAllowed(d *deps, c *gin.Context, projectID string, userID int64) bool {
 	if projectID == "" {
 		return true
@@ -514,7 +475,7 @@ func workbenchProjectAllowed(d *deps, c *gin.Context, projectID string, userID i
 	if !ok {
 		return false
 	}
-	return workbenchProjectAllowsUser(p, userID, d.isPlatformAdmin(c.Request))
+	return workbenchProjectAllowsUser(p, userID)
 }
 
 // errAssistantExecutionUnavailable means the machine that owns the work is
@@ -549,6 +510,6 @@ func repositoryBaseBranchName(rc domain.RepositoryContext) string {
 	}
 	return strings.TrimSpace(rc.DefaultBranch)
 }
-func workbenchProjectAllowsUser(p domain.Project, userID int64, platformAdmin bool) bool {
-	return platformAdmin || p.AccountOwns(userID)
+func workbenchProjectAllowsUser(p domain.Project, userID int64) bool {
+	return p.AccountOwns(userID)
 }
