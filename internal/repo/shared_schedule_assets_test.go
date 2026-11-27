@@ -31,9 +31,9 @@ func TestSharedSchedulePinsOnlyDirectReferences(t *testing.T) {
 	check(st.PutSkill(external))
 	check(st.PutAgent(role))
 	beforeRole, _ := st.Agent(role.ID)
-	job := domain.ScheduleJob{ID: "source-job", Name: "Job", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssistantReference{{Type: "agent", ID: role.ID}, {Type: "skill", ID: external.ID}}}
+	job := domain.ScheduleJob{ID: "source-job", Name: "Job", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssetReference{{Type: "agent", ID: role.ID}, {Type: "skill", ID: external.ID}}}
 	check(st.PutScheduleJob(job))
-	v, err := st.PublishSharedSchedule(job.ID, job.ProjectID, domain.SharedScheduleVersion{Name: "Published", Prompt: "inspect", References: []domain.AssistantReference{{Type: "skill", ID: "forged"}}}, 0)
+	v, err := st.PublishSharedSchedule(job.ID, job.ProjectID, domain.SharedScheduleVersion{Name: "Published", Prompt: "inspect", References: []domain.AssetReference{{Type: "skill", ID: "forged"}}}, 0)
 	check(err)
 	if len(v.References) != 2 || v.References[0].ID != role.ID || !v.HasAsset("agent", role.ID) || !v.HasAsset("skill", external.ID) || v.HasAsset("rule", "source-rule") || v.HasAsset("skill", skill.ID) {
 		t.Fatalf("incomplete version: %+v", v)
@@ -77,7 +77,7 @@ func TestSharedScheduleRejectsEntirePublicationForUnshareableReferences(t *testi
 	t.Cleanup(st.Close)
 	for _, typ := range []string{"issue", "repository", "run", "unknown"} {
 		t.Run(typ, func(t *testing.T) {
-			job := domain.ScheduleJob{ID: "blocked-" + typ, Name: "Job", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssistantReference{{Type: typ, ID: "private"}}}
+			job := domain.ScheduleJob{ID: "blocked-" + typ, Name: "Job", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssetReference{{Type: typ, ID: "private"}}}
 			if err := st.PutScheduleJob(job); err != nil {
 				t.Fatal(err)
 			}
@@ -110,7 +110,7 @@ func TestSharedScheduleSharesPrivateSkillAndPreservesStoredFiles(t *testing.T) {
 	}
 	before, _ := st.Skill(skill.ID)
 	files := st.SkillFileContents(skill.ID)
-	job := domain.ScheduleJob{ID: "private-direct", Name: "Private", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssistantReference{{Type: "skill", ID: skill.ID}}}
+	job := domain.ScheduleJob{ID: "private-direct", Name: "Private", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssetReference{{Type: "skill", ID: skill.ID}}}
 	if err := st.PutScheduleJob(job); err != nil {
 		t.Fatal(err)
 	}
@@ -151,8 +151,8 @@ func TestSharedScheduleCanonicalReferencesAndOwnership(t *testing.T) {
 	if err := st.PutSkill(skill); err != nil {
 		t.Fatal(err)
 	}
-	job := domain.ScheduleJob{ID: "canonical-job", Name: "Job", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssistantReference{
-		{Type: " skill ", ID: " canonical-skill ", Name: "forged", ProjectID: "forged", ProjectName: "forged", Element: &domain.AssistantPageElement{}},
+	job := domain.ScheduleJob{ID: "canonical-job", Name: "Job", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssetReference{
+		{Type: " skill ", ID: " canonical-skill ", Name: "forged", ProjectID: "forged", ProjectName: "forged", Element: &domain.BrowserPageElement{}},
 		{Type: "skill", ID: skill.ID},
 	}}
 	if err := st.PutScheduleJob(job); err != nil {
@@ -162,7 +162,7 @@ func TestSharedScheduleCanonicalReferencesAndOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := domain.AssistantReference{Type: "skill", ID: skill.ID, Name: skill.Name, ProjectID: skill.ProjectID}
+	want := domain.AssetReference{Type: "skill", ID: skill.ID, Name: skill.Name, ProjectID: skill.ProjectID}
 	if len(v.References) != 1 || v.References[0] != want || len(v.Assets) != 1 {
 		t.Fatalf("non-canonical publication: %+v", v)
 	}
@@ -194,7 +194,7 @@ func TestSharedScheduleDoesNotPinSOPDependencies(t *testing.T) {
 	check(st.PutSandbox(domain.SandboxProfile{ID: "native", Name: "Native", ProjectID: "source", Driver: "native", Environment: map[string]string{"MODE": "test"}}))
 	check(st.PutWorkflow(domain.WorkflowDefinition{ID: "child", Name: "Child", ProjectID: "source", SandboxProfileID: "native", Nodes: []domain.WorkflowNode{{ID: "approve", Type: "approval", Name: "Approve"}}}))
 	check(st.PutWorkflow(domain.WorkflowDefinition{ID: "parent", Name: "Parent", ProjectID: "source", Shared: true, SandboxProfileID: "sandbox", Nodes: []domain.WorkflowNode{{ID: "child", Type: "sop", SOPWorkflowID: "child", Name: "Child"}}}))
-	job := domain.ScheduleJob{ID: "sop-task", Name: "LOOP task", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "start", References: []domain.AssistantReference{{Type: "sop", ID: "parent"}}}
+	job := domain.ScheduleJob{ID: "sop-task", Name: "LOOP task", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "start", References: []domain.AssetReference{{Type: "sop", ID: "parent"}}}
 	check(st.PutScheduleJob(job))
 	v, err := st.PublishSharedSchedule(job.ID, job.ProjectID, domain.SharedScheduleVersion{Name: "LOOP task", Prompt: "start"}, 0)
 	check(err)
@@ -232,7 +232,7 @@ func TestSharedScheduleSOPPreservesTemplateFallbacksAndBuiltInPreview(t *testing
 	check(SeedTestGenericTemplates(st))
 	check(st.PutAgent(domain.AgentDefinition{ID: GenericAgentRequirement, Name: "Project override", ProjectID: "source", Skills: []string{"not-in-template"}}))
 	check(st.PutRule(domain.RuleDefinition{ID: GenericRuleCore, Name: "Foreign override", ProjectID: "other"}))
-	job := domain.ScheduleJob{ID: "template-task", Name: "Template", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "start", References: []domain.AssistantReference{{Type: "sop", ID: GenericBackendDeliveryWorkflowID}}}
+	job := domain.ScheduleJob{ID: "template-task", Name: "Template", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "start", References: []domain.AssetReference{{Type: "sop", ID: GenericBackendDeliveryWorkflowID}}}
 	check(st.PutScheduleJob(job))
 	v, err := st.PublishSharedSchedule(job.ID, job.ProjectID, domain.SharedScheduleVersion{Name: "Template", Prompt: "start"}, 0)
 	check(err)
@@ -245,7 +245,7 @@ func TestSharedScheduleSOPPreservesTemplateFallbacksAndBuiltInPreview(t *testing
 	wf, err = domain.AttachPreviewBuild(wf)
 	check(err)
 	check(st.PutWorkflow(wf))
-	job.ID, job.References = "preview-task", []domain.AssistantReference{{Type: "sop", ID: wf.ID}}
+	job.ID, job.References = "preview-task", []domain.AssetReference{{Type: "sop", ID: wf.ID}}
 	check(st.PutScheduleJob(job))
 	preview, err := st.PublishSharedSchedule(job.ID, job.ProjectID, domain.SharedScheduleVersion{Name: "Preview", Prompt: "start"}, 0)
 	check(err)
@@ -271,7 +271,7 @@ func TestSharedScheduleSharesPrivateAgentThroughCatalogBoundary(t *testing.T) {
 	check(st.PutSkill(domain.SkillDefinition{ID: "owned-skill", Name: "Skill", ProjectID: "source"}))
 	role := domain.AgentDefinition{ID: "private-role", Name: "Role", ProjectID: "source", Rules: []string{"owned-rule"}, Skills: []string{"owned-skill"}}
 	check(st.PutAgent(role))
-	job := domain.ScheduleJob{ID: "agent-task", Name: "Task", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssistantReference{{Type: "agent", ID: role.ID}}}
+	job := domain.ScheduleJob{ID: "agent-task", Name: "Task", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssetReference{{Type: "agent", ID: role.ID}}}
 	check(st.PutScheduleJob(job))
 	v, err := st.PublishSharedSchedule(job.ID, job.ProjectID, domain.SharedScheduleVersion{Name: "Shared", Prompt: "inspect"}, 0)
 	check(err)
@@ -303,7 +303,7 @@ func TestSharedScheduleReusesExternalSharedAgentWithoutCascading(t *testing.T) {
 	}
 	beforeRole, _ := st.Agent("library-role")
 	beforeSkill, _ := st.Skill("library-skill")
-	job := domain.ScheduleJob{ID: "library-task", Name: "Task", ProjectID: "source", SkipDispatch: true, References: []domain.AssistantReference{{Type: "agent", ID: "library-role"}}}
+	job := domain.ScheduleJob{ID: "library-task", Name: "Task", ProjectID: "source", SkipDispatch: true, References: []domain.AssetReference{{Type: "agent", ID: "library-role"}}}
 	if err := st.PutScheduleJob(job); err != nil {
 		t.Fatal(err)
 	}
@@ -362,7 +362,7 @@ func TestSharedSchedulePrivateSOPUsesExistingSharingChecks(t *testing.T) {
 			}
 			before, _ := st.Workflow(wf.ID)
 			beforeSkill, _ := st.Skill("first-skill")
-			job := domain.ScheduleJob{ID: "sop-job", Name: "Task", ProjectID: "source", SkipDispatch: true, References: []domain.AssistantReference{{Type: "skill", ID: "first-skill"}, {Type: "sop", ID: wf.ID}}}
+			job := domain.ScheduleJob{ID: "sop-job", Name: "Task", ProjectID: "source", SkipDispatch: true, References: []domain.AssetReference{{Type: "skill", ID: "first-skill"}, {Type: "sop", ID: wf.ID}}}
 			check(st.PutScheduleJob(job))
 			v, err := st.PublishSharedSchedule(job.ID, job.ProjectID, domain.SharedScheduleVersion{Name: "Shared", Prompt: "inspect"}, 0)
 			after, _ := st.Workflow(wf.ID)
@@ -413,7 +413,7 @@ func TestSharedSchedulePublishingWriteFailureRollsBackAssetsAndRevisions(t *test
 			beforeRole, _ := st.Agent("rollback-agent")
 			beforeRule, _ := st.Rule("rollback-rule")
 			beforeSkill, _ := st.Skill("rollback-skill")
-			job := domain.ScheduleJob{ID: "rollback-job", Name: "Task", ProjectID: "source", SkipDispatch: true, References: []domain.AssistantReference{{Type: "agent", ID: "rollback-agent"}}}
+			job := domain.ScheduleJob{ID: "rollback-job", Name: "Task", ProjectID: "source", SkipDispatch: true, References: []domain.AssetReference{{Type: "agent", ID: "rollback-agent"}}}
 			check(st.PutScheduleJob(job))
 			injected := errors.New("injected publish write failure")
 			reached := false
@@ -460,7 +460,7 @@ func TestSharedScheduleVersionConflictDoesNotShareNewReference(t *testing.T) {
 		t.Fatal(err)
 	}
 	before, _ := st.Skill("new-skill")
-	job.References = []domain.AssistantReference{{Type: "skill", ID: "new-skill"}}
+	job.References = []domain.AssetReference{{Type: "skill", ID: "new-skill"}}
 	if err := st.PutScheduleJob(job); err != nil {
 		t.Fatal(err)
 	}

@@ -827,7 +827,7 @@ func TestGlobalRuleWorkflowBinding(t *testing.T) {
 }
 
 func TestExecutorModelsCatalogUsesOnlyTheEditorsSavedModels(t *testing.T) {
-	assistant, user := workbenchFixture(t)
+	d, user := workbenchFixture(t)
 	user = domain.User{
 		LoginName:        "personal-catalog",
 		CodexAPIKey:      "fixture-secret",
@@ -838,11 +838,11 @@ func TestExecutorModelsCatalogUsesOnlyTheEditorsSavedModels(t *testing.T) {
 			"dsh":      {APIKey: "fixture-dsh-secret"},
 		},
 	}
-	if err := assistant.repo.PutUser(user); err != nil {
+	if err := d.repo.PutUser(user); err != nil {
 		t.Fatal(err)
 	}
-	user, _ = assistant.repo.UserByLoginName(user.LoginName)
-	handler := &catalogHandlers{deps: assistant.deps}
+	user, _ = d.repo.UserByLoginName(user.LoginName)
+	handler := &catalogHandlers{deps: d}
 	c, rec := workbenchContext(user, "GET", "/api/executor-models", bytes.NewBuffer(nil))
 	handler.executorModels(c)
 	var catalogs map[string]executorModelCatalog
@@ -869,7 +869,7 @@ func TestExecutorModelsCatalogUsesOnlyTheEditorsSavedModels(t *testing.T) {
 			t.Errorf("%s configured = %t, want %t", id, got, want)
 		}
 	}
-	other, _ := assistant.repo.UserByLoginName("workbench-owner")
+	other, _ := d.repo.UserByLoginName("workbench-owner")
 	c, rec = workbenchContext(other, "GET", "/api/executor-models", bytes.NewBuffer(nil))
 	handler.executorModels(c)
 	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "gateway/second") || !strings.Contains(rec.Body.String(), "gpt-6.1-sol") {
@@ -883,9 +883,9 @@ func TestExecutorModelsCatalogUsesOnlyTheEditorsSavedModels(t *testing.T) {
 // Role and SOP pickers offer the executors a SOP run can use: a personal key,
 // the platform's shared CodeBuddy Key, or account login on the default runner.
 func TestExecutorModelsConfiguredMatchesRunTimeCredentials(t *testing.T) {
-	assistant, _ := workbenchFixture(t)
+	d, _ := workbenchFixture(t)
 	stubCLIModelDiscovery(t)
-	st := assistant.repo
+	st := d.repo
 	for _, user := range []domain.User{
 		{LoginName: "picker-personal", CodexAPIKey: "fixture-codex"},
 		{LoginName: "picker-shared"},
@@ -910,7 +910,7 @@ func TestExecutorModelsConfiguredMatchesRunTimeCredentials(t *testing.T) {
 	if err := st.SetDefaultRunner(login.ID, machine.ID, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	handler := &catalogHandlers{deps: assistant.deps}
+	handler := &catalogHandlers{deps: d}
 	executorModels := func(user domain.User) map[string]map[string]any {
 		t.Helper()
 		c, rec := workbenchContext(user, http.MethodGet, "/api/executor-models", &bytes.Buffer{})
@@ -923,14 +923,8 @@ func TestExecutorModelsConfiguredMatchesRunTimeCredentials(t *testing.T) {
 	}
 	assistantEngines := func(user domain.User, query string) map[string]assistantEngineOption {
 		t.Helper()
-		c, rec := workbenchContext(user, http.MethodGet, "/api/assistant/models"+query, &bytes.Buffer{})
-		assistant.models(c)
-		var catalog assistantModelCatalog
-		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &catalog) != nil {
-			t.Fatalf("assistant models: %d %s", rec.Code, rec.Body)
-		}
 		out := map[string]assistantEngineOption{}
-		for _, option := range catalog.Engines {
+		for _, option := range assistantEngineOptions(user, false) {
 			out[option.ID] = option
 		}
 		return out
@@ -999,9 +993,9 @@ func TestExecutorModelsConfiguredMatchesRunTimeCredentials(t *testing.T) {
 // Without a default machine a project SOP runs on a cloud pool runner with
 // that runner's account login, so the picker offers those CLIs too.
 func TestExecutorModelsConfiguredFollowsTheCloudPool(t *testing.T) {
-	assistant, _ := workbenchFixture(t)
+	d, _ := workbenchFixture(t)
 	stubCLIModelDiscovery(t)
-	st := assistant.repo
+	st := d.repo
 	if err := st.PutUser(domain.User{LoginName: "picker-pool"}); err != nil {
 		t.Fatal(err)
 	}
@@ -1019,8 +1013,8 @@ func TestExecutorModelsConfiguredFollowsTheCloudPool(t *testing.T) {
 	}
 	runs := engine.New(st, runtime.NewManager(t.TempDir()))
 	runs.ConfigureCloudRunnerPool(engine.CloudRunnerPool{Label: "pool", Projects: []string{"pool-project"}})
-	assistant.deps.engine = runs
-	handler := &catalogHandlers{deps: assistant.deps}
+	d.engine = runs
+	handler := &catalogHandlers{deps: d}
 	for query, want := range map[string]bool{"": false, "?projectId=pool-project": true, "?projectId=plain-project": false} {
 		c, rec := workbenchContext(user, http.MethodGet, "/api/executor-models"+query, &bytes.Buffer{})
 		handler.executorModels(c)

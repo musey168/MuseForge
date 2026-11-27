@@ -56,10 +56,11 @@ func TestGenericSOPCopyUsesPersonalDefaultForUnpinnedRoles(t *testing.T) {
 	if _, err := e.resolveDeferredSOPExecutor(run, workflow.Nodes[0]); !errors.Is(err, errSOPExecutorUnconfigured) {
 		t.Fatalf("the role should report missing configuration before invoking a CLI: %v", err)
 	}
-	defaults := domain.AssistantDefaults{Executor: "dsh", Model: "deepseek-v4.1-flash"}
+	// Without a personal default the executor falls back to the only CLI the
+	// account holds a credential for.
+	defaults := domain.ExecutorDefaults{Executor: "dsh"}
 	if _, err := st.UpdateUserCredentials(1, repo.UserCredentialUpdate{
 		AgentCLICredentials: map[string]repo.AgentCLICredentialUpdate{"dsh": {APIKey: "fixture-key"}},
-		AssistantDefaults:   &defaults,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -232,17 +233,17 @@ func TestSOPDefaultSnapshotFollowsRunnerAuthMode(t *testing.T) {
 				t.Fatal(err)
 			}
 			ex, _ := repo.BuiltInExecutorForKind(kind)
-			personal := domain.AssistantDefaults{Executor: kind, Model: "owner-gateway", Effort: "high"}
-			member := domain.AssistantDefaults{Executor: kind, Model: "member-gateway", Effort: "high"}
+			personal := domain.ExecutorDefaults{Executor: kind, Model: "owner-gateway", Effort: "high"}
+			member := domain.ExecutorDefaults{Executor: kind, Model: "member-gateway", Effort: "high"}
 			for _, user := range []struct {
 				id       int64
-				defaults *domain.AssistantDefaults
+				defaults *domain.ExecutorDefaults
 			}{{1, &personal}, {42, &member}} {
 				if err := st.SetProjectDefaultRunner(user.id, project.ID, runner.ID); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := st.UpdateUserCredentials(user.id, repo.UserCredentialUpdate{
-					CodexAPIKey: "codex-fixture-key", ClaudeCodeAPIKey: "claude-fixture-key", AssistantDefaults: user.defaults,
+					CodexAPIKey: "codex-fixture-key", ClaudeCodeAPIKey: "claude-fixture-key", ExecutorDefaults: user.defaults,
 				}); err != nil {
 					t.Fatal(err)
 				}
@@ -272,7 +273,7 @@ func TestSOPDefaultSnapshotFollowsRunnerAuthMode(t *testing.T) {
 				if err != nil {
 					t.Fatalf("%s: %v", label, err)
 				}
-				want := domain.AssistantDefaults{Executor: ex.ID, Model: model, Effort: effort}
+				want := domain.ExecutorDefaults{Executor: ex.ID, Model: model, Effort: effort}
 				defaults := run.WorkflowSnapshot.ExecutorDefaults
 				if run.ExecutionContext.ExecutionRunnerID != runner.ID || len(defaults) != 1 || defaults["inherited"] != want {
 					t.Errorf("%s: runner %q, defaults %+v, want runner %q and %+v", label, run.ExecutionContext.ExecutionRunnerID, defaults, runner.ID, want)
@@ -331,9 +332,9 @@ func TestSOPExecutorDefaultForBaselinePreviewAndProjectRole(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	preference := domain.AssistantDefaults{Executor: "codex", Model: "fixture-model"}
+	preference := domain.ExecutorDefaults{Executor: "codex", Model: "fixture-model"}
 	if _, err := st.UpdateUserCredentials(1, repo.UserCredentialUpdate{
-		CodexAPIKey: "fixture-key", AssistantDefaults: &preference,
+		CodexAPIKey: "fixture-key", ExecutorDefaults: &preference,
 	}); err != nil {
 		t.Fatal(err)
 	}

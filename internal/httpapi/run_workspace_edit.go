@@ -40,7 +40,7 @@ func (h *runsHandlers) workspaceOwnerAccess(r *http.Request, run domain.Run) (in
 	}
 	// Conversation tools inherit project access from their authenticated entry
 	// point; the separate task-panel editor policy does not apply to them.
-	if run.ID == "" || (mainBotWorkspaceRun(r.Context()) != run.ID && !h.workspaceEditAllowed(r, run, user.ID)) {
+	if run.ID == "" || !h.workspaceEditAllowed(r, run, user.ID) {
 		return 0, http.StatusForbidden, "无权编辑该任务工作区"
 	}
 	if engine.WorkspaceRunID(run) != run.ID {
@@ -171,9 +171,6 @@ func (h *runsHandlers) workspaceWritable(c *gin.Context, run domain.Run) bool {
 	// Read-only probe: never write HTTP errors here (browse handlers still return the payload).
 	if _, status, _ := h.workspaceEditAccess(c.Request, run); status != 0 {
 		return false
-	}
-	if mainBotWorkspaceRun(c.Request.Context()) == run.ID {
-		return run.LiveWorkspace() || (run.Status == "waiting" && run.PauseRequested && !run.CancelRequested) || domain.TerminalRunStatus(run.Status)
 	}
 	return run.HumanEditable()
 }
@@ -320,9 +317,6 @@ func (h *runsHandlers) withWorkspaceWriter(c *gin.Context, runID string, user in
 			return err
 		}
 	}
-	if mainBotWorkspaceRun(ctx) == runID {
-		return h.repo.WithMainBotWorkspace(runID, user, fn)
-	}
 	return h.repo.WithWorkspaceEditor(runID, user, fn)
 }
 
@@ -330,14 +324,11 @@ func (h *runsHandlers) withWorkspaceWriter(c *gin.Context, runID string, user in
 // running, which the runner serves beside those tasks (sharing their gate)
 // instead of waiting for their fence. Finished runs keep the exclusive fence.
 func humanWorkspaceEdit(c *gin.Context, run domain.Run) bool {
-	return mainBotWorkspaceRun(c.Request.Context()) != run.ID && run.HumanEditable() && !domain.TerminalRunStatus(run.Status)
+	return run.HumanEditable() && !domain.TerminalRunStatus(run.Status)
 }
 
 // mainBotWorkspaceMode tells the runner to apply the live-workspace rule to
-// Main Bot (no LOOP fence on its conversation workspace).
+// a workspace a person took over.
 func mainBotWorkspaceMode(c *gin.Context, run domain.Run) string {
-	if mainBotWorkspaceRun(c.Request.Context()) == run.ID {
-		return run.Kind
-	}
 	return ""
 }

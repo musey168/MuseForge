@@ -95,10 +95,6 @@ function openScheduleLatestExecution(job){
   if(!action)return;
   if($('#scheduleModal')?.classList.contains('open'))closeScheduleJobModal();
   if(action.kind==='session'){
-    if(typeof openChatSessionInWorkbench==='function'){
-      openChatSessionInWorkbench(action.sessionId,action.projectId);
-      return;
-    }
     if(typeof scheduleExecConversationURL==='function'){
       window.open(scheduleExecConversationURL({projectId:action.projectId,sessionId:action.sessionId}),'_blank','noopener');
       return;
@@ -201,12 +197,9 @@ function syncSchedulePromptEditor(){
   if(!f||!host||f.elements.jobKind.value!=='assistant')return;
   const mount=window.LoopForgePromptEditor?.mount;
   if(!mount){
-    if(!document.getElementById('schedulePromptEditorModule')){
-      const script=document.createElement('script');script.id='schedulePromptEditorModule';
-      script.type='module';script.src='/chatbot/prompt-editor.js';
-      script.onerror=()=>{script.remove();if($('#scheduleModal').classList.contains('open'))toast('项目资产输入组件加载失败，提示词仍可编辑；请重新打开任务重试','err')};
-      document.head.append(script);
-    }
+    // Without the rich editor the plain prompt field stays editable.
+    host.hidden=true;
+    f.querySelector('[data-schedule-reference-editor]').hidden=true;
     return;
   }
   const version=scheduleModalVersion,projectId=state.projectFilter;

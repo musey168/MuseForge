@@ -19,11 +19,11 @@ func TestRunnerCLITestUsesOwnerLoginAndCleansUp(t *testing.T) {
 	if err := h.repo.PutRunner(runner); err != nil {
 		t.Fatal(err)
 	}
-	h.runnerControls = quietRunnerHub()
+	hub := quietRunnerHub()
 	conn := testRunnerConn(runner.ID)
-	registerTestConn(h.runnerControls, conn)
+	registerTestConn(hub, conn)
 	t.Cleanup(conn.close)
-	runners := &runnersHandlers{deps: h.deps, assistant: h}
+	runners := &runnersHandlers{deps: h, runnerControls: hub}
 	body := `{"runnerId":"test-laptop","provider":"claude-code"}`
 
 	foreign := domain.User{ID: owner.ID + 1, LoginName: "other"}
@@ -70,7 +70,7 @@ func TestRunnerCLITestUsesOwnerLoginAndCleansUp(t *testing.T) {
 				t.Fatalf("unexpected runner operation %q", req.Operation)
 			}
 			raw, _ := json.Marshal(result)
-			h.runnerControls.resolveWorkspace(conn, msg.RequestID, domain.RunnerWorkspaceResponse{Status: 200, Payload: raw})
+			hub.resolveWorkspace(conn, msg.RequestID, domain.RunnerWorkspaceResponse{Status: 200, Payload: raw})
 		case <-done:
 			t.Fatalf("test ended before runner cleanup: %d %s", rec.Code, rec.Body)
 		case <-time.After(5 * time.Second):

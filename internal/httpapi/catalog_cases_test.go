@@ -85,7 +85,7 @@ func TestCatalogRepositoryAgentAndAssetBranches(t *testing.T) {
 	if rec := cvBRequest(t, f, http.MethodPut, "/api/rules", map[string]any{"id": "cvb-rule", "name": "Rule", "projectId": "cvb-cat", "shared": false}, true); rec.Code != 409 {
 		t.Errorf("unshare referenced rule = %d: %s", rec.Code, rec.Body.String())
 	}
-	if err := f.s.PutScheduleJob(domain.ScheduleJob{ID: "cvb-shared-agent-job", Name: "Shared agent job", ProjectID: "cvb-cat", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssistantReference{{Type: "agent", ID: agent.ID}}}); err != nil {
+	if err := f.s.PutScheduleJob(domain.ScheduleJob{ID: "cvb-shared-agent-job", Name: "Shared agent job", ProjectID: "cvb-cat", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssetReference{{Type: "agent", ID: agent.ID}}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.s.PublishSharedSchedule("cvb-shared-agent-job", "cvb-cat", domain.SharedScheduleVersion{Name: "Shared agent", Prompt: "inspect"}, 0); err != nil {

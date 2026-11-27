@@ -64,7 +64,7 @@ func TestSharedScheduleDirectReferenceUnshareAndRestoreGuards(t *testing.T) {
 	check(f.s.PutWorkflow(workflow))
 	skill := domain.SkillDefinition{ID: "direct-skill", Name: "Skill", ProjectID: "direct-refs", Shared: true}
 	check(f.s.PutSkill(skill))
-	job := domain.ScheduleJob{ID: "direct-job", Name: "Job", ProjectID: "direct-refs", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssistantReference{{Type: "agent", ID: agent.ID}, {Type: "skill", ID: skill.ID}, {Type: "sop", ID: workflow.ID}}}
+	job := domain.ScheduleJob{ID: "direct-job", Name: "Job", ProjectID: "direct-refs", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssetReference{{Type: "agent", ID: agent.ID}, {Type: "skill", ID: skill.ID}, {Type: "sop", ID: workflow.ID}}}
 	check(f.s.PutScheduleJob(job))
 	version, err := f.s.PublishSharedSchedule(job.ID, job.ProjectID, domain.SharedScheduleVersion{Name: "Shared", Prompt: "inspect"}, 0)
 	check(err)
@@ -107,7 +107,7 @@ func TestSharedScheduleReferences(t *testing.T) {
 	if err := s.PutAgent(domain.AgentDefinition{ID: "ssr-agent", Name: "Shared agent", ProjectID: "ssr-project", Shared: true}); err != nil {
 		t.Fatal(err)
 	}
-	job := domain.ScheduleJob{ID: "ssr-job", Name: "Shared task", ProjectID: "ssr-project", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssistantReference{{Type: "skill", ID: "ssr-skill"}}}
+	job := domain.ScheduleJob{ID: "ssr-job", Name: "Shared task", ProjectID: "ssr-project", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssetReference{{Type: "skill", ID: "ssr-skill"}}}
 	if err := s.PutScheduleJob(job); err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestSharedScheduleReferences(t *testing.T) {
 		t.Fatal(err)
 	}
 	job.ID = "ssr-agent-job"
-	job.References = []domain.AssistantReference{{Type: "agent", ID: "ssr-agent"}}
+	job.References = []domain.AssetReference{{Type: "agent", ID: "ssr-agent"}}
 	if err := s.PutScheduleJob(job); err != nil {
 		t.Fatal(err)
 	}

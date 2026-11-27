@@ -42,7 +42,7 @@ func TestAssistantModelsModuleShipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"window.AgentFlowAssistantModels", "renderList", "renderOptions", "paintItem", "/api/assistant/models"} {
+	for _, want := range []string{"window.AgentFlowAssistantModels", "renderList", "renderOptions", "paintItem", "/api/model-catalog"} {
 		if !strings.Contains(string(source), want) {
 			t.Fatalf("app/assistant-models.js is missing %q", want)
 		}

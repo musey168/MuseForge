@@ -1063,7 +1063,7 @@ func TestRequirementDirectCreateUI(t *testing.T) {
 		`id="reqStepDescribe"`, `id="reqFooter"`,
 		`id="chatInput"`, `placeholder="要做什么？例如：`, `id="reqRepoChip"`, `id="reqRepoPopover"`, `id="reqRepository"`, `id="reqBaseBranch"`,
 		`id="reqWorkflow"`, `LOOP 流程`, `id="reqTarget"`, `data-req-target="local"`, `data-req-target="tapd"`,
-		`id="reqCreate"`, `创建需求`, `id="reqCreateChat"`, `创建并去对话澄清`, `先写一句需求`,
+		`id="reqCreate"`, `创建需求`, `先写一句需求`,
 	} {
 		if !strings.Contains(composer, want) {
 			t.Fatalf("requirement composer UI is missing %q", want)
@@ -1079,9 +1079,8 @@ func TestRequirementDirectCreateUI(t *testing.T) {
 		}
 	}
 	createIdx := strings.Index(composer, `id="reqCreate"`)
-	chatIdx := strings.Index(composer, `id="reqCreateChat"`)
-	if createIdx < 0 || chatIdx < 0 || createIdx > chatIdx {
-		t.Fatal("创建需求 must sit to the left of the primary 创建并去对话澄清")
+	if createIdx < 0 {
+		t.Fatal("the requirement composer needs a 创建需求 button")
 	}
 	js, err := readAppBundle()
 	if err != nil {
@@ -1103,7 +1102,6 @@ func TestRequirementDirectCreateUI(t *testing.T) {
 	for _, want := range []string{
 		`function renderReqFooter(`, `function renderReqRepoChip(`, `persistRequirementComposer`, `agentflow.requirementComposer`, `未配置`, `if(modal.id==='requirementModal')return`,
 		`assigneeUserId:Number(state.currentUser?.id)||0`, `fillReqWorkflow`, `selectedReqWorkflowId`, `可在详情里触发 LOOP`,
-		`createIssueFromChat(undefined,'chat')`, `if(toChat)openIssueInChat(issue,{intent:'clarify'})`, `function openIssueInChat(`, `type:'agentflow-chat-mention-issue'`, `&mentionIssue=`, `&mentionIntent=`,
 	} {
 		if !strings.Contains(code, want) {
 			t.Fatalf("requirement composer behavior is missing %q", want)
@@ -2109,7 +2107,7 @@ func TestPlatformAdminLivesOnItsOwnView(t *testing.T) {
 	if !strings.Contains(source, "group.hidden=!isPlatformAdmin()") {
 		t.Fatal("the platform nav entry is rendered for non-admins")
 	}
-	if !strings.Contains(source, "if(name==='platform'&&!isPlatformAdmin())name='collaboration'") {
+	if !strings.Contains(source, "if(name==='platform'&&!isPlatformAdmin())name='issues'") {
 		t.Fatal("a hand-typed #/platform is not blocked for non-admins")
 	}
 	if strings.Contains(source, "state.sopScope==='generic'&&isPlatformAdmin()") {
@@ -2600,7 +2598,7 @@ func TestCodexStyleLeftMiniRailLayout(t *testing.T) {
 	}
 
 	// 2. 左侧小栏只留 4 个日常入口和设置；流程模板、运行记录、定时任务收进设置导航。
-	for _, view := range []string{"collaboration", "observability", "issues", "approvals", "settings"} {
+	for _, view := range []string{"observability", "issues", "approvals", "settings"} {
 		needle := `data-view="` + view + `"`
 		sub := page[railIdx:sidebarIdx]
 		if !strings.Contains(sub, needle) {

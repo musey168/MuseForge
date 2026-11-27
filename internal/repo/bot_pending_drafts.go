@@ -86,7 +86,7 @@ func (row botPendingDraftRow) draft() domain.BotPendingDraft {
 // SetBotPendingDraftChoice records the LOOP the requester picked on the chat
 // card. Only a pending draft of that sender and configuration, and only an
 // offered LOOP, is accepted.
-func (r *AssistantRepo) SetBotPendingDraftChoice(id, configID, sender, choice string, now time.Time) (domain.BotPendingDraft, error) {
+func (r *BotInteractionsRepo) SetBotPendingDraftChoice(id, configID, sender, choice string, now time.Time) (domain.BotPendingDraft, error) {
 	var row botPendingDraftRow
 	if err := r.DB.First(&row, "id = ?", id).Error; err != nil {
 		return domain.BotPendingDraft{}, err
@@ -104,7 +104,7 @@ func (r *AssistantRepo) SetBotPendingDraftChoice(id, configID, sender, choice st
 
 // SetBotPendingDraftRepository records the repository the requester picked
 // on the chat card; only an offered repository is accepted.
-func (r *AssistantRepo) SetBotPendingDraftRepository(id, configID, sender, choice string, now time.Time) (domain.BotPendingDraft, error) {
+func (r *BotInteractionsRepo) SetBotPendingDraftRepository(id, configID, sender, choice string, now time.Time) (domain.BotPendingDraft, error) {
 	var row botPendingDraftRow
 	if err := r.DB.First(&row, "id = ?", id).Error; err != nil {
 		return domain.BotPendingDraft{}, err
@@ -127,7 +127,7 @@ func botDraftHash(drafts string) string {
 
 // CreateBotPendingDraft freezes drafts for confirmation and returns the
 // random draft ID used in the link.
-func (r *AssistantRepo) CreateBotPendingDraft(d domain.BotPendingDraft, now time.Time) (domain.BotPendingDraft, error) {
+func (r *BotInteractionsRepo) CreateBotPendingDraft(d domain.BotPendingDraft, now time.Time) (domain.BotPendingDraft, error) {
 	options := ""
 	if d.SOP != nil {
 		raw, err := json.Marshal(d.SOP)
@@ -146,7 +146,7 @@ func (r *AssistantRepo) CreateBotPendingDraft(d domain.BotPendingDraft, now time
 // BotPendingDraft reads a draft, settling lazy transitions: an expired
 // pending draft becomes expired, an executing draft past the stale window
 // becomes needs_review.
-func (r *AssistantRepo) BotPendingDraft(id string, now time.Time) (domain.BotPendingDraft, error) {
+func (r *BotInteractionsRepo) BotPendingDraft(id string, now time.Time) (domain.BotPendingDraft, error) {
 	var row botPendingDraftRow
 	if err := r.DB.First(&row, "id = ?", id).Error; err != nil {
 		return domain.BotPendingDraft{}, err
@@ -164,7 +164,7 @@ func (r *AssistantRepo) BotPendingDraft(id string, now time.Time) (domain.BotPen
 
 // BotPendingDraftForInteraction returns the pending draft a chat turn
 // produced, if any (used to send the confirmation as a card).
-func (r *AssistantRepo) BotPendingDraftForInteraction(interactionID string) (domain.BotPendingDraft, bool) {
+func (r *BotInteractionsRepo) BotPendingDraftForInteraction(interactionID string) (domain.BotPendingDraft, bool) {
 	var row botPendingDraftRow
 	if interactionID == "" || r.DB.Where("interaction_id = ? AND status = ?", interactionID, BotDraftPending).Order("created_at DESC").First(&row).Error != nil {
 		return domain.BotPendingDraft{}, false
@@ -175,7 +175,7 @@ func (r *AssistantRepo) BotPendingDraftForInteraction(interactionID string) (dom
 // BeginBotPendingDraft moves a pending, unexpired draft of userID to
 // executing and verifies the frozen parameters. Any other state returns the
 // current draft with ErrBotDraftNotPending.
-func (r *AssistantRepo) BeginBotPendingDraft(id string, userID int64, now time.Time) (domain.BotPendingDraft, error) {
+func (r *BotInteractionsRepo) BeginBotPendingDraft(id string, userID int64, now time.Time) (domain.BotPendingDraft, error) {
 	var out domain.BotPendingDraft
 	err := r.DB.Transaction(func(tx *gorm.DB) error {
 		var row botPendingDraftRow
@@ -221,13 +221,13 @@ func (r *AssistantRepo) BeginBotPendingDraft(id string, userID int64, now time.T
 }
 
 // FinishBotPendingDraft records the outcome of an executing draft.
-func (r *AssistantRepo) FinishBotPendingDraft(id, status, result string, now time.Time) error {
+func (r *BotInteractionsRepo) FinishBotPendingDraft(id, status, result string, now time.Time) error {
 	return r.DB.Model(&botPendingDraftRow{}).Where("id = ? AND status = ?", id, BotDraftExecuting).Updates(map[string]any{"status": status, "result": result, "executed_at": now, "updated_at": now}).Error
 }
 
 // CancelBotPendingDraft lets the bound user reject a pending draft, or the
 // server invalidate it after a failed re-check.
-func (r *AssistantRepo) CancelBotPendingDraft(id string, userID int64, reason string, now time.Time) error {
+func (r *BotInteractionsRepo) CancelBotPendingDraft(id string, userID int64, reason string, now time.Time) error {
 	result := r.DB.Model(&botPendingDraftRow{}).Where("id = ? AND user_id = ? AND status = ?", id, userID, BotDraftPending).Updates(map[string]any{"status": BotDraftCancelled, "reason": truncateBotDetail(reason), "updated_at": now})
 	if result.Error != nil {
 		return result.Error

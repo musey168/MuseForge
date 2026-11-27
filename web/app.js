@@ -999,10 +999,6 @@ async function boot(){
     if(name==='agents')applyAgentRoute();
     if(isProjectSharedAsset(name))applyAssetRoute();
     if(name==='projects')applyProjectAdminRoute();
-    if(name==='collaboration'){
-      const id=routePart(1);
-      if(id){const url=new URL(location.href);url.searchParams.set('chatSession',id);history.replaceState({},'',url);const frame=$('#chatNextFrame');if(frame){frame.dataset.src='';mountNativeChat()}}
-    }
   });
   const view=restoredView();
   if(view==='projects')syncProjectAdminRouteState();
@@ -1013,8 +1009,7 @@ async function boot(){
   if(!['approvals','issues','runs','sops'].includes(state.currentView))preloadApprovalBadge();
   restoreRequirementComposer();
 }
-const BOOT_LOADER_CHAT_TIMEOUT_MS=8000;
-let nativeChatReady=false,bootLoaderTimer=0;
+let bootLoaderTimer=0;
 function finishBootLoader(){
   clearTimeout(bootLoaderTimer);bootLoaderTimer=0;
   document.body.classList.remove('booting');
@@ -1028,12 +1023,10 @@ function finishBootLoader(){
   setTimeout(remove,250);
 }
 function settleBootLoader(){
-  if(!document.body.classList.contains('chat-next-active')||nativeChatReady){finishBootLoader();return}
-  clearTimeout(bootLoaderTimer);
-  bootLoaderTimer=setTimeout(finishBootLoader,BOOT_LOADER_CHAT_TIMEOUT_MS);
+  finishBootLoader();
 }
 window.addEventListener('pageshow',event=>{if(event.persisted)finishBootLoader()});
-// Shared with the /chatbot/ iframe (chatbot/src/theme.js): light|dark|system, while data-theme stays light|dark.
+// The theme preference: light|dark|system, while data-theme stays light|dark.
 const THEME_KEY='agentflow.theme.v3',LEGACY_THEME_KEY='agentflow.native-chat.theme',EARLIER_THEME_KEY='loopforge.theme.v3',themeMedia=matchMedia('(prefers-color-scheme: dark)');
 function readThemePreference(){try{const current=localStorage.getItem(THEME_KEY),legacy=localStorage.getItem(LEGACY_THEME_KEY),earlier=localStorage.getItem(EARLIER_THEME_KEY),valid=value=>['light','dark','system'].includes(value);let preference='light';if(valid(current))preference=current;else if(valid(legacy)||valid(earlier)){preference=valid(legacy)?legacy:earlier;localStorage.setItem(THEME_KEY,preference)}if(legacy!==null)localStorage.removeItem(LEGACY_THEME_KEY);if(earlier!==null)localStorage.removeItem(EARLIER_THEME_KEY);return preference}catch{return'light'}}
 function resolvedTheme(preference){return preference==='system'?(themeMedia.matches?'dark':'light'):preference==='dark'?'dark':'light'}
@@ -1054,7 +1047,7 @@ function bind(){
       resetProjectAdminDetail();
     }
     if(btn.id==='railSettingsEntry'&&(settingsRouteTransition?.target?isSettingsManagementView(settingsRouteTransition.target):document.body.classList.contains('management-mode'))){
-      switchView('collaboration');
+      switchView('issues');
     }else switchView(btn.dataset.view);
   });
   $('#settingsSidebarToggle')?.addEventListener('click',()=>{cancelSettingsRouteTransition();setSettingsSidebarExpanded(!settingsSidebarExpanded())});
@@ -1300,7 +1293,6 @@ function bind(){
   bindProjectAdmin();bindRepoDrawer();
   $$('.requirement-close').forEach(b=>b.onclick=()=>closeRequirementComposer());
   $('#reqCreate').onclick=()=>createIssueFromChat();
-  $('#reqCreateChat').onclick=()=>createIssueFromChat(undefined,'chat');
   $('#reqRepoChipToggle').onclick=e=>{e.stopPropagation();toggleReqRepoPopover()};
   $$('#reqTarget [data-req-target]').forEach(b=>b.onclick=()=>setReqTarget(b.dataset.reqTarget));
   $$('#reqDelivery [data-req-delivery]').forEach(b=>b.onclick=()=>setReqDelivery(b.dataset.reqDelivery));
@@ -1388,8 +1380,8 @@ function bind(){
   });
 
   // --- 工作台 / 待办验收 / 可观测与分析 / Issue 详情抽屉 ---
-  $('.platform-sidebar .brand')?.addEventListener('click',()=>switchView('collaboration'));
-  $('.rail-brand') && ($('.rail-brand').onclick=()=>switchView('collaboration'));
+  $('.platform-sidebar .brand')?.addEventListener('click',()=>switchView('issues'));
+  $('.rail-brand') && ($('.rail-brand').onclick=()=>switchView('issues'));
   $('#railUserBadge') && ($('#railUserBadge').onclick=()=>switchView('settings'));
   (function bindSidebarResize(){
     const KEY=SIDEBAR_WIDTH_KEY,MIN=220,MAX=420,wide=matchMedia('(min-width:1001px)'),sidebar=$('.platform-sidebar');
@@ -1423,8 +1415,6 @@ function bind(){
   $$('[data-close-drawer]').forEach(el=>el.onclick=closeIssueDrawer);
   $('#projectSwitcher').onchange=async e=>{
     if(!await confirmAssetLeave()){e.target.value=state.projectFilter||'';return}
-    const frame=$('#chatNextFrame');
-    if(frame?.contentWindow)frame.contentWindow.postMessage({type:'agentflow-project-context',projectId:e.target.value},location.origin);
     closeScheduleJobModal();
     state.projectFilter=e.target.value;state.selectedIssue=null;
     if(state.currentView==='aiSchedules')refreshAISchedules();
@@ -1546,199 +1536,6 @@ function bindGlobalModals(){
 // link) the chat opens as a personal conversation, so a first-time user sees
 // the project picker instead of silently landing in the default project. The
 // default project still scopes the workbench pages.
-function nativeChatProjectId(){
-  const chosen=new URL(location.href).searchParams.has('projectId')||!!localStorage.getItem('agentflow.activeProject');
-  return chosen?($('#projectSwitcher')?.value||state.projectFilter||''):'';
-}
-function postNativeChatProject(frame){
-  frame.contentWindow?.postMessage({type:'agentflow-project-context',projectId:nativeChatProjectId()},location.origin);
-  frame.contentWindow?.postMessage({type:'agentflow-environments-changed'},location.origin);
-}
-// A requirement handed to the chat opens a new conversation with the
-// requirement already @-mentioned. It waits here until the chat frame can
-// take it: in the frame URL on first mount, otherwise once the chat is ready.
-let pendingChatIssueMention=null;
-let pendingQuickAccessReturn=false;
-const QUICK_ACCESS_EXECUTOR_SETTINGS='#/settings/executors/quick-access';
-let quickAccessExecutorSettingsActive=false;
-function postQuickAccessReturn(frame){
-  if(!pendingQuickAccessReturn||!nativeChatReady||!frame?.contentWindow)return;
-  pendingQuickAccessReturn=false;
-  frame.contentWindow.postMessage({type:'agentflow-chat-resume-quick-access'},location.origin);
-}
-function returnToQuickAccess(){
-  if(location.hash!==QUICK_ACCESS_EXECUTOR_SETTINGS)return;
-  if(history.state?.quickAccessExecutorReturn){history.back();return}
-  const chat=new URL('/chatbot/',location.origin),params=new URLSearchParams(location.search);
-  chat.searchParams.set('quickAccess','1');
-  const projectId=params.get('projectId');
-  const session=params.get('chatSession');
-  if(projectId)chat.searchParams.set('projectId',projectId);
-  if(session)chat.searchParams.set('session',session);
-  location.replace(chat);
-}
-function postPendingChatIssueMention(frame){
-  if(!pendingChatIssueMention||!nativeChatReady||frame?.dataset.src!=='native')return;
-  frame.contentWindow?.postMessage({type:'agentflow-chat-mention-issue',...pendingChatIssueMention},location.origin);
-  pendingChatIssueMention=null;
-}
-function openChatSessionInWorkbench(sessionId,projectId){
-  if(!sessionId)return;
-  if(projectId){
-    state.projectFilter=projectId;
-    localStorage.setItem('agentflow.activeProject',projectId);
-    const select=$('#projectSwitcher');
-    if(select&&[...select.options].some(o=>o.value===projectId))select.value=projectId;
-  }
-  const url=new URL(location.href);
-  if(projectId)url.searchParams.set('projectId',projectId);
-  url.searchParams.set('chatSession',sessionId);
-  url.searchParams.delete('chatIssue');
-  history.replaceState({},'',url.pathname+url.search+'#/collaboration/'+encodeURIComponent(sessionId));
-  const frame=$('#chatNextFrame');
-  if(nativeChatReady&&frame?.dataset.src==='native'&&frame.contentWindow){
-    frame.contentWindow.postMessage({type:'agentflow-chat-open-session',sessionId,projectId:projectId||''},location.origin);
-    switchView('collaboration');
-    return;
-  }
-  if(frame)frame.dataset.src='';
-  switchView('collaboration');
-}
-function openIssueInChat(issue,opts){
-  if(!issue?.id||!issue.projectId)return;
-  const intent=String(opts?.intent||'').trim();
-  pendingChatIssueMention={issueId:issue.id,projectId:issue.projectId,...(intent?{intent}:{})};
-  localStorage.setItem('agentflow.activeProject',issue.projectId);
-  const url=new URL(location.href);
-  ['chatSession','chatIssue'].forEach(key=>url.searchParams.delete(key));
-  history.replaceState({},'',url.pathname+url.search+'#/collaboration');
-  // The mention goes first: it moves the chat to the requirement's project,
-  // so the project context posted by switchView no longer rebinds anything.
-  postPendingChatIssueMention($('#chatNextFrame'));
-  switchView('collaboration');
-}
-// A project created, deleted or restored from the chat must reach the project
-// switcher without a page refresh.
-function reloadShellProjects(){
-  return api('/api/bootstrap',{silent:true}).then(shell=>{Object.assign(state.data,shell);renderAll();return state.data.projects||[]});
-}
-function mountNativeChat(){
-  const frame=$('#chatNextFrame');
-  if(!frame)return;
-  if(!frame.dataset.nativeBridge){
-    frame.dataset.nativeBridge='1';
-    frame.addEventListener('load',()=>postNativeChatProject(frame));
-    window.addEventListener('message',event=>{
-      if(event.origin!==location.origin||event.source!==frame.contentWindow)return;
-      const message=event.data||{};
-      if(message.type==='agentflow-chat-ready'){
-        nativeChatReady=true;
-        postPendingChatIssueMention(frame);
-        postNativeChatProject(frame);
-        postQuickAccessReturn(frame);
-        finishBootLoader();
-      }
-      if(message.type==='agentflow-chat-session'){
-        const id=message.sessionId||'';
-        if(id&&!/^[a-zA-Z0-9_-]{1,64}$/.test(id))return;
-        const url=new URL(location.href);
-        if(id)url.searchParams.set('chatSession',id);else url.searchParams.delete('chatSession');
-        url.searchParams.delete('chatIssue');
-        if(activeViewName()==='collaboration'&&restoredView()==='collaboration')url.hash=id?'#/collaboration/'+encodeURIComponent(id):'#/collaboration';
-        history.replaceState({},'',url);
-      }
-      if(message.type==='agentflow-chat-project'){
-        const projectId=typeof message.projectId==='string'?message.projectId:'';
-        const known=()=>!projectId||(state.data.projects||[]).some(project=>project.id===projectId);
-        const follow=()=>{
-          if(!known())return;
-          localStorage.setItem('agentflow.activeProject',projectId);
-          if(state.projectFilter===projectId)return;
-          const select=$('#projectSwitcher');
-          const option=[...select.options].find(item=>item.value===projectId);
-          if(option)option.selected=true;else select.value=projectId;
-          select.dispatchEvent(new Event('change',{bubbles:true}));
-        };
-        if(known())follow();
-        else reloadShellProjects().then(follow).catch(()=>{});
-      }
-      if(message.type==='agentflow-projects-changed')reloadShellProjects().catch(()=>{});
-      if(message.type==='agentflow-credentials-changed'){
-        const userId=state.currentUser?.id;
-        api('/api/users',{silent:true}).then(users=>{
-          if(state.currentUser?.id!==userId)return;
-          const saved=users.find(user=>Number(user.id)===Number(userId));
-          if(saved)storeCredentialUser(saved);
-        }).catch(()=>{});
-      }
-      if(message.type==='agentflow-quick-access-completed'){
-        api('/api/bootstrap',{silent:true}).then(shell=>{
-          Object.assign(state.data,shell);
-          const pid=typeof message.projectId==='string'?message.projectId:'';
-          if(pid&&(state.data.projects||[]).some(p=>p.id===pid)){
-            state.projectFilter=pid;
-            localStorage.setItem('agentflow.activeProject',pid);
-          }
-          renderAll();
-        }).catch(()=>{});
-      }
-      if(message.type==='agentflow-chat-open-view'&&['settings','runners','sops','projects','runs','agents','sandboxes','flow','mcp','knowledge','aiSchedules'].includes(message.view)){
-        if(message.view==='settings'&&message.credential){
-          if(message.credential==='executors'&&message.returnToQuickAccess===true&&activeViewName()==='collaboration'&&location.hash!==QUICK_ACCESS_EXECUTOR_SETTINGS){
-            history.pushState({quickAccessExecutorReturn:true},'',QUICK_ACCESS_EXECUTOR_SETTINGS);
-          }
-          gotoCredential(message.credential,message.sshRemote);
-        }
-        else if(message.view==='sandboxes'&&message.action==='create')createConversationSandbox(message.projectId).catch(error=>toast(error.message));
-        else if(message.view==='runs'&&/^run-[\w-]+$/.test(message.runId||''))location.hash='#/runs/'+encodeURIComponent(message.runId);
-        else if(message.view==='aiSchedules'){
-          if(message.projectId&&state.projectFilter!==message.projectId&&(state.data.projects||[]).some(p=>p.id===message.projectId)){
-            state.projectFilter=message.projectId;
-            localStorage.setItem('agentflow.activeProject',message.projectId);
-            const select=$('#projectSwitcher');
-            if(select&&[...select.options].some(o=>o.value===message.projectId))select.value=message.projectId;
-          }
-          if(message.action==='executions'&&typeof openScheduleExecutions==='function'){
-            openScheduleExecutions(message.jobId||'');
-          }else{
-            switchView('aiSchedules');
-            if(message.action==='create'&&typeof openScheduleJobModal==='function'){
-              openScheduleJobModal('assistant');
-            }else if(message.action==='edit'&&message.jobId&&typeof openScheduleJobModal==='function'){
-              const job=(state.data.scheduleJobs||[]).find(j=>j.id===message.jobId);
-              if(job)openScheduleJobModal('assistant',job);
-              else refreshAISchedules().then(()=>{const found=(state.data.scheduleJobs||[]).find(j=>j.id===message.jobId);if(found)openScheduleJobModal('assistant',found)}).catch(()=>{});
-            }
-          }
-        }
-        else switchView(message.view);
-      }
-    });
-  }
-  if(frame.dataset.src!=='native'){
-    frame.dataset.src='native';
-    nativeChatReady=false;
-    const topParams=new URL(location.href).searchParams;
-    const projectId=nativeChatProjectId();
-    const sessionId=topParams.get('chatSession')||'';
-    const issueId=topParams.get('chatIssue')||'';
-    const quickAccess=topParams.get('quickAccess')==='1';
-    if(quickAccess||topParams.get('gongfeng')==='ok'){
-      // renderPersonalSettings still owes the OAuth return toast after the URL is cleaned.
-      if(topParams.get('gongfeng')==='ok')state.gongfengReturned=true;
-      topParams.delete('quickAccess');
-      topParams.delete('gongfeng');
-      const clean=topParams.toString();
-      history.replaceState({},'',location.pathname+(clean?'?'+clean:'')+location.hash);
-    }
-    const mention=pendingChatIssueMention;
-    pendingChatIssueMention=null;
-    frame.src=mention
-      ?'/chatbot/?projectId='+encodeURIComponent(mention.projectId)+'&mentionIssue='+encodeURIComponent(mention.issueId)+(mention.intent?'&mentionIntent='+encodeURIComponent(mention.intent):'')
-      :'/chatbot/?projectId='+encodeURIComponent(projectId)+(sessionId?'&session='+encodeURIComponent(sessionId):issueId?'&issueId='+encodeURIComponent(issueId):'')+(quickAccess?'&quickAccess=1':'');
-  }
-  postNativeChatProject(frame);
-}
 function settingsSidebarExpanded(){
   return document.body.classList.contains('management-mode')&&!document.body.classList.contains('settings-sidebar-hidden');
 }
@@ -1757,15 +1554,7 @@ function settingsRouteSurface(name){
     const rect=card.getBoundingClientRect(),top=header.getBoundingClientRect().bottom;
     return {nav,expanded:settingsSidebarExpanded(),geometry:{left:rect.left+1,top,width:rect.width-2,height:Math.max(0,rect.bottom-top-1),background:getComputedStyle(card).backgroundColor}};
   }
-  const frame=$('#chatNextFrame');
-  try{
-    const shell=frame?.contentDocument?.querySelector('.chat-shell');
-    const nav=shell?.querySelector('.conversation-sidebar'),header=shell?.querySelector('.brand');
-    if(!shell||!nav||!header)return null;
-    const frameRect=frame.getBoundingClientRect(),width=parseFloat(shell.style.getPropertyValue('--sidebar-width'))||304;
-    const top=frameRect.top+header.getBoundingClientRect().bottom;
-    return {nav,shell,expanded:!shell.classList.contains('sidebar-hidden'),geometry:{left:frameRect.left+1,top,width:width-2,height:Math.max(0,frameRect.bottom-14-top-1),background:shell.ownerDocument.defaultView.getComputedStyle(shell).backgroundColor}};
-  }catch{return null}
+  return null;
 }
 function cancelSettingsRouteTransition(){
   const transition=settingsRouteTransition;
@@ -1799,12 +1588,10 @@ function startSettingsRouteTransition(name){
   }
   cancelSettingsRouteTransition();
   const fromName=activeViewName(),from=settingsRouteSurface(fromName);
-  const home=settingsRouteSurface('collaboration');
-  const homeSettled=!home?.shell?.matches('.sidebar-entering,.sidebar-transitioning,.sidebar-resizing');
-  const preserveGeometry=!!from?.expanded&&homeSettled&&(isSettingsManagementView(name)||!!home?.expanded);
+  const preserveGeometry=!!from?.expanded&&isSettingsManagementView(name);
   const transition={from:fromName,to:name,target:name,preserveGeometry,held:[],motion:null,observer:null,timer:0};
   settingsRouteTransition=transition;
-  if(from?.expanded&&!isSettingsManagementView(name)&&home&&!home.expanded){
+  if(from?.expanded&&!isSettingsManagementView(name)){
     // Returning to an intentionally closed drawer needs one close, not a
     // close/reopen cycle. Keep the current page mounted until it completes.
     setSettingsSidebarExpanded(false);
@@ -1818,7 +1605,6 @@ function startSettingsRouteTransition(name){
   // Grasp keeps its card mounted: only the navigation inside it changes mode.
   // Suppress the host's unrelated two/three-column grid interpolation here.
   document.body.classList.add('settings-mode-switch');
-  if(home?.geometry.width>0)document.documentElement.style.setProperty('--sidebar-w',`${home.geometry.width+2}px`);
   const hold=nav=>{
     if(!nav||transition.held.some(held=>held.nav===nav))return;
     const doc=nav.ownerDocument;
@@ -1924,7 +1710,7 @@ function setSettingsSidebarExpanded(expanded,focusToggle=false){
     });
   }
 }
-function viewTitles(){return {management:'设置',collaboration:'AI 工作台',issues:'需求列表',aiSchedules:'定时任务',bots:'通道管理',assistant:'AI 助手',runs:'运行记录',approvals:'待我确认',sops:'流程模板',flow:'流程设计',agents:'角色定义',mcp:'能力资产',rules:'能力资产',skills:'能力资产',knowledge:'我的知识库',sandboxes:'沙箱管理',observability:'统计',projects:'项目配置',projectCredentials:'凭据管理',platform:'平台管理',runners:'执行机器',settings:'个人配置',access:'访问密钥',guide:'访问密钥',evolution:'RSI工作台'}}
+function viewTitles(){return {management:'设置',issues:'需求列表',aiSchedules:'定时任务',bots:'通道管理',runs:'运行记录',approvals:'待我确认',sops:'流程模板',flow:'流程设计',agents:'角色定义',mcp:'能力资产',rules:'能力资产',skills:'能力资产',knowledge:'我的知识库',sandboxes:'沙箱管理',observability:'统计',projects:'项目配置',projectCredentials:'凭据管理',platform:'平台管理',runners:'执行机器',settings:'个人配置',access:'访问密钥',guide:'访问密钥',evolution:'RSI工作台'}}
 // 从流程模板打开的流程设计）按 data-nav-match 高亮它们所属的入口。
 function settingsNavMatches(btn,name){return btn.dataset.view===name||String(btn.dataset.navMatch||'').split(/\s+/).includes(name)}
 const assetTypeGroups={capability:['mcp','rules','skills']};
@@ -1947,7 +1733,7 @@ function restoredView(){
   if(saved==='playbooks')return 'sops';
   if(saved==='management')return 'settings';
   if(titles[saved]&&saved!=='dashboard')return saved;
-  return 'collaboration';
+  return 'issues';
 }
 function routePart(index){
   const raw=(location.hash||'').replace(/^#\/?/,'').split('?')[0];
@@ -2049,13 +1835,6 @@ function persistView(name,push=false){
   if(name==='agents'&&agentRouteId())next=`#/agents/${encodeURIComponent(agentRouteId())}${routePart(2)==='gov'?'/gov':''}`;
   if(isProjectSharedAsset(name)&&routePart(0)===name&&assetRouteId())next=`#/${name}/${encodeURIComponent(assetRouteId())}`;
   if(name==='projects')next=projectAdminHash(state.projectAdminDetailId||'',state.projectAdminTab);
-  if(name==='collaboration'){
-    const current=(location.hash||'').replace(/^#\/?/,'').split('?')[0].split('/').filter(Boolean);
-    let fromHash=current[0]==='collaboration'?current[1]||'':'';
-    try{fromHash=decodeURIComponent(fromHash)}catch{}
-    const id=new URL(location.href).searchParams.get('chatSession')||fromHash;
-    if(id)next='#/collaboration/'+encodeURIComponent(id);
-  }
   if(location.hash===next)return;
   // push=true 时压入新历史记录，让浏览器「后退」能在平台页面间回退；
   // 否则原地替换，避免 boot 时把首个视图压栈。
@@ -2065,16 +1844,16 @@ function persistView(name,push=false){
 function switchView(name){
   $$('details.collab-settings').forEach(menu=>menu.open=false);
   const titles=viewTitles();
-  if(name==='dashboard')name='collaboration';
+  if(name==='dashboard')name='issues';
   if(name==='access')name='guide';
   if(['assets','dockerfiles','environments'].includes(name))name='sandboxes';
   if(name==='playbooks')name='sops';
   if(name==='management')name='settings';
   const assetViews=['rules','skills','sandboxes'];
   const targetView=assetViews.includes(name)?'assets':name;
-  if(!titles[name]||!$(`#${targetView}View`)){name='collaboration'}
+  if(!titles[name]||!$(`#${targetView}View`)){name='issues'}
   // 手敲 #/platform 或者从别的账号留下的 localStorage 恢复进来，都要挡住。
-  if(name==='platform'&&!isPlatformAdmin())name='collaboration';
+  if(name==='platform'&&!isPlatformAdmin())name='issues';
   const previous=activeViewName();
   if(previous==='projectCredentials'&&name!=='projectCredentials')closeProjectCredentialsPage();
   if(name!=='settings')cancelCredentialFocus();
@@ -2087,7 +1866,7 @@ function switchView(name){
   }
   if(previous==='agents'&&name!=='agents')$('#agentModal')?.classList.remove('open');
   if(!settingsRouteApplying){
-    const crossingSettings=previous!==name&&((previous==='collaboration'&&isSettingsManagementView(name))||(isSettingsManagementView(previous)&&name==='collaboration'));
+    const crossingSettings=previous!==name&&isSettingsManagementView(name);
     if(crossingSettings&&!settingsRouteMotion.matches){startSettingsRouteTransition(name);return}
     cancelSettingsRouteTransition();
   }
@@ -2116,8 +1895,6 @@ function switchView(name){
   $('#railSettingsEntry')?.classList.toggle('active', isPureManagement);
   const noSidebarViews = ['issues', 'approvals', 'observability'];
   document.body.classList.toggle('no-sidebar', noSidebarViews.includes(name));
-  document.body.classList.toggle('chat-next-active', name==='collaboration');
-  if(name==='collaboration'||isPureManagement)mountNativeChat();
   showDirectRunButton(name==='flow');
   closeIssueDrawer();
   if(name!=='sops'&&typeof hideSOPCardMenu==='function')hideSOPCardMenu();
@@ -2125,15 +1902,6 @@ function switchView(name){
   //（staying）不压；hashchange 后退触发的调用 prevView 非空且 hash 已是目标值，
   // persistView 内部会短路，不会重复压栈。
   persistView(name,!staying&&!!prevView);
-  const resumeQuickAccess=name==='collaboration'&&quickAccessExecutorSettingsActive;
-  quickAccessExecutorSettingsActive=name==='settings'&&location.hash===QUICK_ACCESS_EXECUTOR_SETTINGS;
-  const quickAccessReturnButton=$('#returnToQuickAccess');
-  if(quickAccessReturnButton)quickAccessReturnButton.hidden=!quickAccessExecutorSettingsActive;
-  if(name!=='collaboration')pendingQuickAccessReturn=false;
-  if(resumeQuickAccess){
-    pendingQuickAccessReturn=true;
-    postQuickAccessReturn($('#chatNextFrame'));
-  }
   const nav=$('.platform-sidebar nav');
   if(nav){
     if(['dashboard','issues','approvals'].includes(name)){

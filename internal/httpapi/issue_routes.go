@@ -157,23 +157,6 @@ func issueSyncedFromTracker(issue domain.Issue) bool {
 	return issue.ExternalRef != nil && (issue.Source == "gongfeng" || issue.Source == "tapd")
 }
 
-func (h issuesHandlers) chatClarifyIssue(c *gin.Context, issue domain.Issue) {
-	if c.Request.Method == http.MethodGet {
-		h.stream.attachIssueClarify(c, issue)
-		return
-	}
-	var request chatClarifyRequest
-	if !decode(c, &request) {
-		return
-	}
-	h.stream.runChatClarify(c, issue, request)
-}
-
-func (h issuesHandlers) cancelChatClarifyIssue(c *gin.Context, issue domain.Issue) {
-	cancelled := h.stream.cancelClarifyJob(issue.ID)
-	c.JSON(200, map[string]bool{"cancelled": cancelled})
-}
-
 func (h issuesHandlers) reopenIssue(c *gin.Context, issue domain.Issue) {
 	reopened, err := h.repo.ReopenDeliveredIssue(issue.ID)
 	if err != nil {
@@ -243,12 +226,6 @@ func (h issuesHandlers) issueRequirement(c *gin.Context, issue domain.Issue) {
 	if !ok {
 		c.JSON(http.StatusNotFound, map[string]string{"error": "issue not found"})
 		return
-	}
-	if conv := snap.Conversation; conv != nil && conv.SessionID != "" {
-		// Project members may open the conversation read-only, so this only
-		// tells whether it still exists.
-		session, ok := h.repo.ProjectAssistantSession(conv.SessionID)
-		conv.Available = ok && session.ProjectID == issue.ProjectID
 	}
 	c.JSON(http.StatusOK, snap)
 }
@@ -323,7 +300,6 @@ func (h issuesHandlers) dispatchIssueRoute(c *gin.Context, issue domain.Issue) {
 	}
 	req := dispatchRequest{
 		IssueID: issue.ID, WorkflowID: request.WorkflowID, Rerun: request.Rerun, TriggerUserID: triggerUserID,
-		WorkspaceRunID: dispatchConversationWorkspace(h.deps, c.Request, triggerUserID, issue.ProjectID),
 	}
 	if origin, ok := botStartOriginFrom(c.Request.Context()); ok {
 		req.ChatOrigin = &origin
@@ -333,7 +309,6 @@ func (h issuesHandlers) dispatchIssueRoute(c *gin.Context, issue domain.Issue) {
 		respond(c, err)
 		return
 	}
-	linkDispatchingConversation(h.deps, c.Request, triggerUserID, issue)
 	detail := "触发 LOOP"
 	if request.Rerun {
 		detail = "重新运行 LOOP"

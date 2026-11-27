@@ -273,9 +273,6 @@ func (s *Service) ProcessOne(ctx context.Context) (bool, error) {
 			return finish("cancelled", "定时任务已删除或项目已变更")
 		}
 	}
-	if item.SourceType == "assistant_task" && !s.Store.AssistantTaskExists(item.ProjectID, item.SourceID) {
-		return finish("cancelled", "AI 助手任务已删除或项目已变更")
-	}
 	if item.RunID != "" {
 		run, ok := s.Store.RunState(item.RunID)
 		if !ok {

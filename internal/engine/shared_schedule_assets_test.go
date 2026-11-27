@@ -29,7 +29,7 @@ func TestSharedScheduleUsesNormalProjectAssetResolution(t *testing.T) {
 	check(st.PutMCPServer(domain.MCPServerDefinition{ID: "target-tool", Name: "Target tool", Scope: "project", ProjectID: "target", Transport: "http", URL: "https://example.com/mcp"}))
 	role := domain.AgentDefinition{ID: "role", Name: "Role", ProjectID: "source", Shared: true, Rules: []string{"rule"}, Skills: []string{"skill"}, MCPServers: []string{"source-tool", "target-tool"}}
 	check(st.PutAgent(role))
-	job := domain.ScheduleJob{ID: "job", Name: "Job", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssistantReference{{Type: "agent", ID: role.ID}}}
+	job := domain.ScheduleJob{ID: "job", Name: "Job", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "inspect", References: []domain.AssetReference{{Type: "agent", ID: role.ID}}}
 	check(st.PutScheduleJob(job))
 	v, err := st.PublishSharedSchedule(job.ID, job.ProjectID, domain.SharedScheduleVersion{Name: "Shared", Prompt: "inspect"}, 0)
 	check(err)
@@ -65,7 +65,7 @@ func TestSharedScheduleNestedSOPUsesImmediateParentBinding(t *testing.T) {
 	} {
 		check(st.PutWorkflow(wf))
 	}
-	job := domain.ScheduleJob{ID: "nested-job", Name: "Nested", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "start", References: []domain.AssistantReference{{Type: "sop", ID: "root"}}}
+	job := domain.ScheduleJob{ID: "nested-job", Name: "Nested", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "start", References: []domain.AssetReference{{Type: "sop", ID: "root"}}}
 	check(st.PutScheduleJob(job))
 	v, err := st.PublishSharedSchedule(job.ID, job.ProjectID, domain.SharedScheduleVersion{Name: "Nested", Prompt: "start"}, 0)
 	check(err)
@@ -132,7 +132,7 @@ func TestSharedScheduleRejectsPrivateNestedSOPSandboxResources(t *testing.T) {
 	}))
 	job := domain.ScheduleJob{
 		ID: "private-nested-job", Name: "Private nested", ProjectID: "source", SkipDispatch: true,
-		AssistantPrompt: "start", References: []domain.AssistantReference{{Type: "sop", ID: "shared-parent"}},
+		AssistantPrompt: "start", References: []domain.AssetReference{{Type: "sop", ID: "shared-parent"}},
 	}
 	check(st.PutScheduleJob(job))
 	v, err := st.PublishSharedSchedule(job.ID, job.ProjectID, domain.SharedScheduleVersion{Name: "Private nested", Prompt: "start"}, 0)
@@ -175,7 +175,7 @@ func TestSharedScheduleRejectsPrivateNestedSOP(t *testing.T) {
 	}))
 	job := domain.ScheduleJob{
 		ID: "private-child-job", Name: "Private child", ProjectID: "source", SkipDispatch: true,
-		AssistantPrompt: "start", References: []domain.AssistantReference{{Type: "sop", ID: "shared-parent-for-private-child"}},
+		AssistantPrompt: "start", References: []domain.AssetReference{{Type: "sop", ID: "shared-parent-for-private-child"}},
 	}
 	check(st.PutScheduleJob(job))
 	v, err := st.PublishSharedSchedule(job.ID, job.ProjectID, domain.SharedScheduleVersion{Name: "Private child", Prompt: "start"}, 0)
@@ -242,7 +242,7 @@ func TestSharedScheduleRejectsPrivateNestedDependencies(t *testing.T) {
 			}
 			job := domain.ScheduleJob{
 				ID: "job-" + child.ID, Name: "Nested dependency", ProjectID: "source", SkipDispatch: true,
-				AssistantPrompt: "start", References: []domain.AssistantReference{{Type: "sop", ID: parent.ID}},
+				AssistantPrompt: "start", References: []domain.AssetReference{{Type: "sop", ID: parent.ID}},
 			}
 			if err := st.PutScheduleJob(job); err != nil {
 				t.Fatal(err)

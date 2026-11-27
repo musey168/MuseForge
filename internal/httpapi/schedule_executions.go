@@ -144,16 +144,9 @@ func (h *scheduleHandlers) scheduleExecutionViews(items []domain.ScheduleJobExec
 			sessionIDs = append(sessionIDs, e.SessionID)
 		}
 	}
-	exists := map[string]bool{}
-	if len(sessionIDs) > 0 {
-		exists = h.repo.ExistingAssistantSessionIDs(sessionIDs)
-	}
 	out := make([]scheduleJobExecutionView, len(items))
 	for i, e := range items {
 		out[i] = scheduleJobExecutionView{ScheduleJobExecution: e}
-		if alive, checked := exists[e.SessionID]; checked && e.Status != "running" {
-			out[i].SessionGone = !alive
-		}
 	}
 	return out
 }

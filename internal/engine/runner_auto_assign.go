@@ -22,7 +22,7 @@ const autoAssignOfflineGrace = 2 * time.Minute
 type autoAssignCandidate struct {
 	runner           domain.Runner
 	shared           bool
-	executorDefaults map[string]domain.AssistantDefaults
+	executorDefaults map[string]domain.ExecutorDefaults
 }
 
 func (c autoAssignCandidate) bucket() string {

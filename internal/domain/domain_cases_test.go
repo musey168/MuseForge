@@ -172,17 +172,6 @@ func TestRunEvalRunnerAndSpaceBranches(t *testing.T) {
 	if !r.SupportsProvider("X") || r.SupportsProvider("off") || r.SupportsProvider("") || r.RuntimeAuthMode("x") != RuntimeAuthPersonal || r.RuntimeAuthMode("codebuddy") != RuntimeAuthPersonal {
 		t.Fatal("runner runtime selection")
 	}
-	for _, artifact := range []SpaceArtifact{
-		{Kind: "bad", Title: "x"},
-		{Kind: "doc"},
-		{Kind: "doc", Title: strings.Repeat("x", 121)},
-		{Kind: "doc", Title: "x", Body: strings.Repeat("x", SpaceArtifactBodyLimit+1)},
-		{Kind: "doc", Title: "x", URL: "ftp://x"},
-	} {
-		if artifact.Validate() == nil {
-			t.Fatalf("artifact accepted: %#v", artifact)
-		}
-	}
 }
 
 func TestScheduleLaneAndVerificationBranches(t *testing.T) {

@@ -167,8 +167,7 @@ func (h *botInteractionHandlers) pushResendUser(bot domain.NotificationBot, item
 	if err != nil || binding.TargetVerifiedAt == nil {
 		return domain.User{}, errors.New("原发送者还不是已试发成功的主动发送目标：请让其完成绑定，并在通知接收人中试发一次")
 	}
-	assistant := &assistantHandlers{deps: h.deps}
-	user, err := assistant.botExecutionUser(bot, item.SenderID)
+	user, err := botExecutionUser(h.repo, bot, item.SenderID)
 	if err != nil {
 		return user, err
 	}

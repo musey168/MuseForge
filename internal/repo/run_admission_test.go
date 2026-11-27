@@ -631,7 +631,7 @@ func autoAdmissionPlan(run domain.Run, target string, runner *domain.Runner) (Au
 	}
 	return AutoAssignPlan{
 		ExecutionContext: ec, EventMessage: "bound to " + target,
-		ExecutorDefaults: map[string]domain.AssistantDefaults{"work": {Executor: "codex"}},
+		ExecutorDefaults: map[string]domain.ExecutorDefaults{"work": {Executor: "codex"}},
 	}, true
 }
 

@@ -122,7 +122,7 @@ const gitToken=cred.kind('gitToken');
  assert.equal(putCalls().length,1);
  assert.deepEqual(JSON.parse(putCalls()[0].body),{name:'GitHub',platform:'github',host:'github.com',username:'x-access-token',token:'typed-pat'});
  assert.equal(state.gitTokenVerify.result.valid,true);
- assert.deepEqual(posted,[{type:'agentflow-credentials-changed'}]);
+ assert.deepEqual(posted,[],'there is no chat frame to notify any more');
  // Returning from Gongfeng OAuth clears the cache, announces and re-verifies.
  location.search='?gongfeng=ok';
  result={valid:false,missing:['api']};

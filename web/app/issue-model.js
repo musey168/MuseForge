@@ -150,11 +150,6 @@ function materializePlaybook(draft){
 function issueWithoutSOP(issue){
   return String(issue?.sopMode||'').trim().toLowerCase()==='none';
 }
-function openIssueInChatById(issueId){
-  const issue=(state.data.issues||[]).find(i=>i.id===issueId)||(state.issueDetailData?.issue?.id===issueId?state.issueDetailData.issue:null);
-  if(!issue)return toast('未找到工作项');
-  openIssueInChat(issue);
-}
 function effectiveIssueSOPBindings(issue){
   const listed=(issue?.sopBindings||[]).filter(b=>String(b.workflowId||'').trim());
   if(listed.length)return listed.slice().sort((a,b)=>(Number(a.order)||0)-(Number(b.order)||0));
@@ -420,14 +415,6 @@ function conversationIssueProgress(i,run){
   const stage=conversationIssueStage(i);
   return{text:stage.short,width:stage.width,title:stage.hint,done:stage.key==='closed'&&!stage.ended,ended:!!stage.ended};
 }
-// 打开需求关联的会话；项目成员看到的是只读会话，私人会话仍只对本人可见。
-function issueConversationURL(issue,session){
-  const url=new URL('/',location.origin);
-  url.searchParams.set('projectId',issue.projectId);
-  if(session)url.searchParams.set('chatSession',session);else url.searchParams.set('chatIssue',issue.id);
-  url.hash='/collaboration';
-  return url.href;
-}
 function deliveryBlockReason(i){
   if(issueManuallyClosed(i))return'工作项已关闭，请先重新打开工作项再触发 LOOP';
   if(!deliveryLocked(i))return'';
@@ -458,7 +445,7 @@ function retriggerButton(issue,run,{ghost=false,cls}={}){
   return `<button type="button" class="${klass}" data-retrigger-issue="${escapeHTML(issue.id)}" title="整条 LOOP 从头再开一条新运行，旧记录保留">重新触发</button>`;
 }
 function triggerSOPButton(issue,{ghost=false,cls='button primary small',text='触发'}={}){
-  if(issueWithoutSOP(issue))return `<button class="${ghost?'button ghost small':cls}" data-chat-issue="${escapeHTML(issue.id)}" title="这条需求不使用 LOOP">去对话处理</button>`;
+  if(issueWithoutSOP(issue))return `<span class="muted">这条需求不走 LOOP</span>`;
   if(issueExecutionBlocked(issue))return issueTrackerClosed(issue)&&!issueManuallyClosed(issue)?closedTrackerHint(issue):deliveredHint(issue);
   if(clarificationNeedsConfirm(issue))return `<button class="${ghost?'button ghost small':cls}" data-start-clarify title="请先确认澄清结论并写回原单">去确认结论</button>`;
   return `<button class="${ghost?'button ghost small':cls}" data-dispatch-issue="${escapeHTML(issue.id)}">${text}</button>`;
@@ -478,7 +465,7 @@ function issueActionButtons(i){
   }
   if(health==='active'||health==='attention')return `<button type="button" class="issue-act" data-view-run="${escapeHTML(run?.id||'')}">查看</button>${more}`;
   if(health==='closed')return `${run?`<button type="button" class="issue-act" data-view-run="${escapeHTML(run.id)}">查看</button>`:''}${more}`;
-  if(issueWithoutSOP(i))return `<button type="button" class="issue-act primary" data-chat-issue="${escapeHTML(i.id)}" title="这条需求不使用 LOOP，在对话里澄清和改代码">去对话</button>${more}`;
+  if(issueWithoutSOP(i))return `<span class="muted">这条需求不走 LOOP</span>${more}`;
   return `<button type="button" class="issue-act primary" data-trigger-issue="${escapeHTML(i.id)}" title="${i.workflowId?'整条 LOOP 从头执行':'尚未绑定 LOOP，触发时会先确认绑定'}">触发</button>${more}`;
 }
 function setIssueRunFilter(value,toggle=true){
@@ -604,7 +591,6 @@ function bindIssueRowActions(root=document){
   root.querySelectorAll('[data-pass-node]').forEach(button=>button.onclick=e=>{e.stopPropagation();passFailedNode(button.dataset.passNode,button.dataset.node,button)});
   root.querySelectorAll('[data-reopen-issue]').forEach(button=>button.onclick=e=>{e.stopPropagation();reopenDeliveredIssue(button.dataset.reopenIssue)});
   root.querySelectorAll('[data-retrigger-issue]').forEach(button=>button.onclick=e=>{e.stopPropagation();retriggerIssue(button.dataset.retriggerIssue)});
-  root.querySelectorAll('[data-chat-issue]').forEach(button=>button.onclick=e=>{e.stopPropagation();openIssueInChatById(button.dataset.chatIssue)});
   root.querySelectorAll('[data-rerun-from-here]').forEach(button=>button.onclick=e=>{e.stopPropagation();openRerunFromNode(state.issueDetailData?.run,button.dataset.rerunFromHere)});
   root.querySelectorAll('[data-close-issue]').forEach(button=>button.onclick=e=>{e.stopPropagation();closeIssueById(button.dataset.closeIssue)});
 }

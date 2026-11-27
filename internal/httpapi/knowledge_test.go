@@ -241,13 +241,6 @@ func TestKnowledgeConnectorCRUDAndUserIsolation(t *testing.T) {
 		t.Fatalf("invalid sub-source check = %d, want 400 (%s)", rec.Code, rec.Body.String())
 	}
 
-	// Chat session knowledge rejects cross-user connector and accepts Alice's own connector.
-	sess := domain.AssistantSession{ID: "sess-iso", UserID: bob.ID, ProjectID: "p1", Title: "Bob Chat"}
-	_ = s.PutAssistantSession(bob.ID, sess)
-	if rec := doJSONAsUser(t, h, bob, http.MethodPut, "/api/assistant/sessions/sess-iso/knowledge", `{"knowledgeRefs":[{"connectorId":"`+aliceConn.ID+`","mode":"all"}]}`); rec.Code != http.StatusBadRequest {
-		t.Fatalf("bob sessionKnowledge accepted alice connector: %d %s", rec.Code, rec.Body.String())
-	}
-
 	// Alice launches a manual SOP run with run-level KnowledgeRefs override.
 	runRec := doJSONAsUser(t, h, alice, http.MethodPost, "/api/runs", `{"workflowId":"wf-1","projectId":"p1","input":"run with kb","knowledgeRefs":[{"connectorId":"`+aliceConn.ID+`","mode":"allowlist","sources":["a"]}]}`)
 	if runRec.Code != http.StatusCreated {

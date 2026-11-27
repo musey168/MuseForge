@@ -35,7 +35,7 @@ func assistantModelUnspecified(model string) bool {
 }
 
 func personalDefaultModel(user domain.User) string {
-	engine := user.AssistantDefaults.Executor
+	engine := user.ExecutorDefaults.Executor
 	if engine != "" {
 		if key, _ := assistantEngineCredential(user, engine); key != "" {
 			return featureDefaultModel(user, engine)
@@ -71,7 +71,7 @@ func resolveFeatureModel(user domain.User, requested string) (string, error) {
 }
 
 func featureDefaultModel(user domain.User, engine string) string {
-	if defaults := user.AssistantDefaults; defaults.Executor == engine && defaults.Model != "" {
+	if defaults := user.ExecutorDefaults; defaults.Executor == engine && defaults.Model != "" {
 		return engine + ":" + defaults.Model
 	}
 	if engine == assistantEngineCodeBuddy {

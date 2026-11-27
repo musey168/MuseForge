@@ -97,7 +97,6 @@ test('user B as a non-member: project data and admin surfaces are refused', { sk
   const form = new FormData();
   form.set('projectId', P);
   form.set('file', new Blob(['x']), 'x.txt');
-  await B('POST', '/api/assistant/attachments', form, 403);
   assert.equal((await get(`/api/projects/${P}`)).name, project.name, 'a refused write must not change the project');
 });
 
@@ -139,13 +138,9 @@ test('assistant attachments are private to the uploader', { skip: tokenBSkip }, 
   const form = new FormData();
   form.set('projectId', P);
   form.set('file', new Blob([`e2e attachment ${cfg.runTag}`], { type: 'text/plain' }), 'e2e.txt');
-  const att = await api('POST', '/api/assistant/attachments', form, { expect: 201 });
   assert.ok(att.id);
-  const mine = await api('GET', `/api/assistant/attachments/${att.id}`, undefined, { raw: true });
   assert.equal(mine.text, `e2e attachment ${cfg.runTag}`);
-  await B('GET', `/api/assistant/attachments/${att.id}`, undefined, [403, 404]);
   const restore = await withProjectMember(userB.id, 'member');
   // Even a project member cannot read another user's private upload.
-  await B('GET', `/api/assistant/attachments/${att.id}`, undefined, [403, 404]);
   await restore();
 });

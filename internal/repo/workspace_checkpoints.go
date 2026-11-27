@@ -16,6 +16,10 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// workspaceLeaseSilenceTimeout is how long a workspace lease may go without
+// a renewal before the lease is considered silent and handed off.
+const workspaceLeaseSilenceTimeout = 45 * time.Second
+
 type WorkspaceCheckpoint struct {
 	ArchiveID      string     `gorm:"size:64" json:"-"`
 	ArchiveBytes   int64      `json:"-"`
@@ -465,11 +469,11 @@ func (r *RunsRepo) ReleaseAbandonedWorkspaceUse(runID, token string, now time.Ti
 			}
 			return err
 		}
-		silent := tx.Where("lease_renewed_at IS NULL AND lease_until <= ?", now.Add(workspaceUseTerm-assistantHeartbeatTimeout))
+		silent := tx.Where("lease_renewed_at IS NULL AND lease_until <= ?", now.Add(workspaceUseTerm-workspaceLeaseSilenceTimeout))
 		if r.isMySQL() {
-			silent = silent.Or("lease_renewed_at <= UTC_TIMESTAMP(3) - INTERVAL ? MICROSECOND", assistantHeartbeatTimeout.Microseconds())
+			silent = silent.Or("lease_renewed_at <= UTC_TIMESTAMP(3) - INTERVAL ? MICROSECOND", workspaceLeaseSilenceTimeout.Microseconds())
 		} else {
-			silent = silent.Or("lease_renewed_at <= ?", now.Add(-assistantHeartbeatTimeout))
+			silent = silent.Or("lease_renewed_at <= ?", now.Add(-workspaceLeaseSilenceTimeout))
 		}
 		result := tx.Model(&WorkspaceCheckpoint{}).
 			Where("run_id = ? AND lease_token = ? AND lease_until > ?", runID, token, now).

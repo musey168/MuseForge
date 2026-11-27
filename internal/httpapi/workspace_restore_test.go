@@ -29,8 +29,8 @@ func TestQueuedActivationLeavesWorkspaceArchivedUntilAdmission(t *testing.T) {
 			a, owner, _, _, _ := sharedWorkbenchFixture(t)
 			en := engine.New(a.repo, runtime.NewManager(t.TempDir()))
 			en.ConfigureExecution("activation-api", "activation-host", time.Minute, false)
-			a.deps.engine = en
-			h := &runsHandlers{deps: a.deps}
+			a.engine = en
+			h := &runsHandlers{deps: a}
 			run, _ := a.repo.RunState("shared-run")
 			run.ExecutionContext.ExecutionMode = domain.ExecutionModeCloud
 			run.Status = "failed"
@@ -105,8 +105,8 @@ func TestRetryAsyncRestoreSurvivesDisconnectAndReusesBackgroundOperation(t *test
 	a, owner, _, outsider, _ := sharedWorkbenchFixture(t)
 	en := engine.New(a.repo, runtime.NewManager(t.TempDir()))
 	en.ConfigureExecution("restore-api", "restore-api", time.Minute, false)
-	a.deps.engine = en
-	h := &runsHandlers{deps: a.deps}
+	a.engine = en
+	h := &runsHandlers{deps: a}
 	run, _ := a.repo.RunState("shared-run")
 	run.Status = "failed"
 	run.WorkflowSnapshot.Nodes = []domain.WorkflowNode{{ID: "work", Type: "script", Script: "true", MaxAttempts: 1}}
@@ -225,11 +225,11 @@ func TestRetryAsyncRestoreSurvivesDisconnectAndReusesBackgroundOperation(t *test
 
 func TestAsyncWorkspaceRestoreDoesNotAcknowledgeMissingSnapshot(t *testing.T) {
 	a, owner, _, _, _ := sharedWorkbenchFixture(t)
-	a.deps.engine = engine.New(a.repo, runtime.NewManager(t.TempDir()))
+	a.engine = engine.New(a.repo, runtime.NewManager(t.TempDir()))
 	if err := a.repo.DB.Table("runs").Where("id = ?", "shared-run").Updates(map[string]any{"status": "succeeded", "workspace_cleaned_at": time.Now().UTC()}).Error; err != nil {
 		t.Fatal(err)
 	}
-	h := &runsHandlers{deps: a.deps}
+	h := &runsHandlers{deps: a}
 	c, response := workbenchContext(owner, "POST", "/api/runs/shared-run/workspace/restore", bytes.NewBufferString(`{}`))
 	c.Params = gin.Params{{Key: "id", Value: "shared-run"}}
 	c.Request.Header.Set("Prefer", "respond-async")
@@ -247,8 +247,8 @@ func TestWorkspaceRestoreEligibilityUsesWorkspaceEditAccess(t *testing.T) {
 	if err := a.repo.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
-	a.deps.engine = engine.New(a.repo, runtime.NewManager(t.TempDir()))
-	h := &runsHandlers{deps: a.deps}
+	a.engine = engine.New(a.repo, runtime.NewManager(t.TempDir()))
+	h := &runsHandlers{deps: a}
 	run, _ := a.repo.RunState("shared-run")
 	now := time.Now().UTC()
 	token, err := h.engine.BeginConversationWorkspaceUse(run.ID)
@@ -366,7 +366,7 @@ func TestSOPWorkspaceRestoresConversationCheckpoint(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			h := &runsHandlers{deps: a.deps}
+			h := &runsHandlers{deps: a}
 			router := gin.New()
 			router.Use(h.runWriteGuard())
 			router.GET("/api/runs/:id/workspace", h.runWorkspace)
@@ -482,7 +482,7 @@ func TestSOPWorkspaceActivityTouchesConversationOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := &runsHandlers{deps: a.deps}
+	h := &runsHandlers{deps: a}
 	router := gin.New()
 	router.Use(h.runWriteGuard())
 	router.GET("/api/runs/:id/workspace", h.runWorkspace)
@@ -520,7 +520,7 @@ func TestSharedRunnerWorkspaceRestoreRequiresConnectedRunner(t *testing.T) {
 	t.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
 	a, user := workbenchFixture(t)
 	en := engine.New(a.repo, runtime.NewManager(t.TempDir()))
-	a.deps.engine = en
+	a.engine = en
 	runner := domain.Runner{ID: "shared-runner", Status: domain.RunnerStatusOnline}
 	if err := a.repo.PutRunner(runner); err != nil {
 		t.Fatal(err)
@@ -554,7 +554,7 @@ func TestSharedRunnerWorkspaceRestoreRequiresConnectedRunner(t *testing.T) {
 	}
 	hub := newRunnerControlHub()
 	hub.startupGrace, hub.reconnectWait = 0, 0
-	h := &runsHandlers{deps: a.deps, runnerControls: hub}
+	h := &runsHandlers{deps: a, runnerControls: hub}
 	router := gin.New()
 	router.Use(h.runWriteGuard())
 	router.GET("/api/runs/:id/workspace", h.runWorkspace)

@@ -5,7 +5,7 @@ import { loadApp, settle } from '../lib/load-app.mjs';
 test('bot model picker preserves an unavailable saved executor as a disabled option', async (t) => {
   const app = await loadApp();
   t.after(app.close);
-  app.router.get('/api/assistant/models', {
+  app.router.get('/api/model-catalog', {
     engines: [
       { id: 'codebuddy', name: 'CodeBuddy', configured: true, personal: false },
       { id: 'codex', name: 'Codex', configured: true, personal: true },
@@ -361,7 +361,7 @@ test('records hide manual actions for text removed by the retention cleanup', as
 test('new bot form picks an executor and model and submits the concrete model', async (t) => {
   const app = await loadApp();
   t.after(app.close);
-  app.router.get('/api/assistant/models', {
+  app.router.get('/api/model-catalog', {
     default: 'glm-test',
     models: [{ id: 'glm-test', name: 'GLM Test', family: 'glm' }, { id: 'codex:gpt-x', name: 'GPT X', family: 'gpt', engine: 'codex' }],
     engines: [{ id: 'codebuddy', name: 'CodeBuddy', configured: true }, { id: 'codex', name: 'Codex', configured: true }],
