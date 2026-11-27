@@ -105,7 +105,7 @@ func TestDefaultSandboxWithoutCatalogRowsSupportsSOPCreation(t *testing.T) {
 	}
 }
 
-func TestOnlyPlatformAdminsMayWriteDefaultSandbox(t *testing.T) {
+func TestTheAccountMayWriteDefaultSandbox(t *testing.T) {
 	t.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
 	f := cvBNewHTTPFixture(t)
 	if err := f.s.PutProject(domain.Project{ID: "platform", Name: "Named platform", OwnerID: f.user.ID}); err != nil {
@@ -114,24 +114,17 @@ func TestOnlyPlatformAdminsMayWriteDefaultSandbox(t *testing.T) {
 	body := map[string]any{
 		"id": "GENERIC-DOCKER", "name": "Project override", "projectId": "platform", "driver": "native", "shared": true,
 	}
-	rec := cvBRequest(t, f, http.MethodPut, "/api/sandboxes", body, true)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("project owner could modify the platform default: %d %s", rec.Code, rec.Body.String())
-	}
 	if err := f.s.DB.Exec("DELETE FROM projects WHERE id = ?", "platform").Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := f.s.DB.Exec("DELETE FROM sandboxes WHERE id = ?", repo.DefaultSandboxProfileID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.s.GrantPlatformAdmin(f.user.LoginName); err != nil {
-		t.Fatal(err)
-	}
 	for _, projectID := range []string{"platform", ""} {
 		body["projectId"] = projectID
-		rec = cvBRequest(t, f, http.MethodPut, "/api/sandboxes", body, true)
+		rec := cvBRequest(t, f, http.MethodPut, "/api/sandboxes", body, true)
 		if rec.Code != http.StatusOK {
-			t.Fatalf("platform admin could not configure the default with projectId %q: %d %s", projectID, rec.Code, rec.Body.String())
+			t.Fatalf("the account could not configure the default with projectId %q: %d %s", projectID, rec.Code, rec.Body.String())
 		}
 	}
 	if profile, ok := f.s.Sandbox(repo.DefaultSandboxProfileID); !ok || profile.Driver != domain.SandboxDriverNative {

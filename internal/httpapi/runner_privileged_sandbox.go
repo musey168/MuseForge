@@ -25,12 +25,12 @@ func decodePrivilegedSandboxSetting(c *gin.Context) (bool, bool) {
 }
 
 func (h *runnersHandlers) platformRunnerPrivilegedSandboxSet(c *gin.Context) {
-	if !h.platformAdminWrite(c) {
+	if !h.requireAccountWrite(c) || !requireWriteOrigin(c) {
 		return
 	}
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "只有平台管理员可以执行该操作"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录后管理执行机器"})
 		return
 	}
 	allowed, ok := decodePrivilegedSandboxSetting(c)
@@ -45,7 +45,7 @@ func (h *runnersHandlers) platformRunnerPrivilegedSandboxSet(c *gin.Context) {
 }
 
 func (h *runnersHandlers) runnerPrivilegedSandboxSet(c *gin.Context) {
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录后管理执行机器"})
 		return

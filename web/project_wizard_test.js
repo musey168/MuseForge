@@ -58,7 +58,6 @@ const ctx = {
   userAvatarHTML:u=>`<i>${(u&&u.loginName||"?")[0]}</i>`,
   issueRunHealth:()=>"",
   defaultRunEval:()=>({enabled:true}),
-  isPlatformAdmin:()=>true,
   toast:m=>notices.push(m),
   afConfirm:async opt=>{confirms.push(opt.message);return confirmAnswer},
   renderAll:()=>{},

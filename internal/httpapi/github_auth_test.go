@@ -90,16 +90,8 @@ func TestGitHubApplicationConfiguration(t *testing.T) {
 	t.Setenv("AGENTFLOW_GITHUB_CLIENT_ID", "")
 	current, recorder := githubTestContext(userID, http.MethodPut, "/api/auth/github/config", `{"clientId":"Iv1.testapplication"}`)
 	handler.configure(current)
-	if recorder.Code != http.StatusForbidden {
-		t.Fatalf("non-admin changed application: %d", recorder.Code)
-	}
-	if _, err := handler.repo.GrantPlatformAdmin("github-owner"); err != nil {
-		t.Fatal(err)
-	}
-	current, recorder = githubTestContext(userID, http.MethodPut, "/api/auth/github/config", `{"clientId":"Iv1.testapplication"}`)
-	handler.configure(current)
 	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"enabled":true`) {
-		t.Fatalf("configuration: %d %s", recorder.Code, recorder.Body)
+		t.Fatalf("configuration: %d %s", recorder.Code, recorder.Body.String())
 	}
 	restarted := newGitHubHandlers(handler.deps)
 	if clientID, err := restarted.clientID(); err != nil || clientID != "Iv1.testapplication" {
@@ -207,9 +199,6 @@ func TestGitHubReconfigurationCancelsInFlightGrants(t *testing.T) {
 		t.Run(stage, func(t *testing.T) {
 			handler, userID := githubTestHandler(t)
 			t.Setenv("AGENTFLOW_GITHUB_CLIENT_ID", "")
-			if _, err := handler.repo.GrantPlatformAdmin("github-owner"); err != nil {
-				t.Fatal(err)
-			}
 			if err := handler.repo.UsersRepo.SetGitHubClientID("Iv1.original-application"); err != nil {
 				t.Fatal(err)
 			}

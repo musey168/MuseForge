@@ -23,7 +23,7 @@ func limiterServer(t *testing.T) func(path, body string) int {
 		t.Fatal(err)
 	}
 	t.Cleanup(s.Close)
-	if _, err := s.CreateLocalAccount("owner", "a-long-enough-password", true); err != nil {
+	if _, err := s.CreateLocalAccount("owner", "a-long-enough-password"); err != nil {
 		t.Fatal(err)
 	}
 	h := New(s, engine.New(s, runtime.NewManager(t.TempDir())), nil, "", "")

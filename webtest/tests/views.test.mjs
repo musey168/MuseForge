@@ -19,16 +19,14 @@ test('boots with platform-shaped data and renders every routed view', async (t) 
   assert.equal(app.evaluate('state.data.projects[0].name'), 'Atlas');
   assert.equal(app.evaluate('state.currentUser.username'), 'tester');
 
-  for (const view of SURVIVING_VIEWS) {
-    app.evaluate(`switchView(${JSON.stringify(view)})`);
+  for (const view of SURVIVING_VIEWS) {    app.evaluate(`switchView(${JSON.stringify(view)})`);
     await settle(2);
     assert.ok(app.document.querySelector(`#${view}View`), `${view}View exists`);
   }
   assert.ok(app.router.calls.some((call) => call.path === '/api/bootstrap'));
   assert.ok(app.document.querySelectorAll('.view').length > 5);
   assert.equal(app.document.querySelector('#pageTitle').textContent, '访问密钥');
-  for (const removed of REMOVED_VIEWS) {
-    assert.equal(app.document.querySelector(`#${removed}View`), null, `${removed} was retired`);
+  for (const removed of REMOVED_VIEWS) {    assert.equal(app.document.querySelector(`#${removed}View`), null, `${removed} was retired`);
     assert.equal(app.document.querySelector(`[data-view="${removed}"]`), null, `${removed} has no nav entry`);
   }
 });

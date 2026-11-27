@@ -56,7 +56,4 @@ func TestPasswordLoginOriginCredentialsAndSession(t *testing.T) {
 	if reply.Code != 200 {
 		t.Fatalf("session did not authorize bootstrap: %d", reply.Code)
 	}
-	if s.IsPlatformAdmin("public-user") {
-		t.Fatal("sign in must not grant administration")
-	}
 }

@@ -46,7 +46,7 @@ func (h *usersHandlers) verifyGitToken(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gitTokenVerifyResult{Error: "valid user id is required"})
 		return
 	}
-	current, ok := h.requestUser(c.Request, false)
+	current, ok := h.requestUser(c.Request)
 	if !ok || current.ID != id {
 		c.JSON(http.StatusForbidden, gitTokenVerifyResult{Error: "只能校验当前登录用户的凭据"})
 		return

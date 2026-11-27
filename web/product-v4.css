@@ -658,10 +658,7 @@ body.view-has-heading .topbar .command-trigger{margin-left:0 !important}
 .runner-dispatch-bar,
 .runner-platform-section,
 .runner-list-heading,
-.runner-grid,
-.platform-admin-panel,
-.platform-metric-grid,
-.platform-admin-layout {
+.runner-grid {
   width: 100% !important;
   max-width: none !important;
   margin-left: 0 !important;
@@ -671,19 +668,6 @@ body.view-has-heading .topbar .command-trigger{margin-left:0 !important}
 
 .page-heading{margin-bottom:20px}.page-heading h1{font-size:22px}
 .page-heading>div>p:last-child{max-width:min(960px, 75vw)}
-
-/* 接入指南全宽自适应与一致布局 */
-.access-tabs{margin:0 0 16px 0 !important;width:100% !important;box-sizing:border-box !important}
-.access-summary{width:100% !important;max-width:none !important;margin:0 0 16px 0 !important;box-sizing:border-box !important}
-.quick-wrap{width:100% !important;max-width:none !important;margin:0 !important;box-sizing:border-box !important}
-.quick-hero{width:100% !important;max-width:none !important;margin:0 0 16px 0 !important;box-sizing:border-box !important}
-.quick-hero-text p{max-width:min(840px, 70vw)}
-.setup-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;width:100%;margin-bottom:16px;box-sizing:border-box}
-.setup-card{box-sizing:border-box;width:100%}
-.setup-done{width:100% !important;max-width:none !important;box-sizing:border-box !important;margin:0 !important}
-.quick-onboard{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(320px,0.9fr);width:100%;margin-bottom:16px;box-sizing:border-box}
-.quick-after{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);gap:16px;width:100%;box-sizing:border-box}
-.access-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(320px,0.9fr);gap:16px;width:100%;margin:0 !important;box-sizing:border-box}
 
 /* 个人设置全宽布局 */
 .personal-settings{padding:0 !important}

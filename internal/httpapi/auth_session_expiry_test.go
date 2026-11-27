@@ -134,7 +134,7 @@ func TestRequestUser_ExpiredSessionRejected(t *testing.T) {
 	}
 	expiredReq := httptest.NewRequest(http.MethodGet, "/api/bootstrap", nil)
 	expiredReq.AddCookie(&http.Cookie{Name: authCookieName, Value: expiredToken})
-	if user, ok := d.requestUser(expiredReq, true); ok {
+	if user, ok := d.requestUser(expiredReq); ok {
 		t.Fatalf("expected expired session to be rejected, got user %+v", user)
 	}
 
@@ -148,7 +148,7 @@ func TestRequestUser_ExpiredSessionRejected(t *testing.T) {
 	}
 	freshReq := httptest.NewRequest(http.MethodGet, "/api/bootstrap", nil)
 	freshReq.AddCookie(&http.Cookie{Name: authCookieName, Value: freshToken})
-	if _, ok := d.requestUser(freshReq, true); !ok {
+	if _, ok := d.requestUser(freshReq); !ok {
 		t.Fatalf("expected fresh session to be accepted")
 	}
 }

@@ -43,12 +43,12 @@ func (h *projectsHandlers) projects(c *gin.Context) {
 		}
 		v.ArchivedAt, v.ArchivedBy = nil, 0
 		if authRequired() {
-			user, ok := h.requestUser(r, true)
+			user, ok := h.requestUser(r)
 			if !ok {
 				c.JSON(401, gin.H{"error": "请先登录"})
 				return
 			}
-			if !h.isPlatformAdmin(r) {
+			if !h.isAccount(r) {
 				if exists && existing.OwnerID != user.ID {
 					c.JSON(403, gin.H{"error": "只有项目 Owner 或平台管理员可以修改项目设置"})
 					return
@@ -224,13 +224,13 @@ func (h *projectsHandlers) projectForArchive(c *gin.Context) (domain.Project, in
 	if !authRequired() {
 		return p, 0, true
 	}
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
 		return domain.Project{}, 0, false
 	}
-	if p.OwnerID != user.ID && !h.isPlatformAdmin(c.Request) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "只有项目 Owner 或平台管理员可以删除或恢复项目"})
+	if !h.accountHoldsProject(p.ID, user.ID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "只有项目负责人可以删除或恢复项目"})
 		return domain.Project{}, 0, false
 	}
 	return p, user.ID, true

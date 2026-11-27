@@ -116,13 +116,13 @@ func (v ProjectCredentialInput) Validate() error {
 	return nil
 }
 
-// ProjectCredentialAccess applies the credential policy even for shared or
-// ownerless projects. Anonymous callers do not get access to project secrets.
-func ProjectCredentialAccess(project Project, userID int64, platformAdmin bool) (use, manage bool) {
+// ProjectCredentialAccess applies the credential policy even for ownerless
+// projects. Anonymous callers do not get access to project secrets.
+func ProjectCredentialAccess(project Project, userID int64) (use, manage bool) {
 	if userID <= 0 || project.ID == "" || project.ArchivedAt != nil {
 		return false, false
 	}
-	if platformAdmin || project.OwnerID == userID {
+	if project.AccountOwns(userID) {
 		return true, true
 	}
 	return false, false

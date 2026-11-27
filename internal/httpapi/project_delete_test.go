@@ -25,17 +25,14 @@ func TestProjectDeleteArchivesAndRestores(t *testing.T) {
 	}
 	t.Cleanup(s.Close)
 	users := map[string]domain.User{}
-	for _, login := range []string{"pd-admin", "pd-owner", "pd-outsider"} {
+	for _, login := range []string{"pd-owner", "pd-outsider"} {
 		u := domain.User{LoginName: login}
-		if login == "pd-admin" {
-			u.PlatformRole = domain.PlatformRoleAdmin
-		}
 		if err := s.PutUser(u); err != nil {
 			t.Fatal(err)
 		}
 		users[login], _ = s.UserByLoginName(login)
 	}
-	admin, owner, outsider := users["pd-admin"], users["pd-owner"], users["pd-outsider"]
+	owner, outsider := users["pd-owner"], users["pd-outsider"]
 	if err := s.PutProject(domain.Project{ID: "okr-system", Name: "OKR系统", OwnerID: owner.ID}); err != nil {
 		t.Fatal(err)
 	}
@@ -100,13 +97,12 @@ func TestProjectDeleteArchivesAndRestores(t *testing.T) {
 	}
 
 	requestJSONAuthed[map[string]any](t, h, outsider, http.MethodPost, "/api/projects/okr-system/restore", nil, 403)
-	restored := requestJSONAuthed[domain.Project](t, h, admin, http.MethodPost, "/api/projects/okr-system/restore", nil, 200)
+	restored := requestJSONAuthed[domain.Project](t, h, owner, http.MethodPost, "/api/projects/okr-system/restore", nil, 200)
 	if restored.ArchivedAt != nil || restored.Name != "OKR系统" || restored.OwnerID != owner.ID {
 		t.Fatalf("restore lost data: %+v", restored)
 	}
 	if ids := listed(); !strings.Contains(strings.Join(ids, ","), "okr-system") {
 		t.Fatalf("restored project not listed: %v", ids)
 	}
-	// Admins can delete projects they do not own.
-	requestJSONAuthed[domain.Project](t, h, admin, http.MethodDelete, "/api/projects/okr-system", nil, 200)
+	requestJSONAuthed[domain.Project](t, h, owner, http.MethodDelete, "/api/projects/okr-system", nil, 200)
 }

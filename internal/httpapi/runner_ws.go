@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/gitwork"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -55,7 +54,6 @@ type runnerControlHub struct {
 	reconnectWait  time.Duration
 	reconnectGrace time.Duration
 	startupGrace   time.Duration
-	sshHostLookup  gitwork.SSHKnownHostsLookup
 }
 
 type runnerWorkspaceWaiter struct {
@@ -171,7 +169,6 @@ func (h *runnerControlHub) send(ctx context.Context, conn *runnerControlConn, re
 		}
 		request.SSHHostKeyOwnerID = 0
 	}
-	request.GitSSHKnownHosts = gitwork.SSHKnownHostsForKeys(gitwork.WithSSHKnownHostsLookup(ctx, h.sshHostLookup), nil, request.TerminalGitSSHKeys)
 	h.mu.Lock()
 	h.nextID++
 	requestID := fmt.Sprintf("workspace-%d", h.nextID)

@@ -58,11 +58,11 @@ const panel={innerHTML:'',classList:{remove(){}},querySelector:()=>null,querySel
 const host={innerHTML:'',querySelector(selector){return {'#credentialPanel':panel}[selector]??null},querySelectorAll:()=>[]};
 const posted=[];
 const $=selector=>({'#personalSettingsContent':host,'#credentialPanel':panel,'#chatNextFrame':{contentWindow:{postMessage:m=>posted.push(m)}}}[selector]??null);
-const document={querySelectorAll:()=>[],activeElement:null};
+const document={querySelectorAll:()=>[],activeElement:null,addEventListener:()=>{}};
 const window={};
 const location={search:'',pathname:'/',hash:'',origin:'http://localhost'};
 let replaced=0;const history={replaceState(){replaced++}};
-eval(code.slice(code.indexOf('const CREDENTIAL_GROUPS='),code.indexOf('// 谁能改通用模板'))+';globalThis.cred={kind:credentialKind};');
+eval(code.slice(code.indexOf('const CREDENTIAL_GROUPS='),code.indexOf('function renderUserProfilePopover'))+';globalThis.cred={kind:credentialKind};');
 const gitToken=cred.kind('gitToken');
 (async()=>{
  // Entering the page verifies a configured token once and caches the answer.

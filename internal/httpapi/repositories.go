@@ -27,7 +27,7 @@ func (h *repositoriesHandlers) canManageProjectRepositories(c *gin.Context, proj
 	if !authRequired() {
 		return true
 	}
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(401, gin.H{"error": "请先登录"})
 		return false
@@ -109,7 +109,7 @@ func (h *repositoriesHandlers) repositories(c *gin.Context) {
 	}
 	// localPath copies a directory from the executing host into the task
 	// workspace, so only platform administrators may set it.
-	if authRequired() && !h.isPlatformAdmin(c.Request) {
+	if authRequired() && !h.isAccount(c.Request) {
 		v.LocalPath = ""
 		if existing, ok := h.repo.Repository(v.ID); ok {
 			v.LocalPath = existing.LocalPath
@@ -299,7 +299,7 @@ func (h *repositoriesHandlers) repositories(c *gin.Context) {
 			c.JSON(400, map[string]string{"error": "cloneUrl 不能包含账号、密码或 Token，请去掉 @ 前的部分，并在个人配置中填写 Git Token"})
 			return
 		}
-		if err := gitwork.ValidateRemoteURL(v.CloneURL, !authRequired() || h.isPlatformAdmin(c.Request)); err != nil {
+		if err := gitwork.ValidateRemoteURL(v.CloneURL, !authRequired() || h.isAccount(c.Request)); err != nil {
 			c.JSON(400, map[string]string{"error": "cloneUrl 无效：" + err.Error()})
 			return
 		}

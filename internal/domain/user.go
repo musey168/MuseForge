@@ -30,9 +30,6 @@ type User struct {
 	ChineseName         string                        `json:"chineseName"`
 	DeptID              int                           `json:"deptId"`
 	DeptName            string                        `json:"deptName"`
-	// PlatformRole is a platform-wide role, independent of project membership.
-	// "admin" may edit generic LOOP templates; empty is a regular user.
-	PlatformRole                 string     `json:"platformRole,omitempty"`
 	GitToken                     string     `json:"gitToken,omitempty"`
 	GitHubCredentialConfigured   bool       `json:"gitHubCredentialConfigured,omitempty"`
 	GitTokenOAuth                bool       `json:"gitTokenOAuth,omitempty"`
@@ -67,7 +64,6 @@ func (u User) HasExecutorCredential(kind string) bool {
 	return strings.TrimSpace(key) != ""
 }
 
-const PlatformRoleAdmin = "admin"
 
 // GitSSHKey is the public description of a personal SSH credential.
 type GitSSHKey struct {
@@ -186,11 +182,6 @@ func NormalizeCodeBuddyInternetEnvironment(raw string) (value string, ok bool) {
 	return "", false
 }
 
-// IsPlatformAdmin reports whether the user holds the platform-admin role.
-func IsPlatformAdmin(u User) bool {
-	return strings.EqualFold(strings.TrimSpace(u.PlatformRole), PlatformRoleAdmin)
-}
-
 // PublicUser returns user directory information without exposing credentials.
 func PublicUser(u User) User {
 	u.CodexAPIKeyConfigured = strings.TrimSpace(u.CodexAPIKey) != ""
@@ -288,17 +279,3 @@ func PublicUsers(items []User) []User {
 	return out
 }
 
-// APIToken is a user-owned credential for REST API and MCP access.
-// TokenHash is persisted but never serialized; the plaintext token is shown
-// only once when it is created.
-type APIToken struct {
-	ID         string     `json:"id"`
-	UserID     int64      `json:"userId"`
-	Name       string     `json:"name"`
-	Prefix     string     `json:"prefix"`
-	TokenHash  string     `json:"-"`
-	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
-	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
-	CreatedAt  time.Time  `json:"createdAt"`
-	RevokedAt  *time.Time `json:"revokedAt,omitempty"`
-}

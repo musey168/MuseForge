@@ -15,7 +15,6 @@ import (
 
 func main() {
 	login := flag.String("user", "", "account login")
-	admin := flag.Bool("admin", false, "grant platform administration")
 	flag.Parse()
 	if *login == "" || len(*login) > 64 || strings.ContainsAny(*login, " \t\r\n") {
 		log.Fatal("a login of 1–64 characters without spaces is required")
@@ -42,11 +41,6 @@ func main() {
 	}
 	if err := s.SetLocalPassword(u.ID, password); err != nil {
 		log.Fatal(err)
-	}
-	if *admin {
-		if err := s.SetUserPlatformRole(u.ID, domain.PlatformRoleAdmin); err != nil {
-			log.Fatal(err)
-		}
 	}
 	fmt.Printf("Account %s is ready.\n", *login)
 }

@@ -43,7 +43,7 @@ func (h *authHandlers) localSignupOptions() (needsSetup, allowed bool, err error
 	if err != nil {
 		return false, false, err
 	}
-	needsSetup = count == 0 && len(repo.EnvPlatformAdmins()) == 0 && len(repo.BuiltinPlatformAdmins) == 0
+	needsSetup = count == 0
 	return needsSetup, needsSetup || signupEnabled(), nil
 }
 
@@ -89,7 +89,7 @@ func (h *authHandlers) authRegister(c *gin.Context) {
 		return
 	}
 	registerMu.Lock()
-	first, allowed, err := h.localSignupOptions()
+	_, allowed, err := h.localSignupOptions()
 	if err != nil {
 		registerMu.Unlock()
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "无法读取注册状态"})
@@ -100,12 +100,7 @@ func (h *authHandlers) authRegister(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "自助注册已关闭，请联系管理员创建账号"})
 		return
 	}
-	if repo.IsAllowlistedPlatformAdmin(input.Login) {
-		registerMu.Unlock()
-		c.JSON(http.StatusForbidden, gin.H{"error": "该用户名是已配置的平台管理员，请由运维用账号命令创建，不能在浏览器中注册"})
-		return
-	}
-	u, err := h.repo.CreateLocalAccount(input.Login, input.Password, first)
+	u, err := h.repo.CreateLocalAccount(input.Login, input.Password)
 	registerMu.Unlock()
 	if errors.Is(err, repo.ErrLoginTaken) {
 		c.JSON(http.StatusConflict, gin.H{"error": "该用户名已被使用"})
@@ -122,5 +117,5 @@ func (h *authHandlers) authRegister(c *gin.Context) {
 		return
 	}
 	h.setAuthCookie(c.Writer, c.Request, token)
-	c.JSON(http.StatusOK, gin.H{"user": h.annotateUser(user), "admin": first})
+	c.JSON(http.StatusOK, gin.H{"user": user})
 }

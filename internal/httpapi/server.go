@@ -53,21 +53,17 @@ func (d deps) getAuthClient() *auth.Client {
 // Server 组合各领域 handler，仅保留服务级端点与入口装配。
 type Server struct {
 	*deps
-	auth            *authHandlers // auth.go
-	github          *githubHandlers
-	users           *usersHandlers // users.go
-	sshHostTrust    *sshHostTrustHandlers
-	httpsHostTrust  *httpsHostTrustHandlers
-	platformSetting *platformSettingsHandlers
-	httpHostTrust   *gitHTTPHostTrustHandlers
-	projects        *projectsHandlers
-	repositories    *repositoriesHandlers
-	credentials     *projectCredentialsHandlers
-	insights        *insightsHandlers
-	issues          *issuesHandlers
-	runners         *runnersHandlers // runners.go
-	tokens          *tokenHandlers   // auth_tokens.go
-	syncAPI         *syncHandlers    // tracker.go
+	auth         *authHandlers // auth.go
+	github       *githubHandlers
+	users        *usersHandlers // users.go
+	projects     *projectsHandlers
+	repositories *repositoriesHandlers
+	credentials  *projectCredentialsHandlers
+	insights     *insightsHandlers
+	issues       *issuesHandlers
+	runners      *runnersHandlers // runners.go
+	tokens       *tokenHandlers   // auth_tokens.go
+	syncAPI      *syncHandlers    // tracker.go
 }
 
 func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *gin.Engine {
@@ -77,24 +73,19 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 	}
 	d.configureSync(s.SyncConfig())
 	runnerControls := newRunnerControlHub()
-	runnerControls.sshHostLookup = s.PlatformSSHKnownHosts
 	api := &Server{
-		deps:            d,
-		auth:            &authHandlers{deps: d},
-		github:          newGitHubHandlers(d),
-		users:           &usersHandlers{deps: d},
-		sshHostTrust:    &sshHostTrustHandlers{deps: d, hosts: s.SSHHostTrustRepo, runnerControls: runnerControls},
-		httpsHostTrust:  &httpsHostTrustHandlers{deps: d, hosts: s.HTTPSHostTrustRepo, lookupIP: net.DefaultResolver.LookupNetIP},
-		platformSetting: &platformSettingsHandlers{deps: d},
-		httpHostTrust:   &gitHTTPHostTrustHandlers{deps: d, hosts: s.GitHTTPHostTrustRepo},
-		insights:        &insightsHandlers{deps: d},
-		projects:        &projectsHandlers{deps: d},
-		repositories:    &repositoriesHandlers{deps: d},
-		credentials:     &projectCredentialsHandlers{deps: d},
-		issues:          &issuesHandlers{deps: d},
-		runners:         &runnersHandlers{deps: d, runnerControls: runnerControls, runnerBindCodes: map[string]runnerBindCode{}},
-		tokens:          &tokenHandlers{deps: d},
-		syncAPI:         &syncHandlers{deps: d},
+		deps:         d,
+		auth:         &authHandlers{deps: d},
+		github:       newGitHubHandlers(d),
+		users:        &usersHandlers{deps: d},
+		insights:     &insightsHandlers{deps: d},
+		projects:     &projectsHandlers{deps: d},
+		repositories: &repositoriesHandlers{deps: d},
+		credentials:  &projectCredentialsHandlers{deps: d},
+		issues:       &issuesHandlers{deps: d},
+		runners:      &runnersHandlers{deps: d, runnerControls: runnerControls, runnerBindCodes: map[string]runnerBindCode{}},
+		tokens:       &tokenHandlers{deps: d},
+		syncAPI:      &syncHandlers{deps: d},
 	}
 	api.runners.startRunnerSweeper()
 	g := gin.New()
@@ -135,37 +126,8 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 	g.POST("/api/auth/logout", api.auth.authLogout)
 	g.GET("/api/auth/photo", api.auth.authPhoto)
 	g.GET("/api/auth/photo/:spec/:username", api.auth.authPhoto)
-	g.GET("/api/auth/tokens", api.tokens.authTokens)
-	g.POST("/api/auth/tokens", api.tokens.authTokens)
-	g.DELETE("/api/auth/tokens/:id", api.tokens.authToken)
-	g.GET("/api/users", api.users.users)
-	g.GET("/api/platform/admins", api.users.platformAdmins)
-	g.PUT("/api/platform/admins", api.users.platformAdmins)
-	g.GET("/api/platform/accounts", api.users.platformAccounts)
-	g.POST("/api/platform/accounts", api.users.createPlatformAccount)
-	g.PUT("/api/platform/accounts/:id/password", api.users.resetPlatformAccountPassword)
-	g.GET("/api/platform/codebuddy-key", api.users.platformCodeBuddyKey)
-	g.PUT("/api/platform/codebuddy-key", api.users.savePlatformCodeBuddyKey)
-	g.DELETE("/api/platform/codebuddy-key", api.users.platformCodeBuddyKey)
-	g.GET("/api/platform/git-ssh-hosts", api.sshHostTrust.list)
-	g.POST("/api/platform/git-ssh-hosts", api.sshHostTrust.save)
-	g.DELETE("/api/platform/git-ssh-hosts", api.sshHostTrust.remove)
-	g.POST("/api/platform/git-ssh-hosts/preview", api.sshHostTrust.preview)
-	g.PUT("/api/platform/git-ssh-hosts/:host", api.sshHostTrust.save)
-	g.DELETE("/api/platform/git-ssh-hosts/:host", api.sshHostTrust.remove)
-	g.GET("/api/platform/git-https-hosts", api.httpsHostTrust.list)
-	g.POST("/api/platform/git-https-hosts/preview", api.httpsHostTrust.preview)
-	g.POST("/api/platform/git-https-hosts", api.httpsHostTrust.save)
-	g.PUT("/api/platform/git-https-hosts/:host", api.httpsHostTrust.save)
-	g.DELETE("/api/platform/git-https-hosts/:host", api.httpsHostTrust.remove)
-	g.GET("/api/git-https-hosts", api.httpsHostTrust.choices)
-	g.GET("/api/platform/public-url", api.platformSetting.publicURL)
-	g.PUT("/api/platform/public-url", api.platformSetting.publicURL)
-	g.DELETE("/api/platform/public-url", api.platformSetting.publicURL)
-	g.GET("/api/platform/git-http-hosts", api.httpHostTrust.list)
-	g.POST("/api/platform/git-http-hosts", api.httpHostTrust.save)
-	g.DELETE("/api/platform/git-http-hosts/:host", api.httpHostTrust.remove)
-	g.GET("/api/git-http-hosts", api.httpHostTrust.choices)
+	// master(net/http) 的 /api/users/ 子树只接受 PUT /api/users/<id>/credentials
+	// 一种形态，其余任何方法/子路径都走 method(w) → 405 JSON。
 	g.Any("/api/users/:id/credentials", func(c *gin.Context) {
 		if c.Request.Method != http.MethodPut {
 			c.JSON(http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})

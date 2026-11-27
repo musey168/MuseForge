@@ -11,5 +11,5 @@ import (
 // instead of accepting that cached identity as interactive authentication.
 func (d deps) interactiveUser(r *http.Request) (*auth.User, bool) {
 	ctx := context.WithValue(r.Context(), requestUserContextKey{}, (*auth.User)(nil))
-	return d.requestUser(r.WithContext(ctx), false)
+	return d.requestUser(r.WithContext(ctx))
 }

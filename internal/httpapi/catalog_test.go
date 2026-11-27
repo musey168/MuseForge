@@ -880,8 +880,8 @@ func TestExecutorModelsCatalogUsesOnlyTheEditorsSavedModels(t *testing.T) {
 	}
 }
 
-// Role and SOP pickers offer the executors a SOP run can use: a personal key,
-// the platform's shared CodeBuddy Key, or account login on the default runner.
+// Role and SOP pickers offer the executors a SOP run can use: a personal key
+// or account login on the default runner.
 func TestExecutorModelsConfiguredMatchesRunTimeCredentials(t *testing.T) {
 	d, _ := workbenchFixture(t)
 	stubCLIModelDiscovery(t)
@@ -943,19 +943,12 @@ func TestExecutorModelsConfiguredMatchesRunTimeCredentials(t *testing.T) {
 
 	check("no credentials", shared, nil)
 	check("personal key", personal, map[string]availability{"codex": {true, true}})
-	if err := st.SetPlatformCodeBuddyKey(repo.PlatformCodeBuddyKeyUpdate{APIKey: "shared-fixture", Models: []string{"glm-5.1"}}, 0); err != nil {
-		t.Fatal(err)
-	}
-	check("shared CodeBuddy key", shared, map[string]availability{"codebuddy": {true, false}})
-	if engine := assistantEngines(shared, "")[assistantEngineCodeBuddy]; !engine.Configured || engine.Personal {
-		t.Fatalf("assistant models disagree for the shared key: %+v", engine)
-	}
 	check("runner login", login, map[string]availability{"codebuddy": {true, false}, "codex": {true, false}})
 	engines := assistantEngines(login, "?schedule=1")
 	if !engines[assistantEngineCodex].Configured || engines[assistantEngineClaude].Configured {
 		t.Fatalf("assistant models disagree for runner login: %+v", engines)
 	}
-	check("personal key with a shared key", personal, map[string]availability{"codebuddy": {true, false}, "codex": {true, true}})
+	check("personal key with a runner login", personal, map[string]availability{"codebuddy": {true, false}, "codex": {true, true}})
 
 	// A project SOP runs on the user's project default machine, even when the
 	// user has no personal default.

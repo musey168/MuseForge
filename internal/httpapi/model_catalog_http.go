@@ -10,15 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// modelCatalogEngines lists the CLIs the caller may run with: their own
-// keys, the platform's shared CodeBuddy key, and — for a scheduled AI job —
-// the account login on their default machine.
+// modelCatalogEngines lists the CLIs the caller may run with: their own keys
+// and — for a scheduled AI job — the account login on their default machine.
 func modelCatalogEngines(r *repo.Store, user domain.User, projectID string, schedule bool) []assistantEngineOption {
-	sponsored := false
-	if key, ok := r.SharedCodeBuddyKey(); ok && strings.TrimSpace(key.APIKey) != "" && strings.TrimSpace(user.CodeBuddyAPIKey) == "" {
-		sponsored = true
-	}
-	options := assistantEngineOptions(user, sponsored)
+	options := assistantEngineOptions(user)
 	if schedule {
 		for i := range options {
 			if scheduleLoginRunner(r, user.ID, projectID, options[i].ID).ID != "" {
@@ -33,7 +28,7 @@ func modelCatalogEngines(r *repo.Store, user domain.User, projectID string, sche
 // run with and the models each of them offers. It is the catalogue the
 // personal settings and the task pickers read.
 func (h *Server) modelCatalog(c *gin.Context) {
-	authUser, ok := h.requestUser(c.Request, true)
+	authUser, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
 		return

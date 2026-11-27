@@ -18,8 +18,6 @@ const state = {
   usage:null, usageLoading:false, usageError:'', usageGrain:['day','week','month'].includes(localStorage.getItem('agentflow.usageGrain'))?localStorage.getItem('agentflow.usageGrain'):'day', usageBucket:'', usageBuckets:[], usageMetric:'tokens', usageExpanded:'', drawerOpen:false, issueDetailTab:'overview', issueDetailData:null, propTab:'basic',
   uiScroll:{runId:'', nodeId:'', graphLeft:0, feedTop:0, telTop:0, feedStick:true, telStick:true},
   runLogs:null, runTelemetry:null, runTelemetryAdapter:'live', runWorkspace:null,
-  accessClient:'cursor',
-  accessTokens:[], accessTokensStatus:'idle', accessTokensError:'', revealedToken:'',
   issueSelectionMode:false, issueSelection:new Set(), issueSelectionScope:'', issueBulkDeleting:false, issueBulkDeleteProgress:null, issueBulkDeleteResult:null,
   listPages:{}
 };
@@ -704,8 +702,7 @@ function fallbackCopyText(value){
   input.value=value;
   input.readOnly=true;
   input.style.cssText='position:fixed;top:-9999px;left:-9999px';
-  document.body.appendChild(input);
-  try{
+  document.body.appendChild(input);  try{
     input.select();
     return document.execCommand('copy');
   }catch{
@@ -1168,8 +1165,7 @@ function settingsSidebarExpanded(){
 }
 let settingsSidebarEntryFrame=0;
 let settingsSidebarWasManaged=false;
-const settingsManagementViews=['settings','projects','projectCredentials','runners','guide','platform'];
-const settingsRouteMotion=matchMedia('(prefers-reduced-motion: reduce)');
+const settingsManagementViews=['settings','projects','projectCredentials','runners','guide','platform'];const settingsRouteMotion=matchMedia('(prefers-reduced-motion: reduce)');
 let settingsRouteTransition=null;
 let settingsRouteApplying=false;
 function isSettingsManagementView(name){return settingsManagementViews.includes(name)}
@@ -1332,14 +1328,12 @@ function setSettingsSidebarExpanded(expanded,focusToggle=false){
   }
 }
 function viewTitles(){return {management:'设置',issues:'需求列表',observability:'用量台',projects:'项目配置',projectCredentials:'凭据管理',platform:'平台管理',runners:'执行机器',settings:'个人配置',access:'访问密钥',guide:'访问密钥'}}
-// 从流程模板打开的流程设计）按 data-nav-match 高亮它们所属的入口。
-function settingsNavMatches(btn,name){return btn.dataset.view===name||String(btn.dataset.navMatch||'').split(/\s+/).includes(name)}
+// 从流程模板打开的流程设计）按 data-nav-match 高亮它们所属的入口。function settingsNavMatches(btn,name){return btn.dataset.view===name||String(btn.dataset.navMatch||'').split(/\s+/).includes(name)}
 function activeViewName(){if(state.currentView)return state.currentView;const el=document.querySelector('.view.active');return el?el.id.replace(/View$/,''):''}
 function restoredView(){
   const titles=viewTitles();
   const hash=(location.hash||'').replace(/^#\/?/,'').split(/[/?]/)[0];
-  if(hash==='access')return 'guide';
-  if(hash==='management')return 'settings';
+  if(hash==='access')return 'guide';  if(hash==='management')return 'settings';
   if(titles[hash])return hash;
   const saved=localStorage.getItem('agentflow.activeView');
   if(saved==='management')return 'settings';
@@ -1366,12 +1360,9 @@ function switchView(name){
   $$('details.collab-settings').forEach(menu=>menu.open=false);
   const titles=viewTitles();
   if(name==='dashboard')name='issues';
-  if(name==='access')name='guide';
-  if(name==='management')name='settings';
+  if(name==='access')name='guide';  if(name==='management')name='settings';
   const targetView=name;
   if(!titles[name]||!$(`#${targetView}View`)){name='issues'}
-  // 手敲 #/platform 或者从别的账号留下的 localStorage 恢复进来，都要挡住。
-  if(name==='platform'&&!isPlatformAdmin())name='issues';
   const previous=activeViewName();
   if(previous==='projectCredentials'&&name!=='projectCredentials')closeProjectCredentialsPage();
   if(name!=='settings')cancelCredentialFocus();
@@ -1432,7 +1423,6 @@ function switchView(name){
   if(name==='dashboard')refreshDashboard()
   if(name==='observability')refreshObs()
   if(name==='settings')renderPersonalSettings();
-  if(name==='platform')renderPlatformAdminPanel();
   if(name==='projects')renderProjectAdmin();
   if(name==='projectCredentials')loadProjectCredentialsPage();
   if(name==='runners')refreshRunners();

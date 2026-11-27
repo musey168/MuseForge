@@ -111,5 +111,5 @@ func (h *authHandlers) authPassword(c *gin.Context) {
 		return
 	}
 	h.setAuthCookie(c.Writer, c.Request, token)
-	c.JSON(http.StatusOK, gin.H{"user": h.annotateUser(user)})
+	c.JSON(http.StatusOK, gin.H{"user": user})
 }

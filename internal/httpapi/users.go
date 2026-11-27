@@ -32,7 +32,7 @@ func (h *usersHandlers) user(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, map[string]string{"error": "valid user id is required"})
 		return
 	}
-	current, ok := h.requestUser(c.Request, false)
+	current, ok := h.requestUser(c.Request)
 	if !ok || current.ID != id {
 		c.JSON(http.StatusForbidden, map[string]string{"error": "只能配置当前登录用户的凭据"})
 		return
@@ -107,49 +107,4 @@ func validCLIBaseURL(raw string) bool {
 	}
 	u, err := url.Parse(raw)
 	return err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Hostname() != "" && u.User == nil && u.RawQuery == "" && u.Fragment == "" && len(raw) <= 2048
-}
-
-func (h *usersHandlers) platformAdmins(c *gin.Context) {
-	if !h.isPlatformAdmin(c.Request) {
-		c.JSON(http.StatusForbidden, map[string]string{"error": "只有平台管理员可以管理该名单"})
-		return
-	}
-	if h.repo == nil {
-		c.JSON(http.StatusOK, []repo.PlatformAdminRecord{})
-		return
-	}
-	if c.Request.Method == http.MethodGet {
-		c.JSON(http.StatusOK, h.repo.ListPlatformAdmins())
-		return
-	}
-	var req struct {
-		LoginName string `json:"loginName"`
-		Role      string `json:"role"`
-	}
-	if !decode(c, &req) {
-		return
-	}
-	login := strings.TrimSpace(req.LoginName)
-	if login == "" {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": "loginName is required"})
-		return
-	}
-	role := strings.ToLower(strings.TrimSpace(req.Role))
-	if role == "" || role == "none" || role == "revoke" {
-		if err := h.repo.RevokePlatformAdmin(login); err != nil {
-			respond(c, err)
-			return
-		}
-		c.JSON(http.StatusOK, h.repo.ListPlatformAdmins())
-		return
-	}
-	if role != domain.PlatformRoleAdmin {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": "role 只支持 admin 或空（撤销）"})
-		return
-	}
-	if _, err := h.repo.GrantPlatformAdmin(login); err != nil {
-		respond(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, h.repo.ListPlatformAdmins())
 }

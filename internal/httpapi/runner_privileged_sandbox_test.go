@@ -16,9 +16,6 @@ func TestExecutionMachinePrivilegedSandboxSettings(t *testing.T) {
 	if err := f.s.PutUser(owner); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.s.GrantPlatformAdmin(f.user.LoginName); err != nil {
-		t.Fatal(err)
-	}
 	const origin = "http://localhost"
 	request := func(user domain.User, method, path, origin, body string, want int) *httptest.ResponseRecorder {
 		t.Helper()
@@ -50,7 +47,6 @@ func TestExecutionMachinePrivilegedSandboxSettings(t *testing.T) {
 	path := "/api/runners/" + registered.RunnerID + "/privileged-sandbox"
 	const on = `{"allowed":true}`
 	const off = `{"allowed":false}`
-	request(owner, http.MethodPut, platformPath, origin, on, http.StatusForbidden)
 	request(f.user, http.MethodPut, path, origin, on, http.StatusForbidden)
 	request(owner, http.MethodPut, path, "https://other.example", on, http.StatusForbidden)
 	request(f.user, http.MethodPut, platformPath, "", on, http.StatusForbidden)

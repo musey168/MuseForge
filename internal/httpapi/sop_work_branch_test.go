@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -132,29 +131,5 @@ printf '{"type":"result","result":"{\\"branch\\":\\"%s\\"}"}\n' "$name"
 	current := requestJSON[domain.Run](t, api, http.MethodGet, "/api/runs/"+run.ID, nil, http.StatusOK)
 	if current.Repository.WorkBranch != run.Repository.WorkBranch || current.Repositories[0].WorkBranch != run.Repositories[0].WorkBranch {
 		t.Fatalf("changing the naming configuration changed an existing run: %+v", current.Repositories)
-	}
-}
-
-func TestSOPWorkBranchNamingRequiresSelectedModelOnSharedCodeBuddyKey(t *testing.T) {
-	store, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(store.Close)
-	if err := store.SetPlatformCodeBuddyKey(repo.PlatformCodeBuddyKeyUpdate{
-		APIKey: "branch-shared-key-fixture", Models: []string{"another-model"},
-	}, 1); err != nil {
-		t.Fatal(err)
-	}
-	// Model access is checked before invoking a CLI.
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	h := &sopHelper{deps: &deps{repo: store}}
-	_, err = h.generateSOPWorkBranch(ctx, engine.SOPWorkBranchRequest{
-		Execution: domain.TelemetryContext{ResponsibleUserID: 1, ProjectID: "platform"},
-		Executor:  domain.ExecutorDefaults{Executor: "codebuddy", Model: "hy4std"},
-	})
-	if err == nil || !strings.Contains(err.Error(), "所选模型未在平台共享 CodeBuddy Key 中启用") {
-		t.Fatalf("expected rejection of the selected model, got %v", err)
 	}
 }

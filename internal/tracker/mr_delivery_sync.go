@@ -1,9 +1,7 @@
 package tracker
 
 import (
-	"context"
 	"log"
-	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +16,6 @@ const (
 
 // MRDeliveryStore is the persistence surface used by the MR state background sync.
 type MRDeliveryStore interface {
-	PlatformGitHTTPSAddresses(context.Context, string) ([]netip.Addr, error)
 	DiscoverMRDeliveryStatesFromArtifacts() error
 	MRDeliveryStatesNeedingRefresh(staleBefore time.Time) ([]domain.MRDeliveryState, error)
 	UpdateMRDeliveryState(project string, iid int, state string, targetBranch string, mergedAt, checkedAt time.Time) error

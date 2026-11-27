@@ -104,13 +104,14 @@ func TestSSHRepositoryCheckoutAndDelivery(t *testing.T) {
 	if err := os.WriteFile(knownHosts, correctPins, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	registerTestPlatformSSHHost(t, f, remote, knownHosts)
 	if err := os.WriteFile(knownHosts, append([]byte("@revoked "), correctPins...), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	managedCtx := gitwork.WithSSHKnownHostsLookup(gitCtx, f.s.PlatformSSHKnownHosts)
-	if _, err := gitwork.Run(managedCtx, t.TempDir(), "ls-remote", "--", remote); err == nil || !strings.Contains(err.Error(), "REVOKED HOST KEY") {
-		t.Fatalf("deployment revocation must also apply to UI-managed keys: %v", err)
+	if _, err := gitwork.Run(gitCtx, t.TempDir(), "ls-remote", "--", remote); err == nil || !strings.Contains(err.Error(), "REVOKED HOST KEY") {
+		t.Fatalf("a revoked deployment pin must be refused: %v", err)
+	}
+	if err := os.WriteFile(knownHosts, correctPins, 0o600); err != nil {
+		t.Fatal(err)
 	}
 	t.Setenv(gitwork.SSHKnownHostsEnv, "")
 	if err := f.e.MaterializeConversationWorkspace(ctx, run.ID); err != nil {
@@ -124,7 +125,7 @@ func TestSSHRepositoryCheckoutAndDelivery(t *testing.T) {
 	if origin := sshTestGit(t, checkout, "remote", "get-url", "origin"); origin != remote {
 		t.Fatalf("origin = %q", origin)
 	}
-	ctx = gitwork.WithSSHKnownHostsLookup(ctx, f.s.PlatformSSHKnownHosts)
+	ctx = gitwork.WithSSHKnownHosts(ctx, gitwork.SSHKnownHostsForKeys(ctx, map[string]string{remote: privateKey}))
 	if got, err := runtime.ExecuteLocalCommand(ctx, root, runtime.CommandSpec{
 		Argv: []string{"git", "-C", "app", "fetch", "origin", "main"}, CredentialBindings: []runtime.CredentialBinding{runtime.BindGit},
 	}, runtime.RunCredentials{GitSSHKeys: map[string]string{remote: privateKey}}, nil); err != nil {
@@ -297,8 +298,7 @@ func TestGitSSHRunnerClaimUsesTaskActorCredential(t *testing.T) {
 	}
 	_, unrelatedKey := sshTestIdentity(t)
 	unrelatedPin := knownhosts.Line([]string{"unrelated.example.org:22"}, unrelatedKey) + "\n"
-	registerTestPlatformSSHHost(t, f, gitlabRepo, knownHosts)
-	if err := os.WriteFile(knownHosts, []byte(unrelatedPin), 0o600); err != nil {
+	if err := os.WriteFile(knownHosts, append(expectedPin, unrelatedPin...), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv(gitwork.SSHKnownHostsEnv, knownHosts)

@@ -49,7 +49,7 @@ func (h *runnersHandlers) probeRunnerModels(c *gin.Context) {
 }
 
 func (h *runnersHandlers) runnerModelOwner(c *gin.Context) (domain.Runner, bool) {
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok || user.ID <= 0 {
 		c.JSON(http.StatusUnauthorized, cliModelProbeResult{Error: "请先登录后管理账号模型"})
 		return domain.Runner{}, false

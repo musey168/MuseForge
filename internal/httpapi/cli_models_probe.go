@@ -42,7 +42,7 @@ func (h *usersHandlers) probeCLIModels(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, cliModelProbeResult{Error: "valid user id is required"})
 		return
 	}
-	current, ok := h.requestUser(c.Request, false)
+	current, ok := h.requestUser(c.Request)
 	if !ok || current.ID != id {
 		c.JSON(http.StatusForbidden, cliModelProbeResult{Error: "只能使用当前登录用户的凭据获取模型"})
 		return

@@ -14,7 +14,6 @@
   <link rel="stylesheet" href="/platform.css?v=20261121settingsrows">
   <link rel="stylesheet" href="/observability.css?v=20261031metrics2">
   <link rel="stylesheet" href="/sync.css?v=20261021schedule1">
-  <link rel="stylesheet" href="/access.css?v=20261031v1">
   <link rel="stylesheet" href="/product-v3.css?v=20261030runs1">
   <link rel="stylesheet" href="/product-v4.css?v=20261123run-eval">
   <link rel="stylesheet" href="/app/harness-ui.css?v=20261031req1">
@@ -114,9 +113,6 @@
       <button class="nav" data-view="projectCredentials"><span class="nav-icon"><svg class="agent-icon harness-icon" data-icon="key" data-icon-motion="idle" width="15" height="15" aria-hidden="true"></svg></span><span class="nav-label">凭据管理</span></button>
       <p>运行环境</p>
       <button class="nav" data-view="runners"><span class="nav-icon"><svg class="agent-icon harness-icon" data-icon="server" data-icon-motion="idle" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01"/><path d="M7 17.5h.01"/></svg></span><span class="nav-label">执行机器</span></button>
-      <p>开放与平台</p>
-      <button class="nav" data-view="guide"><span class="nav-icon"><svg class="agent-icon harness-icon" data-icon="key" data-icon-motion="idle" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3"/><path d="M16 7l3 3"/><path d="M18 5l2 2"/></svg></span><span class="nav-label">访问密钥</span></button>
-      <div id="platformNavGroup" hidden><button class="nav" data-view="platform"><span class="nav-icon"><svg class="agent-icon harness-icon" data-icon="gate" data-icon-motion="idle" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path class="gate-shield" d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path class="gate-check agent-check-draw" pathLength="1" d="m9 12 2 2 4-4"/></svg></span><span class="nav-label">平台管理</span></button></div>
       </div>
     </nav>
 
@@ -157,12 +153,6 @@
         </div>
         <div id="personalSettingsContent"></div>
       </div>
-    </section>
-    <section id="platformView" class="view page-view">
-      <div class="page-heading">
-        <div><p class="eyebrow">平台</p><h1>平台管理</h1><p>跨项目生效的平台级设置，只有平台管理员可见。</p></div>
-      </div>
-      <div id="platformAdminPanel" class="platform-admin-panel"></div>
     </section>
     <!-- 工作台 -->
     <section id="dashboardView" class="view page-view">
@@ -334,13 +324,6 @@
       <div id="runnersList" class="runner-grid"></div>
     </section>
 
-    <!-- 开放与平台：访问密钥 -->
-    <section id="guideView" class="view page-view">
-      <div class="page-heading">
-        <div><p class="eyebrow">开放与平台</p><h1>访问密钥</h1><p>使用访问密钥将 AI 客户端接入 LoopForge 平台 MCP，或在脚本中调用 REST API。</p></div>
-      </div>
-      <div id="accessBody"></div>
-    </section>
   </main>
 
   <!-- Issue 详情抽屉（页签化，渐进式详情） -->
@@ -608,7 +591,7 @@
   </div>
   <script src="/app.js"></script>
   <script src="/app/assistant-models.js"></script>
-  <script src="/app/access.js"></script>
+  <script src="/app/command-palette.js"></script>
   <script src="/app/dashboards.js"></script>
   <script src="/app/issue-model.js"></script>
   <script src="/app/projects.js"></script>
@@ -626,9 +609,6 @@
   <script src="/app/issue-bulk-delete.js"></script>
   <script src="/app/sync-schedule.js"></script>
   <script src="/app/runners.js"></script>
-  <script src="/app/platform-ssh-hosts.js"></script>
-  <script src="/app/platform-https-hosts.js"></script>
-  <script src="/app/platform-public-url.js"></script>
   <script src="/app/workbench.js?v=20261121settingsrows"></script>
   <script src="/app/git-ssh-keys.js?v=20261121settings"></script>
   <script src="/app/git-http-credentials.js?v=20261121settings"></script>

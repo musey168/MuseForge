@@ -75,9 +75,8 @@ func assistantEngineCredentialField(engine string) string {
 }
 
 // assistantEngineOptions lists every CLI, configured or not, so the switch
-// also shows where to add a key. CodeBuddy counts as configured when the
-// platform sponsors chats without one.
-func assistantEngineOptions(user domain.User, sponsored bool) []assistantEngineOption {
+// also shows where to add a key.
+func assistantEngineOptions(user domain.User) []assistantEngineOption {
 	engines := append([]string{assistantEngineCodeBuddy}, assistantCLIEngines()...)
 	out := make([]assistantEngineOption, 0, len(engines))
 	for _, engine := range engines {
@@ -85,7 +84,7 @@ func assistantEngineOptions(user domain.User, sponsored bool) []assistantEngineO
 		out = append(out, assistantEngineOption{
 			ID:         engine,
 			Name:       assistantEngineLabel(engine),
-			Configured: key != "" || (engine == assistantEngineCodeBuddy && sponsored),
+			Configured: key != "",
 			Personal:   key != "",
 			Credential: assistantEngineCredentialField(engine),
 		})

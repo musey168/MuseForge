@@ -76,7 +76,7 @@ func (h *usersHandlers) gitHTTPCredentialOwner(c *gin.Context) (int64, bool) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "valid user id is required"})
 		return 0, false
 	}
-	if user, ok := h.requestUser(c.Request, false); !ok || user.ID != id {
+	if user, ok := h.requestUser(c.Request); !ok || user.ID != id {
 		c.JSON(http.StatusForbidden, gin.H{"error": "只能管理当前登录用户的 Git 访问令牌"})
 		return 0, false
 	}
@@ -89,8 +89,6 @@ func respondGitHTTPCredentialError(c *gin.Context, err error) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case errors.Is(err, repo.ErrGitHTTPCredentialExists):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-	case errors.Is(err, repo.ErrGitHTTPHostUnauthorized):
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": "此主机的访问令牌已不存在"})
 	default:
@@ -159,7 +157,7 @@ func (h *usersHandlers) verifyGitHTTPCredential(c *gin.Context) {
 		c.JSON(http.StatusOK, h.verifyPlainGitRepository(ctx, cred, input.RepoURL))
 		return
 	}
-	c.JSON(http.StatusOK, verifyGitHTTPToken(ctx, cred, gitHTTPVerifyClient(h.repo.PlatformGitHTTPSAddresses)))
+	c.JSON(http.StatusOK, verifyGitHTTPToken(ctx, cred, gitHTTPVerifyClient(nil)))
 }
 
 func (h *usersHandlers) verifyPlainGitRepository(ctx context.Context, cred domain.GitHTTPCredentialSecret, raw string) gitTokenVerifyResult {
@@ -170,13 +168,6 @@ func (h *usersHandlers) verifyPlainGitRepository(ctx context.Context, cred domai
 	endpoint, ok := gitwork.GitHTTPRemoteEndpoint(remote)
 	if !ok || endpoint.Scope() != cred.Host || endpoint.Scheme != "http" {
 		return gitTokenVerifyResult{Error: "仓库地址必须与此令牌的 HTTP 主机和端口一致"}
-	}
-	authorized, err := h.repo.PlatformGitHTTPHostAuthorized(ctx, endpoint.Authority)
-	if err != nil {
-		return gitTokenVerifyResult{Error: "暂时无法读取 Git 主机授权，请稍后重试"}
-	}
-	if !authorized {
-		return gitTokenVerifyResult{Error: repo.ErrGitHTTPHostUnauthorized.Error()}
 	}
 	workspace, err := os.MkdirTemp("", "loopforge-git-access-")
 	if err != nil {

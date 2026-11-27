@@ -14,22 +14,22 @@ type projectCredentialsHandlers struct {
 	*deps
 }
 
-func (d deps) projectCredentialAccess(req *http.Request, projectID string, userID int64) (use, manage bool) {
+func (d deps) projectCredentialAccess(projectID string, userID int64) (use, manage bool) {
 	project, ok := d.repo.Project(projectID)
 	if !ok || project.ID != projectID {
 		return false, false
 	}
-	return domain.ProjectCredentialAccess(project, userID, d.isPlatformAdmin(req))
+	return domain.ProjectCredentialAccess(project, userID)
 }
 
 func (h *projectCredentialsHandlers) authorize(c *gin.Context, manage bool) (string, bool, bool) {
-	user, ok := h.requestUser(c.Request, true)
+	user, ok := h.requestUser(c.Request)
 	if !ok || user.ID <= 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录后访问项目凭据"})
 		return "", false, false
 	}
 	id := strings.TrimSpace(c.Param("id"))
-	use, canManage := h.projectCredentialAccess(c.Request, id, user.ID)
+	use, canManage := h.projectCredentialAccess(id, user.ID)
 	if !use || (manage && !canManage) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权访问或管理该项目的凭据"})
 		return "", false, false

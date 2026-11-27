@@ -24,7 +24,7 @@ func TestAuthTokenPureBranches(t *testing.T) {
 	}
 	for path, want := range map[string]bool{
 		insightIngestPath: false, "/mcp": true, "/other": false,
-		"/api/health": false, "/api/auth/photo/name": false, "/api/auth/tokens": false,
+		"/api/health": false, "/api/auth/photo/name": false, "/api/auth/tokens": true,
 		"/api/projects": true, "/runners/heartbeat": false,
 	} {
 		if got := protectedAccessPath(path); got != want {
@@ -46,21 +46,9 @@ func TestAuthTokenPureBranches(t *testing.T) {
 	}
 
 	d := deps{repo: f.s}
-	if d.annotateUser(nil) != nil {
-		t.Fatal("nil annotation")
-	}
-	guest := &auth.User{IsGuest: true}
-	if d.annotateUser(guest) != guest {
-		t.Fatal("guest annotation")
-	}
-	plain := deps{}
-	user := &auth.User{LoginName: "nobody"}
-	if plain.annotateUser(user) != user || user.IsPlatformAdmin {
-		t.Fatal("nil-store annotation")
-	}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req = req.WithContext(context.WithValue(req.Context(), requestUserContextKey{}, domainUserToAuth(f.user)))
-	if resolved, ok := d.requestUser(req, true); !ok || resolved.ID != f.user.ID {
+	if resolved, ok := d.requestUser(req); !ok || resolved.ID != f.user.ID {
 		t.Fatalf("context user: %+v %v", resolved, ok)
 	}
 
@@ -266,7 +254,6 @@ func TestAuthCurrentGatewayAndPreviewBranches(t *testing.T) {
 }
 
 func TestUsersNilAndMalformedBranches(t *testing.T) {
-	t.Setenv("AGENTFLOW_PLATFORM_ADMINS", "example-admin")
 	h := &usersHandlers{deps: &deps{}}
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -274,16 +261,6 @@ func TestUsersNilAndMalformedBranches(t *testing.T) {
 	h.users(c)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("nil users = %d", rec.Code)
-	}
-
-	admin := &auth.User{ID: 1, LoginName: "example-admin"}
-	rec = httptest.NewRecorder()
-	c, _ = gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodGet, "/admins", nil)
-	c.Request = req.WithContext(context.WithValue(req.Context(), requestUserContextKey{}, admin))
-	h.platformAdmins(c)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("nil platform admins = %d: %s", rec.Code, rec.Body.String())
 	}
 
 	f := cvBNewHTTPFixture(t)
@@ -295,41 +272,12 @@ func TestUsersNilAndMalformedBranches(t *testing.T) {
 	}
 }
 
-func TestTokenZeroIDAndEmptyDelete(t *testing.T) {
+func TestRequestUserRejectsInvalidSignedCookie(t *testing.T) {
 	f := cvBNewHTTPFixture(t)
 	h := &tokenHandlers{deps: &deps{repo: f.s}}
-	zero := &auth.User{LoginName: "cvb-zero-token-user", ChineseName: "Zero"}
-	req := httptest.NewRequest(http.MethodGet, "/tokens", nil)
-	req = req.WithContext(context.WithValue(req.Context(), requestUserContextKey{}, zero))
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = req
-	h.authTokens(c)
-	if rec.Code != http.StatusOK || zero.ID <= 0 {
-		t.Fatalf("zero-id token owner = %d user=%+v body=%s", rec.Code, zero, rec.Body.String())
-	}
-
-	rec = httptest.NewRecorder()
-	c, _ = gin.CreateTestContext(rec)
-	req = httptest.NewRequest(http.MethodDelete, "/tokens/", nil)
-	c.Request = req.WithContext(context.WithValue(req.Context(), requestUserContextKey{}, domainUserToAuth(f.user)))
-	h.authToken(c)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("empty token id = %d", rec.Code)
-	}
-
-	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.AddCookie(&http.Cookie{Name: authCookieName, Value: "invalid"})
-	if _, ok := h.requestUser(req, false); ok {
+	if _, ok := h.requestUser(req); ok {
 		t.Fatal("invalid signed cookie authenticated")
-	}
-	rec = httptest.NewRecorder()
-	c, _ = gin.CreateTestContext(rec)
-	req = httptest.NewRequest(http.MethodPost, "/tokens", strings.NewReader("{"))
-	req.Header.Set("Content-Type", "application/json")
-	c.Request = req.WithContext(context.WithValue(req.Context(), requestUserContextKey{}, domainUserToAuth(f.user)))
-	h.authTokens(c)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("malformed token body = %d", rec.Code)
 	}
 }

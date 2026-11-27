@@ -25,15 +25,14 @@ const (
 )
 
 type userRow struct {
-	ID           int64      `gorm:"column:id;primaryKey;autoIncrement"`
-	StaffID      int        `gorm:"column:staff_id"`
-	LoginName    string     `gorm:"column:login_name;uniqueIndex:uq_users_login;size:64"`
-	ChineseName  string     `gorm:"column:chinese_name;size:128"`
-	DeptID       int        `gorm:"column:dept_id"`
-	DeptName     string     `gorm:"column:dept_name;size:128"`
-	PlatformRole string     `gorm:"column:platform_role;size:32"`
-	Created      *time.Time `gorm:"column:created_at"`
-	Updated      *time.Time `gorm:"column:updated_at"`
+	ID          int64      `gorm:"column:id;primaryKey;autoIncrement"`
+	StaffID     int        `gorm:"column:staff_id"`
+	LoginName   string     `gorm:"column:login_name;uniqueIndex:uq_users_login;size:64"`
+	ChineseName string     `gorm:"column:chinese_name;size:128"`
+	DeptID      int        `gorm:"column:dept_id"`
+	DeptName    string     `gorm:"column:dept_name;size:128"`
+	Created     *time.Time `gorm:"column:created_at"`
+	Updated     *time.Time `gorm:"column:updated_at"`
 }
 
 func (userRow) TableName() string { return "users" }
@@ -85,20 +84,6 @@ type gitHTTPCredentialRow struct {
 }
 
 func (gitHTTPCredentialRow) TableName() string { return "user_git_http_credentials" }
-
-type apiTokenRow struct {
-	ID         string     `gorm:"column:id;primaryKey;size:64"`
-	UserID     int64      `gorm:"column:user_id;index:idx_api_tokens_user"`
-	Name       string     `gorm:"column:name;size:128"`
-	Prefix     string     `gorm:"column:prefix;size:24"`
-	TokenHash  string     `gorm:"column:token_hash;uniqueIndex:uq_api_tokens_hash;size:64"`
-	LastUsedAt *time.Time `gorm:"column:last_used_at"`
-	ExpiresAt  *time.Time `gorm:"column:expires_at"`
-	Created    time.Time  `gorm:"column:created_at"`
-	RevokedAt  *time.Time `gorm:"column:revoked_at"`
-}
-
-func (apiTokenRow) TableName() string { return "api_tokens" }
 
 type projectRow struct {
 	ID          string     `gorm:"column:id;primaryKey;size:64"`
@@ -634,16 +619,6 @@ type knowledgeConnectorRow struct {
 
 func (knowledgeConnectorRow) TableName() string { return "knowledge_connectors" }
 
-// platformSettingsRow is the single row of platform-wide settings a platform
-// administrator maintains on the management page (see domain.PlatformSettings).
-type platformSettingsRow struct {
-	ID      string     `gorm:"column:id;primaryKey;size:64"`
-	Payload []byte     `gorm:"column:payload;type:json"`
-	Updated *time.Time `gorm:"column:updated_at"`
-}
-
-func (platformSettingsRow) TableName() string { return "platform_settings" }
-
 type knowledgeConnectorUsageRow struct {
 	OwnerUserID      int64      `gorm:"column:owner_user_id;primaryKey;not null;default:0"`
 	ConnectorID      string     `gorm:"column:connector_id;primaryKey;size:64"`
@@ -759,7 +734,7 @@ func (trackerImportRunRow) TableName() string { return "tracker_import_runs" }
 // allModels lists every table for the sqlite test schema (AutoMigrate).
 func allModels() []any {
 	return []any{domain.BotUserBinding{}, domain.BotBindingChallenge{}, domain.BotConnection{}, domain.BotConversation{}, domain.BotInteraction{}, notificationBotRow{}, botCredentialRow{}, botNativeSessionRow{}, botPendingDraftRow{}, botChatOriginRow{}, botClarifySessionRow{}, domain.NotificationDelivery{},
-		userRow{}, localAccountRow{}, userConfigRow{}, gitSSHKeyRow{}, gitHTTPCredentialRow{}, authIntegrationRow{}, platformCodeBuddyKeyRow{}, apiTokenRow{}, genericTemplateRow{},
+		userRow{}, localAccountRow{}, userConfigRow{}, gitSSHKeyRow{}, gitHTTPCredentialRow{}, authIntegrationRow{}, genericTemplateRow{},
 		insightSourceRow{}, insightExecutionRow{},
 		projectRow{}, projectCredentialRow{}, repositoryRow{},
 		agentRow{}, ruleRow{}, skillRow{}, skillFileRow{}, mcpServerRow{}, mcpFileRow{}, executorRow{},
@@ -778,8 +753,6 @@ func allModels() []any {
 		knowledgeDocumentUsageRow{},
 		knowledgeUsageEventRow{},
 		evoPolicyRow{}, evoFindingRow{}, evoProposalRow{}, evoAssetGateRow{}, evoQueueRow{}, evoReplayRow{}, assetVersionRow{}, runAssetPinRow{}, evoSignalRow{}, evoSampleRow{}, evoSOPPolicyRow{},
-		platformSettingsRow{},
 		trackerImportRunRow{},
-		PlatformGitSSHHost{}, PlatformGitHTTPSHost{}, PlatformGitHTTPHost{},
 	}
 }

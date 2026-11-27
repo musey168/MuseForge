@@ -1190,6 +1190,70 @@ function credentialRowAction(action,row,button){
   if(action==='confirm-delete')return confirmDeleteCredential(row,button);
   if(action==='save')return submitCredentialEditor(row,button);
 }
+// 个人凭据的定位与跳转：凭据面板在「个人配置」里，错误提示里的
+// 「去配置」按钮按下面的字段名找到对应行。
+let credentialFocusRequest=0;
+function cancelCredentialFocus(){credentialFocusRequest++}
+function gotoCredential(name,sshRemote){
+  const request=++credentialFocusRequest;
+  if(name!=='executors'&&!Object.hasOwn(CREDENTIAL_FIELDS,name)){switchView('settings');return}
+  if(name==='gitSshKey')return openGitSSHKeys(sshRemote);
+  if(name==='gitHttpCredentials')return openGitHTTPCredentials();
+  switchView('settings');
+  const requestedRoute=settingsRouteTransition;
+  const focusAfter=performance.now()+150;
+  const focusCredential=()=>{
+    const transition=settingsRouteTransition;
+    if(request!==credentialFocusRequest||(transition&&transition!==requestedRoute))return;
+    if(transition&&transition.target!=='settings')return;
+    if(activeViewName()!=='settings'){
+      // The outgoing workspace drawer closes before settings is mounted.
+      // A different route cancels this request instead of stealing focus later.
+      if(transition===requestedRoute&&transition?.phase==='closing')requestAnimationFrame(focusCredential);
+      return;
+    }
+    if(performance.now()<focusAfter){requestAnimationFrame(focusCredential);return}
+    const panel=document.querySelector('#personalSettingsContent #credentialPanel'),row=panel?.querySelector(`[data-credential-row="${name}"]`);
+    if(!panel?.getClientRects().length)return;
+    if(name==='executors'){
+      const group=panel.querySelector('[data-credential-group="model"]');
+      if(matchMedia('(max-width:1000px)').matches)setSettingsSidebarExpanded(false);
+      group?.scrollIntoView({block:'nearest',behavior:'instant'});
+      const select=group?.querySelector('[data-credential-add-menu]');
+      if(select)window.HuiSelect?.enhance(select)?.open();
+      return;
+    }
+    // Missing credentials open the wizard on its fill-in step; configured ones expand in place.
+    if(row?.classList.contains('is-configured'))revealCredentialRow(name);
+    else openCredentialWizard(name);
+  };
+  requestAnimationFrame(focusCredential);
+}
+// Personal credential fields and the errors they cause. The rules live here
+// and next to the CodeBuddy network environments.
+const CREDENTIAL_FIELDS={codeBuddyApiKey:'CodeBuddy API Key',codexApiKey:'Codex API Key',claudeCodeApiKey:'Claude Code API Key',gitToken:'GitHub Git Token',gitSshKey:'Git SSH 密钥',gitHttpCredentials:'Git 访问令牌'};
+const CREDENTIAL_RULES=[
+  ['codexApiKey',/Codex[^。\n]{0,16}API Key/i],
+  ['claudeCodeApiKey',/Claude Code[^。\n]{0,16}API Key/i],
+  ['codeBuddyApiKey',/CodeBuddy[^。\n]{0,20}(API Key|Key|凭据)|拒绝了你的 API Key/i],
+  ['gitSshKey',/Git SSH (?:密钥|私钥)/i],
+  ['gitToken',/Git Token|工蜂[^。\n]{0,12}令牌|could not read Username|Authentication failed|HTTP Basic: Access denied|terminal prompts disabled|requested URL returned error: 40[13]/i],
+];
+function credentialHint(text){
+  const message=String(text||'');
+  if(!message)return null;
+  const rule=CREDENTIAL_RULES.find(([,re])=>re.test(message));
+  return rule?{field:rule[0],label:CREDENTIAL_FIELDS[rule[0]],owner:/责任人|Owner|该账号/i.test(message)}:null;
+}
+function credentialActionHTML(text){
+  const hint=credentialHint(text);
+  if(!hint)return '';
+  return `<div class="credential-action"><button type="button" class="button ghost small" data-goto-credential="${hint.field}">去配置 ${escapeHTML(hint.label)} →</button>${hint.owner?'<small>需由责任人本人在个人配置中配置</small>':''}</div>`;
+}
+document.addEventListener('click',e=>{
+  const button=e.target.closest?.('[data-goto-credential]');
+  if(button)gotoCredential(button.dataset.gotoCredential);
+});
 function activateCredentialRow(row){
   const key=row.dataset.credentialRow;
   const dialog=credentialDialog(key);if(dialog)return dialog();
@@ -1637,627 +1701,6 @@ async function renderPersonalSettings(){
     if(!cached||(cached.busy&&!state.gitTokenVerifyInFlight)){state.gitTokenVerifyInFlight=true;refreshGitTokenStatus().finally(()=>{state.gitTokenVerifyInFlight=false})}
   }
 }
-// 谁能改通用模板是平台级权限，不属于任何一个项目，也不属于个人凭据；
-// 只有平台管理员能看到「平台管理」入口。
-function renderPlatformNav(){
-  const group=$('#platformNavGroup');if(!group)return;
-  group.hidden=!isPlatformAdmin();
-}
-const PLATFORM_TABS=[
-  {id:'accounts',zh:'成员账号',en:'Accounts'},
-  {id:'admins',zh:'平台管理员',en:'Admins'},
-  {id:'sharedKey',zh:'共享 CodeBuddy Key',en:'Shared CodeBuddy Key'},
-  {id:'gitHostTrust',zh:'Git 主机信任',en:'Git Host Trust'},
-  {id:'publicUrl',zh:'外部访问地址',en:'Public Address'},
-];
-function platformTabsHTML(active){
-  return `<div class="pa-tabs-wrap platform-tabs-wrap"><div class="pa-tabs platform-tabs" id="platformTabs" role="tablist" aria-label="平台管理分区">${PLATFORM_TABS.map(t=>{
-    const on=t.id===active;
-    const extra=t.id==='sharedKey'?'<span class="platform-tab-state" data-platform-tab-state hidden></span>':'<span class="pa-tab-n" data-platform-tab-count hidden></span>';
-    return `<button type="button" role="tab" class="pa-tab${on?' on':''}" id="platformTab-${t.id}" data-platform-tab="${t.id}" aria-controls="platformPanel-${t.id}" aria-selected="${on}" tabindex="${on?0:-1}">${lfT(t.zh,t.en)}${extra}</button>`;
-  }).join('')}</div></div>`;
-}
-function platformTabPanel(id,active,body){
-  return `<section class="platform-tab-panel" id="platformPanel-${id}" role="tabpanel" aria-labelledby="platformTab-${id}" data-platform-panel="${id}"${id===active?'':' hidden'}>${body}</section>`;
-}
-function setPlatformTab(host,tab){
-  if(!PLATFORM_TABS.some(t=>t.id===tab))tab=PLATFORM_TABS[0].id;
-  state.platformTab=tab;
-  host.querySelectorAll('[data-platform-tab]').forEach(b=>{const on=b.dataset.platformTab===tab;b.classList.toggle('on',on);b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1});
-  host.querySelectorAll('[data-platform-panel]').forEach(p=>{p.hidden=p.dataset.platformPanel!==tab});
-}
-function bindPlatformTabs(host){
-  const bar=host.querySelector('#platformTabs');if(!bar)return;
-  bar.querySelectorAll('[data-platform-tab]').forEach(b=>b.onclick=()=>setPlatformTab(host,b.dataset.platformTab));
-  bar.onkeydown=e=>{
-    if(!['ArrowLeft','ArrowRight'].includes(e.key))return;
-    const ids=PLATFORM_TABS.map(t=>t.id),i=ids.indexOf(state.platformTab),next=ids[(i+(e.key==='ArrowRight'?1:ids.length-1))%ids.length];
-    setPlatformTab(host,next);bar.querySelector(`[data-platform-tab="${next}"]`)?.focus();
-  };
-}
-function setPlatformTabCount(host,tab,n){
-  const el=host.querySelector(`[data-platform-tab="${tab}"] [data-platform-tab-count]`);
-  if(el){el.textContent=String(n);el.hidden=false}
-}
-function renderPlatformAdminPanel(){
-  const host=$('#platformAdminPanel');if(!host)return;
-  if(!isPlatformAdmin()){host.innerHTML='';return}
-  const tab=PLATFORM_TABS.some(t=>t.id===state.platformTab)?state.platformTab:PLATFORM_TABS[0].id;
-  state.platformTab=tab;
-  host.innerHTML=`
-    ${platformTabsHTML(tab)}
-    ${platformTabPanel('accounts',tab,platformAccountsHTML())}
-    ${platformTabPanel('admins',tab,`
-    <div class="platform-metric-grid">
-      <div class="platform-metric-card">
-        <div class="platform-metric-icon blue">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
-        </div>
-        <div class="platform-metric-info">
-          <span class="platform-metric-label">平台管理员</span>
-          <b class="platform-metric-num" id="platformMetricTotal">--</b>
-          <small>具有跨项目通用模板与角色编辑权</small>
-        </div>
-      </div>
-      <div class="platform-metric-card">
-        <div class="platform-metric-icon amber">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        </div>
-        <div class="platform-metric-info">
-          <span class="platform-metric-label">系统内置</span>
-          <b class="platform-metric-num" id="platformMetricLocked">--</b>
-          <small>系统初始预设名单，不可撤销</small>
-        </div>
-      </div>
-      <div class="platform-metric-card">
-        <div class="platform-metric-icon purple">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        </div>
-        <div class="platform-metric-info">
-          <span class="platform-metric-label">界面授权</span>
-          <b class="platform-metric-num" id="platformMetricGranted">--</b>
-          <small>控制台动态授予，可随时撤销</small>
-        </div>
-      </div>
-      <div class="platform-metric-card">
-        <div class="platform-metric-icon green">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-        </div>
-        <div class="platform-metric-info">
-          <span class="platform-metric-label">生效范围</span>
-          <b class="platform-metric-num">全平台通用</b>
-          <small>通用模板 · 共享角色 · 门禁规范</small>
-        </div>
-      </div>
-    </div>
-
-    <div class="platform-admin-layout">
-      <div class="platform-admin-main-card">
-        <div class="platform-admin-head">
-          <div class="platform-admin-head-meta">
-            <h2>谁可以改通用模板</h2>
-            <p>平台管理员能直接编辑通用模板和它打包的角色，改完所有项目下次运行生效。系统内置名单不能在这里撤销。</p>
-          </div>
-          <span class="platform-admin-count-pill" id="platformAdminCountBadge">-- 位管理员</span>
-        </div>
-
-        <div class="platform-add-box">
-          <form id="platformAdminForm" class="platform-admin-form">
-            <div class="platform-input-wrap">
-              <span class="platform-input-icon">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              </span>
-              <input name="loginName" placeholder="输入用户名，如 alice" autocomplete="off">
-            </div>
-            <button class="button primary platform-add-btn" type="submit">添加管理员</button>
-          </form>
-          <div class="platform-add-hint">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-            <span>授权后用户将获得全平台通用 LOOP 模板及公共角色的修改与发布权限，请谨慎授予。</span>
-          </div>
-        </div>
-
-        <div class="platform-list-toolbar">
-          <div class="platform-search-wrap">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <input id="platformAdminSearch" placeholder="搜索姓名或用户名..." autocomplete="off">
-          </div>
-          <div class="platform-filter-tabs" id="platformFilterTabs">
-            <button type="button" class="platform-filter-btn active" data-source-filter="all">全部</button>
-            <button type="button" class="platform-filter-btn" data-source-filter="builtin">内置</button>
-            <button type="button" class="platform-filter-btn" data-source-filter="granted">已授权</button>
-          </div>
-        </div>
-
-        <div id="platformAdminList" class="platform-admin-list"></div>
-      </div>
-
-      <div class="platform-admin-side">
-        <div class="platform-side-card">
-          <div class="platform-side-head">
-            <span class="platform-side-icon blue">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            </span>
-            <h3>权限与安全规则</h3>
-          </div>
-          <ul class="platform-side-list">
-            <li>
-              <b>通用 LOOP 模板全局编辑</b>
-              <p>通用模板面向全平台所有项目共享，由平台管理员统一定义并维护，修改后各项目下次运行即刻生效。</p>
-            </li>
-            <li>
-              <b>公共角色与通用门禁下发</b>
-              <p>通用模板中引用的 Agent 角色、执行门禁由平台统一调优升级，项目内默认只读，保障基准质量。</p>
-            </li>
-            <li>
-              <b>系统固化名单安全保护</b>
-              <p>系统内置名单具备最高防锁死安全防护，无法通过页面撤销，确保生产管理连续性。</p>
-            </li>
-          </ul>
-        </div>
-
-        <div class="platform-side-card">
-          <div class="platform-side-head">
-            <span class="platform-side-icon green">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-            </span>
-            <h3>平台级资产</h3>
-          </div>
-          <p class="platform-side-desc">平台管理员在这里维护跨项目生效的账号、共享密钥与主机信任配置。</p>
-          <div class="platform-audit-note">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-            <span>管理员授予与撤销操作均实时生效，变更将记录平台审计。</span>
-          </div>
-        </div>
-      </div>
-    </div>
-    `)}
-    ${platformTabPanel('sharedKey',tab,platformSharedKeyHTML())}
-    ${platformTabPanel('gitHostTrust',tab,platformSSHHostTrustHTML()+platformHTTPSHostTrustHTML()+platformHTTPHostTrustHTML())}
-    ${platformTabPanel('publicUrl',tab,platformPublicURLHTML())}
-  `;
-  bindPlatformTabs(host);
-  loadPlatformAccounts(host);
-  loadPlatformSharedKey(host);
-  loadPlatformSSHHosts(host);
-  loadPlatformHTTPSHosts(host);
-  loadPlatformPublicURL(host);
-  loadPlatformHTTPHosts(host);
-  loadPlatformAdmins(host);
-}
-
-// 平台管理 → 成员账号 / 平台共享 CodeBuddy Key.
-const PLATFORM_ACCOUNT_PASSWORD_MIN=6;
-function platformRandomPassword(){
-  const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-  const bytes=new Uint32Array(14);window.crypto.getRandomValues(bytes);
-  return Array.from(bytes,b=>alphabet[b%alphabet.length]).join('');
-}
-function sharedModelLabel(id){return id==='deepseek-v4.1-flash'?'Deepseek-V4.1-Flash':String(id||'')}
-// The models users without their own CodeBuddy key may use, as announced by bootstrap.
-function sharedModelSummary(){
-  const models=Array.isArray(state.data?.sponsoredModels)&&state.data.sponsoredModels.length?state.data.sponsoredModels:(state.data?.sponsoredModel?[state.data.sponsoredModel]:[]);
-  return models.map(sharedModelLabel).join('、');
-}
-const PLATFORM_ICON_USER='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
-const PLATFORM_ICON_LOCK='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
-const PLATFORM_ICON_SEARCH='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
-function platformAccountsHTML(){
-  return `
-    <section class="platform-admin-main-card" id="platformAccountsCard">
-      <div class="platform-admin-head">
-        <div class="platform-admin-head-meta">
-          <h2>给同事开账号</h2>
-          <p data-account-intro>填好用户名和初始密码，点创建，再把登录信息发给同事。同事忘记密码时可以在下面重置。</p>
-        </div>
-        <span class="platform-admin-count-pill" id="platformAccountCountBadge">${lfT('-- 个账号','-- accounts')}</span>
-      </div>
-      <div class="platform-account-create">
-        <form id="platformAccountForm" class="platform-account-form" autocomplete="off">
-          <div class="platform-input-wrap"><span class="platform-input-icon">${PLATFORM_ICON_USER}</span><input name="loginName" placeholder="用户名，如 alice" aria-label="用户名" maxlength="64" autocomplete="off" spellcheck="false"></div>
-          <div class="platform-input-wrap"><span class="platform-input-icon">${PLATFORM_ICON_LOCK}</span><input name="password" placeholder="初始密码，至少 6 位" aria-label="初始密码" maxlength="72" autocomplete="new-password" spellcheck="false"><button type="button" class="button ghost small" data-account-generate>随机生成</button></div>
-          <label class="platform-check"><input type="checkbox" name="admin"><span>同时设为平台管理员</span></label>
-          <button class="button primary platform-add-btn" type="submit">创建账号</button>
-        </form>
-        <div class="platform-account-created" data-account-created hidden></div>
-      </div>
-      <div class="platform-list-toolbar">
-        <div class="platform-search-wrap platform-account-search">${PLATFORM_ICON_SEARCH}<input data-account-search placeholder="搜索用户名..." autocomplete="off"></div>
-      </div>
-      <div id="platformAccountList" class="platform-admin-list platform-account-list"></div>
-    </section>`;
-}
-function platformSharedKeyHTML(){
-  const envOptions=CODEBUDDY_ENVIRONMENTS.map(env=>`<option value="${escapeHTML(env.value)}">${escapeHTML(env.label)} · ${escapeHTML(env.site)}</option>`).join('');
-  return `
-    <section class="platform-admin-main-card" id="platformSharedKeyCard">
-      <div class="platform-admin-head">
-        <div class="platform-admin-head-meta">
-          <h2>给没配 Key 的成员用</h2>
-          <p>成员没配自己的 CodeBuddy API Key 时，对话和 LOOP 会用这里的 Key，并且只能用下面勾选的模型。成员配了自己的 Key 就用自己的，不受限制。</p>
-        </div>
-        <span class="platform-admin-count-pill platform-status-pill" data-shared-key-badge>${lfT('加载中','Loading')}</span>
-      </div>
-      <form id="platformSharedKeyForm" class="platform-shared-key-form" autocomplete="off">
-        <div class="platform-shared-key-grid">
-          <div class="platform-shared-key-col">
-            <label class="platform-field"><span>网络环境</span><select name="internetEnvironment">${envOptions}</select></label>
-            <div class="platform-field-group">
-              <label class="platform-field"><span>API Key</span><input name="apiKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="ck_ 开头的 CodeBuddy API Key"></label>
-              <a class="platform-shared-key-link" data-shared-key-link target="_blank" rel="noopener noreferrer"></a>
-            </div>
-            <div class="platform-note is-warn" data-shared-key-warning hidden></div>
-            <label class="platform-field"><span>默认模型</span><select name="defaultModel"></select><small class="platform-field-hint">没指定模型时用它；LOOP 角色的模型不在允许范围内时也改用它。</small></label>
-          </div>
-          <div class="platform-shared-key-col">
-            <div class="platform-field">
-              <div class="platform-field-head"><span>允许使用的模型</span><small data-shared-models-count></small></div>
-              <div class="platform-model-list" data-shared-models><p class="prop-hint">正在读取可用模型…</p></div>
-            </div>
-            <label class="platform-field"><span>列表里没有的模型</span><input name="extraModels" placeholder="模型 ID，多个用逗号分隔" autocomplete="off" spellcheck="false"></label>
-          </div>
-        </div>
-        <div class="platform-shared-key-footer">
-          <p class="platform-add-hint" data-shared-key-meta></p>
-          <div class="platform-shared-key-actions">
-            <button class="button ghost danger" type="button" data-shared-key-clear hidden>停用共享 Key</button>
-            <button class="button primary" type="submit">保存</button>
-          </div>
-        </div>
-      </form>
-    </section>`;
-}
-function platformAccountCreatedHTML(action,login,password){
-  const who=`<b data-i18n-skip>${escapeHTML(login)}</b>`,secret=`<code>${escapeHTML(password)}</code>`;
-  const text=action==='reset'
-    ?lfT(`已重置账号 ${who}，新密码 ${secret}。密码只显示这一次，请现在发给对方。`,`Password of ${who} reset to ${secret}. It is shown only once; send it now.`)
-    :lfT(`已创建账号 ${who}，初始密码 ${secret}。密码只显示这一次，请现在发给对方。`,`Created ${who} with the initial password ${secret}. It is shown only once; send it now.`);
-  return `<div class="platform-note is-ok"><span>${text}</span><button type="button" class="button ghost small" data-copy-login>复制登录信息</button></div>`;
-}
-const platformPasswordTooShort=()=>lfT(`密码至少 ${PLATFORM_ACCOUNT_PASSWORD_MIN} 位`,`The password needs at least ${PLATFORM_ACCOUNT_PASSWORD_MIN} characters`);
-async function loadPlatformAccounts(host){
-  const card=host.querySelector('#platformAccountsCard');if(!card)return;
-  const list=card.querySelector('#platformAccountList'),form=card.querySelector('#platformAccountForm'),created=card.querySelector('[data-account-created]'),search=card.querySelector('[data-account-search]');
-  let accounts=[],query='',resetting=null;
-  const showCreated=(action,login,password)=>{
-    created.innerHTML=platformAccountCreatedHTML(action,login,password);created.hidden=false;
-    created.querySelector('[data-copy-login]').onclick=()=>copyText(lfT(`登录地址：${location.origin}\n用户名：${login}\n密码：${password}`,`Sign in at: ${location.origin}\nLogin: ${login}\nPassword: ${password}`),'已复制登录信息');
-  };
-  const render=()=>{
-    const n=accounts.length,badge=card.querySelector('#platformAccountCountBadge');if(badge)badge.textContent=lfT(`共 ${n} 个账号`,`${n} account${n===1?'':'s'}`);
-    setPlatformTabCount(host,'accounts',n);
-    const q=query.toLowerCase();
-    const rows=accounts.filter(a=>!q||String(a.loginName||'').toLowerCase().includes(q)||String(a.chineseName||'').toLowerCase().includes(q));
-    if(!rows.length){list.innerHTML=`<div class="platform-empty-state"><b>${accounts.length?'没有匹配的账号':'还没有账号'}</b></div>`;return}
-    list.innerHTML=rows.map(a=>{
-      const name=a.chineseName&&a.chineseName.toLowerCase()!==String(a.loginName).toLowerCase()?`${a.loginName}(${a.chineseName})`:a.loginName;
-      const badges=[a.admin?'<span class="platform-source-badge source-builtin">平台管理员</span>':'',a.password?'<span class="platform-source-badge source-default">用户名密码</span>':'<span class="platform-source-badge source-default">GitHub / 网关登录</span>',a.codeBuddyApiKeyConfigured?'<span class="platform-source-badge source-env">已配 CodeBuddy Key</span>':'<span class="platform-source-badge source-default">未配 CodeBuddy Key</span>'].join('');
-      const editing=resetting===a.userId;
-      return `<div class="platform-admin-row platform-account-row" data-account-row="${Number(a.userId)}">
-        <div class="platform-admin-user">
-          <div class="platform-admin-avatar">${userAvatarHTML(a.loginName,100)}</div>
-          <div class="platform-admin-info"><span class="platform-admin-name" data-i18n-skip>${escapeHTML(name)}</span><div class="platform-admin-meta">${badges}</div></div>
-        </div>
-        <div class="platform-admin-actions">${a.password?(editing?`<form class="platform-account-reset" data-reset-form="${Number(a.userId)}"><input name="password" placeholder="新密码，至少 6 位" aria-label="新密码" maxlength="72" autocomplete="new-password" spellcheck="false"><button type="button" class="button ghost small" data-reset-generate>随机</button><button type="submit" class="button primary small">确认重置</button><button type="button" class="button ghost small" data-reset-cancel>取消</button></form>`:`<button type="button" class="button ghost small" data-reset-account="${Number(a.userId)}">重置密码</button>`):'<span class="platform-locked-tag" title="通过 GitHub 或网关登录的账号没有平台密码">无平台密码</span>'}</div>
-      </div>`;
-    }).join('');
-    list.querySelectorAll('[data-reset-account]').forEach(btn=>btn.onclick=()=>{resetting=Number(btn.dataset.resetAccount);render();list.querySelector('[data-reset-form] input')?.focus()});
-    const resetForm=list.querySelector('[data-reset-form]');
-    if(resetForm){
-      resetForm.querySelector('[data-reset-cancel]').onclick=()=>{resetting=null;render()};
-      resetForm.querySelector('[data-reset-generate]').onclick=()=>{resetForm.elements.password.value=platformRandomPassword()};
-      resetForm.onsubmit=async e=>{
-        e.preventDefault();
-        const password=resetForm.elements.password.value;
-        if(password.length<PLATFORM_ACCOUNT_PASSWORD_MIN)return toast(platformPasswordTooShort(),'err');
-        const account=accounts.find(a=>a.userId===resetting);
-        resetForm.querySelectorAll('button').forEach(b=>b.disabled=true);
-        try{
-          await api(`/api/platform/accounts/${encodeURIComponent(resetting)}/password`,{method:'PUT',body:JSON.stringify({password})});
-          resetting=null;render();showCreated('reset',account?.loginName||'',password);toast('密码已重置','ok');
-        }catch(err){toast(err.message,'err');resetForm.querySelectorAll('button').forEach(b=>b.disabled=false)}
-      };
-    }
-  };
-  const load=async()=>{
-    try{
-      const result=await api('/api/platform/accounts');
-      accounts=Array.isArray(result?.accounts)?result.accounts:[];
-      const intro=card.querySelector('[data-account-intro]');
-      if(intro)intro.textContent=result?.signupEnabled
-        ?'登录页目前允许自助注册。也可以在这里直接创建账号，再把登录信息发给同事；同事忘记密码时可以在下面重置。'
-        :'登录页的自助注册已关闭，同事的账号要在这里创建：填好用户名和初始密码，点创建，再把登录信息发给对方。忘记密码时可以在下面重置。';
-      render();
-    }catch(e){list.innerHTML=`<p class="prop-hint">${escapeHTML(e.message||'加载账号失败')}</p>`}
-  };
-  if(search)search.oninput=()=>{query=search.value.trim();render()};
-  form.querySelector('[data-account-generate]').onclick=()=>{form.elements.password.value=platformRandomPassword()};
-  form.onsubmit=async e=>{
-    e.preventDefault();
-    const loginName=form.elements.loginName.value.trim(),password=form.elements.password.value,admin=form.elements.admin.checked;
-    if(!/^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$/.test(loginName))return toast('用户名需 2–64 位，以字母或数字开头，只能包含字母、数字、_ . -','err');
-    if(password.length<PLATFORM_ACCOUNT_PASSWORD_MIN)return toast(platformPasswordTooShort(),'err');
-    const submit=form.querySelector('button[type="submit"]');if(submit)submit.disabled=true;
-    try{
-      const account=await api('/api/platform/accounts',{method:'POST',body:JSON.stringify({loginName,password,admin})});
-      form.reset();
-      accounts=[...accounts.filter(a=>a.userId!==account?.userId),account].filter(Boolean);
-      render();showCreated('create',loginName,password);toast('账号已创建','ok');
-      if(admin)loadPlatformAdmins(host);
-    }catch(err){toast(err.message,'err')}
-    finally{if(submit)submit.disabled=false}
-  };
-  await load();
-}
-async function loadPlatformSharedKey(host){
-  const card=host.querySelector('#platformSharedKeyCard');if(!card)return;
-  const form=card.querySelector('#platformSharedKeyForm');
-  const env=form.elements.internetEnvironment,key=form.elements.apiKey,extra=form.elements.extraModels,defaultSelect=form.elements.defaultModel;
-  const modelsHost=card.querySelector('[data-shared-models]'),badge=card.querySelector('[data-shared-key-badge]'),meta=card.querySelector('[data-shared-key-meta]');
-  const link=card.querySelector('[data-shared-key-link]'),warning=card.querySelector('[data-shared-key-warning]'),clear=card.querySelector('[data-shared-key-clear]');
-  let status=null,catalog=[],selected=[];
-  const extraIDs=()=>String(extra.value||'').split(/[,，\s]+/).map(s=>s.trim()).filter(Boolean);
-  const chosen=()=>{const all=[...selected];for(const id of extraIDs())if(!all.includes(id))all.push(id);return all};
-  const modelCount=card.querySelector('[data-shared-models-count]'),tabState=host.querySelector('[data-platform-tab-state]');
-  const renderDefault=()=>{
-    const models=chosen(),current=defaultSelect.value;
-    if(modelCount)modelCount.textContent=models.length?lfT(`已选 ${models.length} 个`,`${models.length} selected`):'';
-    defaultSelect.innerHTML=models.length?models.map(id=>`<option value="${escapeHTML(id)}">${escapeHTML(sharedModelLabel(id))}</option>`).join(''):'<option value="">请先勾选模型</option>';
-    defaultSelect.value=models.includes(current)?current:(models[0]||'');
-  };
-  const renderModels=()=>{
-    const listed=catalog.filter(m=>m&&m.id&&m.id!=='default');
-    const ids=new Set(listed.map(m=>m.id));
-    for(const id of selected)if(!ids.has(id)){listed.push({id,name:id});ids.add(id)}
-    modelsHost.innerHTML=listed.length?listed.map(m=>`<label class="platform-check platform-model-option"><input type="checkbox" value="${escapeHTML(m.id)}"${selected.includes(m.id)?' checked':''}><span>${escapeHTML(m.name&&m.name!==m.id?`${m.name}（${m.id}）`:sharedModelLabel(m.id))}</span>${m.credits?`<small>${escapeHTML(m.credits)}</small>`:''}</label>`).join(''):'<p class="prop-hint">这个网络环境暂时没有读到模型列表，可以在下面直接填模型 ID。</p>';
-    modelsHost.querySelectorAll('input[type="checkbox"]').forEach(box=>box.onchange=()=>{
-      selected=box.checked?[...selected.filter(id=>id!==box.value),box.value]:selected.filter(id=>id!==box.value);
-      renderDefault();
-    });
-    renderDefault();
-  };
-  const renderLink=()=>{link.href=codeBuddyKeyURL(env.value);link.textContent=`${codeBuddyKeyLinkLabel(env.value)} ↗`};
-  const renderStatus=()=>{
-    const on=!!status?.configured,envInfo=CODEBUDDY_ENVIRONMENTS.find(e=>e.value===(status?.internetEnvironment||''))||CODEBUDDY_ENVIRONMENTS[0];
-    const tone=on?'on':status?.legacySponsor?'legacy':'off';
-    badge.textContent=on?'已启用':status?.legacySponsor?'使用旧配置':'未启用';
-    badge.classList.remove('is-on','is-legacy','is-off');badge.classList.add(`is-${tone}`);
-    if(tabState){tabState.className=`platform-tab-state is-${tone}`;tabState.title=badge.textContent;tabState.hidden=false}
-    key.placeholder=on?'已配置，留空保持不变':'ck_ 开头的 CodeBuddy API Key';
-    clear.hidden=!on;
-    const parts=[];
-    if(on){
-      const n=(status.models||[]).length,first=sharedModelLabel(status.models?.[0]),by=status.updatedBy||'';
-      parts.push(lfT(`当前：${envInfo.label}，${n} 个模型，默认 ${first}${by?`，${by} 最后修改`:''}。`,`Current: ${envInfo.label}, ${n} model${n===1?'':'s'}, default ${first}${by?`, last changed by ${by}`:''}.`));
-    }
-    else parts.push(lfT('还没有配置共享 Key，没配 Key 的成员需要先配自己的 Key 才能对话和跑 LOOP。','No shared key yet; members without their own key must add one before chatting or running LOOPs.'));
-    const sponsor=status?.legacySponsor;
-    if(sponsor)parts.push(on
-      ?lfT(`配置后不再使用环境变量 AGENTFLOW_ASSISTANT_SPONSOR_LOGIN 指定的账号 ${sponsor} 的 Key。`,`The key of ${sponsor} (AGENTFLOW_ASSISTANT_SPONSOR_LOGIN) is no longer used.`)
-      :lfT(`现在沿用环境变量 AGENTFLOW_ASSISTANT_SPONSOR_LOGIN 指定的账号 ${sponsor} 的 Key，只能用 ${sharedModelLabel(status.legacySponsorModel)}。`,`For now the key of ${sponsor} (AGENTFLOW_ASSISTANT_SPONSOR_LOGIN) is shared, limited to ${sharedModelLabel(status.legacySponsorModel)}.`));
-    meta.textContent=parts.join(lfT('',' '));
-  };
-  const syncBootstrap=()=>{
-    if(!state.data)return;
-    const models=status?.configured?(status.models||[]):(status?.legacySponsor?[status.legacySponsorModel]:[]);
-    state.data.sponsoredModels=models;state.data.sponsoredModel=models[0]||'';
-  };
-  const fetchStatus=async environment=>{
-    const query=environment===undefined?'':`?environment=${encodeURIComponent(environment)}`;
-    const result=await api('/api/platform/codebuddy-key'+query);
-    catalog=Array.isArray(result?.catalog)?result.catalog:[];
-    return result;
-  };
-  try{
-    status=await fetchStatus();
-    env.value=status?.internetEnvironment||'';
-    selected=status?.configured?[...(status.models||[])]:(status?.legacySponsorModel?[status.legacySponsorModel]:[]);
-    renderStatus();renderLink();renderModels();
-  }catch(e){
-    badge.textContent='加载失败';modelsHost.innerHTML=`<p class="prop-hint">${escapeHTML(e.message||'加载共享 Key 失败')}</p>`;
-    return;
-  }
-  env.onchange=async()=>{
-    renderLink();
-    modelsHost.innerHTML='<p class="prop-hint">正在读取可用模型…</p>';
-    try{await fetchStatus(env.value)}catch(e){catalog=[]}
-    renderModels();
-  };
-  extra.oninput=renderDefault;
-  key.oninput=()=>{const text=credentialSecretWarning(credentialKind('codeBuddyApiKey'),key.value);warning.textContent=text;warning.hidden=!text};
-  form.onsubmit=async e=>{
-    e.preventDefault();
-    const models=chosen();
-    if(!models.length)return toast('请至少勾选一个允许使用的模型','err');
-    if(!status?.configured&&!key.value.trim())return toast('请填写 CodeBuddy API Key','err');
-    const first=defaultSelect.value&&models.includes(defaultSelect.value)?defaultSelect.value:models[0];
-    const ordered=[first,...models.filter(id=>id!==first)];
-    const submit=form.querySelector('button[type="submit"]');if(submit)submit.disabled=true;
-    try{
-      status=await api('/api/platform/codebuddy-key',{method:'PUT',body:JSON.stringify({apiKey:key.value.trim(),internetEnvironment:env.value,models:ordered})});
-      key.value='';warning.hidden=true;extra.value='';selected=[...(status.models||ordered)];
-      renderStatus();renderModels();syncBootstrap();toast('共享 Key 已保存','ok');
-    }catch(err){toast(err.message,'err')}
-    finally{if(submit)submit.disabled=false}
-  };
-  clear.onclick=async()=>{
-    if(!await afConfirm({title:'停用共享 Key',message:'停用后，没配自己 Key 的成员将不能再用共享 Key 对话和跑 LOOP。确定停用？',danger:true,confirmText:'停用'}))return;
-    try{status=await api('/api/platform/codebuddy-key',{method:'DELETE'});renderStatus();syncBootstrap();toast('共享 Key 已停用','ok')}
-    catch(err){toast(err.message,'err')}
-  };
-}
-async function loadPlatformAdmins(host){
-  const list=host.querySelector('#platformAdminList');
-  const form=host.querySelector('#platformAdminForm');
-  const searchInput=host.querySelector('#platformAdminSearch');
-  const filterTabs=host.querySelectorAll('#platformFilterTabs button');
-  if(!list||!form)return;
-
-  const sourceMeta={
-    builtin:{label:'内置',className:'source-builtin',icon:'<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>'},
-    granted:{label:'已授权',className:'source-granted',icon:'<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'}
-  };
-
-  let allRows=[];
-  let activeFilter='all';
-  let searchQuery='';
-
-  const updateMetrics=rows=>{
-    const listArr=rows||[];
-    const total=listArr.length;
-    const locked=listArr.filter(r=>!r.revocable).length;
-    const granted=listArr.filter(r=>r.revocable).length;
-    const elTotal=host.querySelector('#platformMetricTotal');
-    const elLocked=host.querySelector('#platformMetricLocked');
-    const elGranted=host.querySelector('#platformMetricGranted');
-    const elBadge=host.querySelector('#platformAdminCountBadge');
-    if(elTotal)elTotal.textContent=total;
-    if(elLocked)elLocked.textContent=locked;
-    if(elGranted)elGranted.textContent=granted;
-    if(elBadge)elBadge.textContent=`共 ${total} 位管理员`;
-    setPlatformTabCount(host,'admins',total);
-  };
-
-  const render=()=>{
-    let filtered=allRows||[];
-    if(activeFilter==='builtin'){
-      filtered=filtered.filter(r=>!r.revocable||r.source==='builtin'||r.source==='env');
-    }else if(activeFilter==='granted'){
-      filtered=filtered.filter(r=>r.revocable||r.source==='granted');
-    }
-    if(searchQuery){
-      const q=searchQuery.toLowerCase();
-      const knownChineseNames = {};
-      filtered=filtered.filter(r=>
-        (r.chineseName&&String(r.chineseName).toLowerCase().includes(q))||
-        (r.loginName&&String(r.loginName).toLowerCase().includes(q))||
-        (knownChineseNames[String(r.loginName).toLowerCase()]&&knownChineseNames[String(r.loginName).toLowerCase()].toLowerCase().includes(q))
-      );
-    }
-
-    if(!filtered.length){
-      list.innerHTML=`
-        <div class="platform-empty-state">
-          <div class="platform-empty-icon">🔍</div>
-          <b>未找到符合条件的管理员</b>
-          <p>${(allRows&&allRows.length)?'请尝试更换搜索关键字或重置筛选条件。':'还没有配置平台管理员。'}</p>
-        </div>
-      `;
-      return;
-    }
-
-    list.innerHTML=filtered.map(row=>{
-      const isBuiltin=!row.revocable||row.source==='builtin'||row.source==='env';
-      const meta=isBuiltin?sourceMeta.builtin:sourceMeta.granted;
-      const userObj=(state.data?.users||[]).find(u=>u.loginName===row.loginName||(row.userId&&Number(u.id)===Number(row.userId)));
-      const knownChineseNames = {};
-      const lName=row.loginName||'';
-      let cName=row.chineseName||userObj?.chineseName||'';
-      if(!cName||cName.toLowerCase()===lName.toLowerCase()){
-        if(knownChineseNames[lName.toLowerCase()]){
-          cName=knownChineseNames[lName.toLowerCase()];
-        }
-      }
-      const displayName=(cName&&cName.toLowerCase()!==lName.toLowerCase())
-        ? `${lName}(${cName})`
-        : lName;
-      return `
-        <div class="platform-admin-row ${row.revocable?'is-granted':'is-locked'}">
-          <div class="platform-admin-user">
-            <div class="platform-admin-avatar">
-              ${userAvatarHTML(row.loginName, 100)}
-            </div>
-            <div class="platform-admin-info">
-              <div class="platform-admin-name-row">
-                <span class="platform-admin-name">${escapeHTML(displayName)}</span>
-              </div>
-              <div class="platform-admin-meta">
-                <span class="platform-source-badge ${meta.className}">
-                  ${meta.icon}<span>${escapeHTML(meta.label)}</span>
-                </span>
-              </div>
-            </div>
-          </div>
-          <div class="platform-admin-actions">
-            ${row.revocable?`
-              <button type="button" class="button ghost small platform-revoke-btn" data-revoke-admin="${escapeHTML(row.loginName)}" title="撤销该账号的平台管理员权限">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                <span>撤销</span>
-              </button>
-            `:`
-              <span class="platform-locked-tag" title="系统内置名单无法通过界面撤销，保障平台管理连续性">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                <span>不可撤销</span>
-              </span>
-            `}
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    list.querySelectorAll('[data-revoke-admin]').forEach(btn=>btn.onclick=async()=>{
-      const target=btn.dataset.revokeAdmin;
-      if(!await afConfirm({
-        title:'撤销平台管理员',
-        message:`确定撤销 ${target} 的平台管理员权限？撤销后该账号将不再具备通用模板与角色编辑能力。`,
-        danger:true,
-        confirmText:'撤销权限'
-      }))return;
-      try{
-        const rows=await api('/api/platform/admins',{method:'PUT',body:JSON.stringify({loginName:target,role:''})});
-        allRows=rows||[];
-        updateMetrics(allRows);
-        render();
-        toast('已撤销管理员权限','ok');
-      }catch(e){toast(e.message,'err')}
-    });
-  };
-
-  if(searchInput){
-    searchInput.oninput=()=>{
-      searchQuery=searchInput.value.trim();
-      render();
-    };
-  }
-
-  filterTabs.forEach(btn=>{
-    btn.onclick=()=>{
-      filterTabs.forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      activeFilter=btn.dataset.sourceFilter||'all';
-      render();
-    };
-  });
-
-  try{
-    allRows=await api('/api/platform/admins')||[];
-    updateMetrics(allRows);
-    render();
-  }catch(e){
-    list.innerHTML=`<p class="prop-hint">${escapeHTML(e.message||'加载管理员列表失败')}</p>`;
-  }
-
-  form.onsubmit=async e=>{
-    e.preventDefault();
-    const login=form.elements.loginName.value.trim();
-    if(!login)return toast('请填写用户名');
-    const submitBtn=form.querySelector('button[type="submit"]');
-    if(submitBtn)submitBtn.disabled=true;
-    try{
-      const rows=await api('/api/platform/admins',{method:'PUT',body:JSON.stringify({loginName:login,role:'admin'})});
-      form.reset();
-      allRows=rows||[];
-      updateMetrics(allRows);
-      render();
-      toast('已成功添加平台管理员','ok');
-    }catch(err){
-      toast(err.message,'err');
-    }finally{
-      if(submitBtn)submitBtn.disabled=false;
-    }
-  };
-}
-
 
 function renderUserProfilePopover() {
   const popover = $('#userProfilePopover');

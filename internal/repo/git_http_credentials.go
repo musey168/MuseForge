@@ -20,7 +20,6 @@ var (
 	ErrGitHTTPCredentialExists  = errors.New("该主机已有访问令牌，请编辑现有凭据")
 	ErrGitHTTPTokenRequired     = errors.New("添加凭据时请填写访问令牌")
 	ErrGitHTTPCredentialManaged = errors.New("内部托管凭据由平台维护，不能在这里修改或删除")
-	ErrGitHTTPHostUnauthorized  = errors.New("请联系平台管理员先授权该 HTTP Git 主机")
 )
 
 func gitHTTPCredentialID(host string) string {
@@ -116,13 +115,6 @@ func (r *UsersRepo) SaveGitHTTPCredential(userID int64, existingID string, input
 	host, httpHost := endpoint.Scope(), ""
 	id := gitHTTPCredentialID(host)
 	if endpoint.Scheme == "http" {
-		authorized, err := r.gitHTTPHosts.PlatformGitHTTPHostAuthorized(context.Background(), endpoint.Authority)
-		if err != nil {
-			return err
-		}
-		if !authorized {
-			return ErrGitHTTPHostUnauthorized
-		}
 		httpHost, host = host, ""
 		input.Platform = domain.GitPlatformOther
 	}
@@ -188,12 +180,6 @@ func (r *UsersRepo) GitHTTPCredentialForHost(ctx context.Context, userID int64, 
 	}
 	secret := row.secret()
 	if row.ID != "" && secret.Host == host && secret.Token != "" {
-		if endpoint.Scheme == "http" {
-			authorized, err := r.gitHTTPHosts.PlatformGitHTTPHostAuthorized(ctx, endpoint.Authority)
-			if err != nil || !authorized {
-				return domain.GitHTTPCredentialSecret{}, false
-			}
-		}
 		return secret, true
 	}
 	if host != managedGitHost() {
@@ -256,12 +242,6 @@ func (r *UsersRepo) GitHTTPWorkspaceHosts(userID int64) map[string]string {
 	}
 	hosts := make(map[string]string, len(creds))
 	for _, cred := range creds {
-		if authority, plain := strings.CutPrefix(cred.Host, "http://"); plain {
-			authorized, err := r.gitHTTPHosts.PlatformGitHTTPHostAuthorized(context.Background(), authority)
-			if err != nil || !authorized {
-				continue
-			}
-		}
 		hosts[cred.Host] = cred.Platform
 	}
 	return hosts

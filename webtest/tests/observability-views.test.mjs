@@ -124,14 +124,14 @@ test('a failed usage request surfaces the error instead of a blank page', async 
   assert.match(body.textContent, /usage unavailable/);
 });
 
-test('the credential button only shows for project members who can manage sources', async (t) => {
+test('the credential button shows for the account that owns the reporting credential', async (t) => {
   const app = await loadApp();
   t.after(app.close);
   await prepare(app);
   await app.evaluate('refreshObs()');
   await settle(4);
   assert.equal(app.document.querySelector('#obsManageSources').hidden, false);
-  app.evaluate(`state.currentUser={id:99,isGuest:false,isPlatformAdmin:false};state.data.projects[0].ownerId=1;renderObservability()`);
+  app.evaluate(`state.currentUser={id:99,isGuest:true};renderObservability()`);
   assert.equal(app.document.querySelector('#obsManageSources').hidden, true);
 });
 

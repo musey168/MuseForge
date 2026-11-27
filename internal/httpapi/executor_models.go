@@ -218,7 +218,7 @@ func (s *Server) executorModels(c *gin.Context) {
 		return
 	}
 	var user domain.User
-	if current, ok := s.requestUser(c.Request, true); ok {
+	if current, ok := s.requestUser(c.Request); ok {
 		if stored, found := s.repo.User(current.ID); found {
 			user = stored
 			refreshOfficialCodeBuddyModels(c.Request.Context(), user)

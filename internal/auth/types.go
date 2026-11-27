@@ -16,16 +16,15 @@ import (
 
 // User 表示当前登录或降级后的员工身份。
 type User struct {
-	ID              int64     `json:"id"`
-	StaffID         int       `json:"staffId"`
-	LoginName       string    `json:"loginName"`
-	ChineseName     string    `json:"chineseName"`
-	DeptID          int       `json:"deptId"`
-	DeptName        string    `json:"deptName"`
-	IsGuest         bool      `json:"isGuest"`
-	IsPlatformAdmin bool      `json:"isPlatformAdmin,omitempty"`
-	AuthTime        time.Time `json:"authTime"`
-	AvatarURL       string    `json:"avatarUrl,omitempty"`
+	ID          int64     `json:"id"`
+	StaffID     int       `json:"staffId"`
+	LoginName   string    `json:"loginName"`
+	ChineseName string    `json:"chineseName"`
+	DeptID      int       `json:"deptId"`
+	DeptName    string    `json:"deptName"`
+	IsGuest     bool      `json:"isGuest"`
+	AuthTime    time.Time `json:"authTime"`
+	AvatarURL   string    `json:"avatarUrl,omitempty"`
 }
 
 // ToDomain 将 auth.User 转换为持久化层实体 domain.User。

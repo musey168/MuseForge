@@ -35,7 +35,7 @@ func masterTrailingSlashCompat(c *gin.Context, s *Server) bool {
 	if entity == "auth/tokens" {
 		if c.Request.Method != http.MethodDelete {
 			c.JSON(http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		} else if _, logged := s.requestUser(c.Request, false); logged {
+		} else if _, logged := s.requestUser(c.Request); logged {
 			c.JSON(http.StatusBadRequest, map[string]string{"error": "Token ID 不能为空"})
 		} else {
 			c.JSON(http.StatusUnauthorized, map[string]string{"error": "请先登录后管理个人 Token"})
