@@ -249,11 +249,14 @@ func TestRunnerProjectSharing(t *testing.T) {
 	if err := owner.s.PutUser(member.user); err != nil {
 		t.Fatal(err)
 	}
+	// "one" and "two" belong to nobody, so the account that owns the machine
+	// and the other account may both act in them; the account holds
+	// "read-only" and "unassigned", the other account holds "other".
 	for _, project := range []domain.Project{
-		{ID: "one", Name: "One", OwnerID: owner.user.ID, },
-		{ID: "two", Name: "Two", OwnerID: member.user.ID, },
+		{ID: "one", Name: "One"},
+		{ID: "two", Name: "Two"},
 		{ID: "other", Name: "Other", OwnerID: member.user.ID},
-		{ID: "read-only", Name: "Read only", OwnerID: owner.user.ID, },
+		{ID: "read-only", Name: "Read only", OwnerID: owner.user.ID},
 		{ID: "unassigned", Name: "Unassigned", OwnerID: owner.user.ID},
 	} {
 		if err := owner.s.PutProject(project); err != nil {
@@ -390,35 +393,26 @@ func TestRunnerProjectSharing(t *testing.T) {
 
 	check(member, http.MethodPut, "/api/runners/default?projectId=two", selection, 200)
 	checkDefault(member, "two", runner.ID, "", runner.ID)
-	for _, members := range [][]domain.ProjectMember{
-		{{UserID: owner.user.ID, Role: "viewer"}},
-		{},
-	} {
-		project, ok := owner.s.Project("two")
-		if !ok {
-			t.Fatal("project two not found")
-		}
-		project.Members = members
-		if err := owner.s.PutProject(project); err != nil {
-			t.Fatal(err)
-		}
+	// The machine owner does not hold "other": the machine is not usable there,
+	// for the project owner or for the machine owner.
+	{
 		var rows []repo.RunnerProjectView
-		if err := json.Unmarshal(check(member, http.MethodGet, "/api/runners?projectId=two", nil, 200), &rows); err != nil {
+		if err := json.Unmarshal(check(member, http.MethodGet, "/api/runners?projectId=other", nil, 200), &rows); err != nil {
 			t.Fatal(err)
 		}
 		if len(rows) != 0 {
-			t.Fatalf("project with machine owner membership %+v exposed %+v", members, rows)
+			t.Fatalf("a project the machine owner does not hold exposed %+v", rows)
 		}
-		if err := json.Unmarshal(check(owner, http.MethodGet, "/api/runners?projectId=two", nil, 200), &rows); err != nil {
+		if err := json.Unmarshal(check(owner, http.MethodGet, "/api/runners?projectId=other", nil, 200), &rows); err != nil {
 			t.Fatal(err)
 		}
 		if len(rows) != 1 || rows[0].ID != runner.ID || rows[0].CanUseInConversation {
 			t.Fatalf("machine owner without project write access: %+v", rows)
 		}
-		check(owner, http.MethodPut, "/api/assistant/sessions/owner-runner-two-forbidden", draft("two"), 400)
-		checkDefault(member, "two", "", "", "")
-		check(member, http.MethodPut, "/api/runners/default?projectId=two", selection, 403)
-		check(member, http.MethodPut, "/api/assistant/sessions/shared-runner-owner-revoked", draft("two"), 400)
+		check(owner, http.MethodPut, "/api/assistant/sessions/owner-runner-other-forbidden", draft("other"), 400)
+		checkDefault(member, "other", "", "", "")
+		check(member, http.MethodPut, "/api/runners/default?projectId=other", selection, 403)
+		check(member, http.MethodPut, "/api/assistant/sessions/shared-runner-other-revoked", draft("other"), 400)
 	}
 	checkDefault(owner, "", runner.ID, "", "")
 

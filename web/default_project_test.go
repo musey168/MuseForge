@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// New users start in a project they belong to, then the welcome project, then the first project.
-func TestDefaultProjectPrefersMembershipThenWelcome(t *testing.T) {
+// New users start in a project they own, then the welcome project, then the first project.
+func TestDefaultProjectPrefersOwnershipThenWelcome(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("node not installed")
@@ -19,7 +19,7 @@ eval(code.slice(start,code.indexOf('\n',code.indexOf('function defaultProjectId(
 assert.equal(defaultProjectId([{id:'agent-chat'},{id:'welcome'},{id:'platform'}]),'welcome');
 assert.equal(defaultProjectId([{id:'agentflow'},{id:'platform'}]),'agentflow');
 assert.equal(defaultProjectId([{id:'welcome'},{id:'team',ownerId:7}],7),'team');
-assert.equal(defaultProjectId([{id:'welcome'},{id:'team',members:[{userId:9}]}],9),'team');
+assert.equal(defaultProjectId([{id:'welcome'},{id:'team',ownerId:9}],9),'team');
 assert.equal(defaultProjectId([{id:'welcome'},{id:'team',ownerId:7}],8),'welcome');
 assert.equal(defaultProjectId([]),'');
 assert.equal(defaultProjectId(undefined),'');

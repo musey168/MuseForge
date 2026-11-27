@@ -139,26 +139,26 @@ func TestLockedConversationRejectsTurnsAfterRunnerAccessChanges(t *testing.T) {
 	}
 	h.generate = func(context.Context, string, domain.User) (string, error) { return "fixture", nil }
 	const projectID = "workbench"
-	setRole := func(t *testing.T, role string) {
+	hold := func(t *testing.T, ownerID int64) {
 		t.Helper()
 		project, ok := h.repo.Project(projectID)
 		if !ok {
 			t.Fatal("workbench project not found")
 		}
-		project.Members = []domain.ProjectMember{{UserID: member.ID, Role: role}}
+		project.OwnerID = ownerID
 		if err := h.repo.PutProject(project); err != nil {
 			t.Fatal(err)
 		}
 	}
 	target := &domain.AssistantExecutionTarget{Pool: domain.ExecutionModeRunner, RunnerID: "shared-locked"}
-	if err := h.repo.PutRunner(domain.Runner{ID: target.RunnerID, OwnerUserID: owner.ID,
+	if err := h.repo.PutRunner(domain.Runner{ID: target.RunnerID, OwnerUserID: member.ID,
 		Status: domain.RunnerStatusOnline, RunnerVersion: domain.RunnerVersionConversationCLI}); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"/api/assistant/chat", "/api/assistant/generations"} {
 		t.Run(path, func(t *testing.T) {
-			setRole(t, domain.ProjectRoleMember)
-			if err := h.repo.SetRunnerSharedProjects(target.RunnerID, owner.ID, []string{projectID}); err != nil {
+			hold(t, member.ID)
+			if err := h.repo.SetRunnerSharedProjects(target.RunnerID, member.ID, []string{projectID}); err != nil {
 				t.Fatal(err)
 			}
 			for _, revoke := range []string{"share", "membership"} {
@@ -169,14 +169,14 @@ func TestLockedConversationRejectsTurnsAfterRunnerAccessChanges(t *testing.T) {
 					t.Fatal(err)
 				}
 				if revoke == "share" {
-					if err := h.repo.SetRunnerSharedProjects(target.RunnerID, owner.ID, nil); err != nil {
+					if err := h.repo.SetRunnerSharedProjects(target.RunnerID, member.ID, nil); err != nil {
 						t.Fatal(err)
 					}
 				} else {
-					if err := h.repo.SetRunnerSharedProjects(target.RunnerID, owner.ID, []string{projectID}); err != nil {
+					if err := h.repo.SetRunnerSharedProjects(target.RunnerID, member.ID, []string{projectID}); err != nil {
 						t.Fatal(err)
 					}
-					setRole(t, domain.ProjectRoleViewer)
+					hold(t, owner.ID)
 				}
 				body, _ := json.Marshal(assistantRequest{SessionID: id, ProjectID: projectID,
 					Messages: []assistantMessage{{Role: "user", Content: "fixture"}}})

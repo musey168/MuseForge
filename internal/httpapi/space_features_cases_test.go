@@ -71,7 +71,7 @@ func TestSpaceFeaturesLifecycleAndAuthorization(t *testing.T) {
 
 	created := cvBMiscRequestAs(t, f, owner, http.MethodPost, "/api/spaces", map[string]any{
 		"projectId": project.ID, "title": "Linked space", "summary": "summary", "creatorTitle": "lead",
-		"issueId": issue.ID, "members": []any{map[string]any{"userId": owner.ID}, map[string]any{"userId": member.ID, "title": strings.Repeat("m", 30)}},
+		"issueId": issue.ID, "members": []any{map[string]any{"userId": owner.ID}},
 	})
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create linked = %d: %s", created.Code, created.Body.String())
@@ -80,7 +80,7 @@ func TestSpaceFeaturesLifecycleAndAuthorization(t *testing.T) {
 	if err := json.Unmarshal(created.Body.Bytes(), &linked); err != nil {
 		t.Fatal(err)
 	}
-	if linked.Requirement == nil || len(linked.Members) != 2 {
+	if linked.Requirement == nil || len(linked.Members) != 1 {
 		t.Fatalf("linked view = %+v", linked)
 	}
 	duplicate := cvBMiscRequestAs(t, f, owner, http.MethodPost, "/api/spaces", map[string]any{
@@ -98,7 +98,7 @@ func TestSpaceFeaturesLifecycleAndAuthorization(t *testing.T) {
 	}{
 		{owner, http.MethodGet, "/api/spaces?projectId=" + project.ID, nil, http.StatusOK},
 		{owner, http.MethodGet, base, nil, http.StatusOK},
-		{viewer, http.MethodGet, base, nil, http.StatusOK},
+		{viewer, http.MethodGet, base, nil, http.StatusForbidden},
 		{viewer, http.MethodPatch, base, map[string]any{"pinned": true}, http.StatusForbidden},
 		{outsider, http.MethodGet, base, nil, http.StatusForbidden},
 		{owner, http.MethodPatch, base, "{", http.StatusBadRequest},
@@ -106,9 +106,9 @@ func TestSpaceFeaturesLifecycleAndAuthorization(t *testing.T) {
 		{owner, http.MethodPatch, base, map[string]any{"title": " Updated ", "summary": " updated ", "pinned": true}, http.StatusOK},
 		{owner, http.MethodPost, base + "/requirement", map[string]any{"title": "again"}, http.StatusConflict},
 		{owner, http.MethodPost, base + "/members", "{", http.StatusBadRequest},
-		{owner, http.MethodPost, base + "/members", map[string]any{"userId": member.ID, "title": "again"}, http.StatusOK},
+		{owner, http.MethodPost, base + "/members", map[string]any{"userId": member.ID, "title": "again"}, http.StatusBadRequest},
 		{owner, http.MethodDelete, base + "/members?userId=" + "8402", nil, http.StatusOK},
-		{owner, http.MethodPost, base + "/members", map[string]any{"userId": member.ID, "title": "developer"}, http.StatusOK},
+		{owner, http.MethodPost, base + "/members", map[string]any{"userId": owner.ID, "title": "developer"}, http.StatusOK},
 		{owner, http.MethodGet, base + "/members", nil, http.StatusOK},
 	} {
 		rec := cvBMiscRequestAs(t, f, tc.user, tc.method, tc.path, tc.body)

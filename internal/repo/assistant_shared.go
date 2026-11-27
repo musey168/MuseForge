@@ -89,7 +89,7 @@ func (r *AssistantRepo) ListSharedAssistantSessions() []domain.AssistantSession 
 
 // ListCrossUserAssistantSessions returns, in one query, LOOP shared sessions
 // and project-shared conversations created by other users. The HTTP layer
-// filters both by project membership.
+// filters both by project ownership.
 func (r *AssistantRepo) ListCrossUserAssistantSessions(excludeUserID int64) (shared, project []domain.AssistantSession) {
 	rows, err := r.findAssistantSessionSummaries("id LIKE ? OR (user_id <> ? AND project_id <> ?)", "sop-%", excludeUserID, "")
 	if err != nil {
@@ -145,7 +145,7 @@ func validSharedAssistantSession(s domain.AssistantSession) bool {
 }
 
 // ProjectSharedAssistantSession reports whether an ordinary conversation is
-// shared with its project's members. LOOP run sessions keep their own rules;
+// shared with the account that holds its project. LOOP run sessions keep their own rules;
 // legacy per-user run discussions stay private. A LOOP designer conversation
 // stays private to its author too: it edits one person's unsaved canvas and
 // is not a project discussion.

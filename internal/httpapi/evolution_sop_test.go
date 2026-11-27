@@ -337,7 +337,7 @@ func TestEvolutionSOPDetectionRunsForEnabledPolicyWithoutGlobalSwitch(t *testing
 	}
 }
 
-func TestEvolutionSOPAutoBatchOptInSharedKeyAndViewerIsolation(t *testing.T) {
+func TestEvolutionSOPAutoBatchOptInSharedKeyAndOutsiderIsolation(t *testing.T) {
 	env := newEvoTestEnv(t)
 	now := time.Now().UTC()
 
@@ -354,20 +354,17 @@ func TestEvolutionSOPAutoBatchOptInSharedKeyAndViewerIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Add a viewer with a personal API key to ensure automated SOP jobs NEVER borrow a viewer's key.
-	if err := env.store.PutUser(domain.User{StaffID: 3102, LoginName: "evo-viewer", ChineseName: "只读成员"}); err != nil {
+	// Add an account that does not hold the project, with a personal API key,
+	// to ensure automated SOP jobs NEVER borrow an outsider's key.
+	if err := env.store.PutUser(domain.User{StaffID: 3102, LoginName: "evo-outsider", ChineseName: "只读成员"}); err != nil {
 		t.Fatal(err)
 	}
-	viewer, _ := env.store.UserByLoginName("evo-viewer")
-	if _, err := env.store.UpdateUserCredentials(viewer.ID, repo.UserCredentialUpdate{CodeBuddyAPIKey: "ck_viewer_secret"}); err != nil {
+	outsider, _ := env.store.UserByLoginName("evo-outsider")
+	if _, err := env.store.UpdateUserCredentials(outsider.ID, repo.UserCredentialUpdate{CodeBuddyAPIKey: "ck_outsider_secret"}); err != nil {
 		t.Fatal(err)
 	}
 	proj, _ := env.store.Project("evo-p")
 	proj.OwnerID = u.ID
-	proj.Members = []domain.ProjectMember{
-		{UserID: u.ID, Role: "owner"},
-		{UserID: viewer.ID, Role: "viewer"},
-	}
 	if err := env.store.PutProject(proj); err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +384,7 @@ func TestEvolutionSOPAutoBatchOptInSharedKeyAndViewerIsolation(t *testing.T) {
 			WorkflowSnapshot: env.wf,
 			Status:           "succeeded",
 			Input:            `{"ticketId":"T-1"}`,
-			ExecutionContext: domain.TelemetryContext{ProjectID: "evo-p", ResponsibleUserID: viewer.ID},
+			ExecutionContext: domain.TelemetryContext{ProjectID: "evo-p", ResponsibleUserID: outsider.ID},
 			CreatedAt:        now.Add(time.Duration(i-15) * time.Minute),
 			UpdatedAt:        now.Add(time.Duration(i-15) * time.Minute),
 			Usage:            domain.TokenUsage{TotalTokens: 320000},
@@ -409,10 +406,11 @@ func TestEvolutionSOPAutoBatchOptInSharedKeyAndViewerIsolation(t *testing.T) {
 		t.Fatalf("unconfigured SOP must not auto-trigger, got %d proposals", len(props))
 	}
 
-	// P1-3: Viewer policy UpdatedBy must be rejected and never borrow viewer's personal key.
-	viewerPolicy := domain.EvoSOPPolicy{WorkflowID: env.wf.ID, ProjectID: "evo-p", Enabled: true, BatchSize: 10, UpdatedBy: viewer.ID}
-	if _, _, ok := env.h.resolveSOPActorUser(viewerPolicy, env.wf); ok {
-		t.Fatal("resolveSOPActorUser must reject project viewer")
+	// P1-3: A policy updated by an account that does not hold the project
+	// must be rejected and never borrow that account's personal key.
+	outsiderPolicy := domain.EvoSOPPolicy{WorkflowID: env.wf.ID, ProjectID: "evo-p", Enabled: true, BatchSize: 10, UpdatedBy: outsider.ID}
+	if _, _, ok := env.h.resolveSOPActorUser(outsiderPolicy, env.wf); ok {
+		t.Fatal("resolveSOPActorUser must reject an account that does not hold the project")
 	}
 
 	// Explicitly enable policy as writable owner u.

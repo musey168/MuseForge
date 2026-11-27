@@ -191,8 +191,8 @@ func (h *projectsHandlers) project(c *gin.Context) {
 	c.JSON(http.StatusOK, domain.PublicProject(project))
 }
 
-// deleteProject hides a project (soft delete). Requirements, runs, settings
-// and members are kept so restoreProject can bring it back. Running work and
+// deleteProject hides a project (soft delete). Requirements, runs and
+// settings are kept so restoreProject can bring it back. Running work and
 // enabled schedules must be stopped first so nothing keeps acting on a
 // project nobody can see.
 func (h *projectsHandlers) deleteProject(c *gin.Context) {

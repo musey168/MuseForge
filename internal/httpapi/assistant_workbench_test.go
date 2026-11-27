@@ -49,7 +49,7 @@ func workbenchContext(u domain.User, method, path string, body *bytes.Buffer) (*
 	return c, rec
 }
 
-func TestViewerCannotExecuteAgentsThroughRunConversation(t *testing.T) {
+func TestAnotherAccountCannotExecuteAgentsThroughRunConversation(t *testing.T) {
 	t.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
 	h, owner := workbenchFixture(t)
 	if err := h.repo.PutUser(domain.User{LoginName: "read-only-viewer", CodeBuddyAPIKey: "test-only"}); err != nil {
@@ -57,20 +57,16 @@ func TestViewerCannotExecuteAgentsThroughRunConversation(t *testing.T) {
 	}
 	viewer, _ := h.repo.UserByLoginName("read-only-viewer")
 	project, _ := h.repo.Project("workbench")
-	project.Members = []domain.ProjectMember{{UserID: viewer.ID, Role: "viewer"}}
-	if err := h.repo.PutProject(project); err != nil {
-		t.Fatal(err)
-	}
 	if err := h.repo.PutRun(domain.Run{ID: "viewer-run", Status: "waiting", ExecutionContext: domain.TelemetryContext{ProjectID: project.ID}, WorkflowSnapshot: domain.WorkflowDefinition{CollaborationMode: "group"}, Nodes: map[string]*domain.NodeRun{}}); err != nil {
 		t.Fatal(err)
 	}
 	c, _ := workbenchContext(viewer, "POST", "/api/assistant/generations", bytes.NewBuffer(nil))
-	if !h.workbenchProjectAllowed(c, project.ID, viewer.ID) {
-		t.Fatal("viewer must retain read access")
+	if h.workbenchProjectAllowed(c, project.ID, viewer.ID) {
+		t.Fatal("another account must not hold project access")
 	}
 	request := assistantRequest{ProjectID: project.ID, RunID: "viewer-run", Messages: []assistantMessage{{Role: "user", Content: "modify the workspace"}}}
 	if err := h.prepareWorkbenchContext(c, &request, viewer); err == nil {
-		t.Fatal("viewer obtained an agent execution context")
+		t.Fatal("another account obtained an agent execution context")
 	}
 	c, _ = workbenchContext(owner, "POST", "/api/assistant/generations", bytes.NewBuffer(nil))
 	if err := h.prepareWorkbenchContext(c, &request, owner); err != nil {

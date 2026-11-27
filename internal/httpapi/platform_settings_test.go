@@ -116,9 +116,17 @@ func TestPlatformAdminsManageAccounts(t *testing.T) {
 	if !s.CheckLocalPassword(created.UserID, "alice-initial") {
 		t.Fatal("the new account signs in with the initial password")
 	}
-	welcome, _ := s.Project(welcomeProjectID)
-	if len(welcome.Members) != 1 || welcome.Members[0].UserID != created.UserID {
-		t.Fatalf("new account joins the welcome project: %+v", welcome.Members)
+	// A platform account no longer joins a project roster. The welcome
+	// project stays ownerless, which leaves it open to the signed-in account.
+	welcome, ok := s.Project(welcomeProjectID)
+	if !ok {
+		t.Fatal("welcome project not found")
+	}
+	if welcome.OwnerID != 0 {
+		t.Fatalf("the welcome project must stay ownerless: %+v", welcome)
+	}
+	if !welcome.AccountOwns(created.UserID) {
+		t.Fatalf("an ownerless project must stay open to the signed-in account: %+v", welcome)
 	}
 
 	w = client.call(owner, "GET", "/api/platform/accounts", "", "")

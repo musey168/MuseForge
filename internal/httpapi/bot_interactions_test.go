@@ -26,7 +26,7 @@ func botFixture(t *testing.T) (*repo.Store, *assistantHandlers, domain.Notificat
 	t.Setenv("AGENTFLOW_ASSISTANT_SESSION_DIR", t.TempDir())
 	s.PutUser(domain.User{ID: 42, LoginName: "bot-owner", CodeBuddyAPIKey: "owner-key", CodeBuddyInternetEnvironment: "ioa"})
 	s.PutUser(domain.User{ID: 43, LoginName: "other-user", CodeBuddyAPIKey: "other-key", CodeBuddyInternetEnvironment: "ioa"})
-	s.PutProject(domain.Project{ID: "p", OwnerID: 42, })
+	s.PutProject(domain.Project{ID: "p", OwnerID: 42})
 	bot := domain.NotificationBot{ID: "b", BotID: "external", ProjectID: "p", OwnerID: 42, Enabled: true, InteractionEnabled: true, Model: domain.DefaultNotificationReportModel}
 	if err = s.SaveNotificationBot(bot, "secret"); err != nil {
 		t.Fatal(err)
@@ -294,6 +294,10 @@ func bindBotTestUser(t *testing.T, s *repo.Store, bot domain.NotificationBot, se
 }
 func TestBotUnboundAndMissingCredentialsNeverUseOwner(t *testing.T) {
 	s, h, bot := botFixture(t)
+	// The bound sender's account holds the project.
+	project, _ := s.Project("p")
+	project.OwnerID = 43
+	s.PutProject(project)
 	h.generate = func(context.Context, string, domain.User) (string, error) {
 		t.Fatal("unbound actor reached model")
 		return "", nil
@@ -310,11 +314,17 @@ func TestBotUnboundAndMissingCredentialsNeverUseOwner(t *testing.T) {
 	if err != nil || !strings.Contains(reply, "你的平台账号尚未配置") {
 		t.Fatal(reply, err)
 	}
-	project, _ := s.Project("p")
-	project.Members = []domain.ProjectMember{}
+	// The account holds the project and may execute.
+	if _, err = h.botExecutionUser(bot, "new-wecom-user"); err != nil {
+		t.Fatal(err)
+	}
+	// The project moves to another account: the sender is an outsider and
+	// inherits nothing.
+	project, _ = s.Project("p")
+	project.OwnerID = 42
 	s.PutProject(project)
 	if _, err = h.botExecutionUser(bot, "new-wecom-user"); err == nil {
-		t.Fatal("revoked member inherited owner permission")
+		t.Fatal("the account that lost the project inherited owner permission")
 	}
 }
 func TestUnboundCardActorCannotMutateRun(t *testing.T) {

@@ -46,7 +46,6 @@ func putSessionListProject(t testing.TB, h *assistantHandlers, project domain.Pr
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		h.repo.DB.Exec("DELETE FROM project_members WHERE project_id=?", project.ID)
 		h.repo.DB.Exec("DELETE FROM projects WHERE id=?", project.ID)
 	})
 }
@@ -76,10 +75,9 @@ func TestAssistantSessionListPreservesVisibilityAndMetadata(t *testing.T) {
 	h, owner, viewer, prefix := sessionListFixture(t)
 	projects := []domain.Project{
 		{ID: prefix + "owned", OwnerID: viewer.ID},
-		{ID: prefix + "member", OwnerID: owner.ID, },
+		{ID: prefix + "member", OwnerID: owner.ID},
 		{ID: prefix + "private", OwnerID: owner.ID},
 		{ID: prefix + "open"},
-		{ID: prefix + "members-only", },
 	}
 	ids := map[string]string{}
 	for _, project := range projects {
@@ -124,10 +122,10 @@ func TestAssistantSessionListPreservesVisibilityAndMetadata(t *testing.T) {
 		user domain.User
 		keys []string
 	}{
-		{"member", viewer, []string{"owned", "member", "open", "branch", "personal"}},
-		{"owner", owner, []string{"member", "private", "open", "members-only", "branch", "foreign"}},
+		{"member", viewer, []string{"owned", "open", "personal"}},
+		{"owner", owner, []string{"member", "private", "open", "branch", "foreign"}},
 		{"outsider", domain.User{ID: 103, LoginName: "session-list-outsider"}, []string{"open"}},
-		{"admin", domain.User{ID: 104, LoginName: "example-maintainer"}, []string{"owned", "member", "private", "open", "members-only", "branch"}},
+		{"admin", domain.User{ID: 104, LoginName: "example-maintainer"}, []string{"owned", "member", "private", "open", "branch"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, rec := workbenchContext(tc.user, "GET", "/api/assistant/sessions", bytes.NewBuffer(nil))
@@ -248,8 +246,8 @@ func TestAssistantSessionListMarksUnreadRepliesUntilOpened(t *testing.T) {
 	if got := unread(owner); !reflect.DeepEqual(got, map[string]bool{"done": true, "legacy": false, "failed": false, "busy": false, "team-chat": true}) {
 		t.Fatalf("owner unread marks: %v", got)
 	}
-	// The viewer can see the colleague's project chat but never joined it.
-	if got := unread(viewer); !reflect.DeepEqual(got, map[string]bool{"team-chat": false}) {
+	// The viewer does not hold the project, so the project chat is not theirs.
+	if got := unread(viewer); !reflect.DeepEqual(got, map[string]bool{}) {
 		t.Fatalf("viewer unread marks: %v", got)
 	}
 	if code := markRead(viewer, "done", prefix+"g1"); code != 404 {
@@ -291,7 +289,7 @@ func (l *sessionListQueryLog) Trace(_ context.Context, _ time.Time, query func()
 
 func TestAssistantSessionListQueryCountIsBounded(t *testing.T) {
 	h, owner, viewer, prefix := sessionListFixture(t)
-	putSessionListProject(t, h, domain.Project{ID: prefix, OwnerID: owner.ID, })
+	putSessionListProject(t, h, domain.Project{ID: prefix, OwnerID: viewer.ID})
 	originalLogger := h.repo.DB.Logger
 	counts := []int{}
 	for i := 0; i < 27; i++ {
@@ -327,14 +325,14 @@ func TestAssistantSessionListQueryCountIsBounded(t *testing.T) {
 	}
 }
 
-func TestAssistantSessionListMembershipFailureIsClosed(t *testing.T) {
+func TestAssistantSessionListOwnerReadFailureIsClosed(t *testing.T) {
 	h, owner, viewer, prefix := sessionListFixture(t)
 	putSessionListProject(t, h, domain.Project{ID: prefix, OwnerID: owner.ID})
 	putSessionListRun(t, h, domain.Run{ID: prefix, Status: "succeeded", ExecutionContext: domain.TelemetryContext{ProjectID: prefix}})
 	putSessionListConversation(t, h, owner.ID, domain.AssistantSession{ID: repo.RunAssistantSessionID(prefix), RunID: prefix, ProjectID: prefix, Shared: true})
 	if err := h.repo.DB.Callback().Query().Before("gorm:query").Register(prefix, func(tx *gorm.DB) {
-		if tx.Statement.Table == "project_members" {
-			tx.AddError(errors.New("membership read failed"))
+		if tx.Statement.Table == "projects" {
+			tx.AddError(errors.New("project owner read failed"))
 		}
 	}); err != nil {
 		t.Fatal(err)
@@ -343,6 +341,6 @@ func TestAssistantSessionListMembershipFailureIsClosed(t *testing.T) {
 	c, rec := workbenchContext(viewer, "GET", "/api/assistant/sessions", bytes.NewBuffer(nil))
 	h.listSessions(c)
 	if rec.Code != 500 {
-		t.Fatalf("membership failure must not grant access: %d %s", rec.Code, rec.Body)
+		t.Fatalf("a failed owner read must not grant access: %d %s", rec.Code, rec.Body)
 	}
 }

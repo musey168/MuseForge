@@ -22,8 +22,7 @@ func TestRunnerProjectModeOverridesPersonalDefault(t *testing.T) {
 	s := newTestRunner(t)
 	const owner = 1
 	const project = "mode-project"
-	if err := s.PutProject(domain.Project{ID: project, Name: project, OwnerID: owner,
-}); err != nil {
+	if err := s.PutProject(domain.Project{ID: project, Name: project, OwnerID: owner}); err != nil {
 		t.Fatal(err)
 	}
 	runner := domain.Runner{ID: "preferred", OwnerUserID: owner, RunnerVersion: domain.RunnerVersionConversationCLI, Status: domain.RunnerStatusOnline}
@@ -37,7 +36,7 @@ func TestRunnerProjectModeOverridesPersonalDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := s.SetProjectRunnerPreference(2, project, "", domain.RunnerSelectionModeAuto); err != ErrRunnerProjectDenied {
-		t.Fatalf("viewer wrote mode: %v", err)
+		t.Fatalf("another account wrote mode: %v", err)
 	}
 	for _, mode := range []string{domain.RunnerSelectionModeAuto, domain.RunnerSelectionModePlatform} {
 		if err := s.SetProjectRunnerPreference(owner, project, "", mode); err != nil {

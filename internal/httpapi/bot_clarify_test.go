@@ -15,8 +15,13 @@ import (
 )
 
 // clarifyChatFixture: a Feishu or DingTalk Bot of project LOOP with the
-// project owner (42, ou_owner) and a member (43, ou_member) bound, the
-// requirement LOOP-7, and scripted clarification rounds.
+// project owner (42, ou_owner) and the other account (43, ou_member) bound,
+// the requirement LOOP-7, and scripted clarification rounds.
+//
+// The Bot works in a project nobody owns: the platform runs a single account
+// and an unowned project stays open to the account that signs in. The
+// owner-only contract itself is asserted by the revocation case at the end of
+// this file.
 type clarifyChatFixture struct {
 	s       *repo.Store
 	h       *assistantHandlers
@@ -32,16 +37,17 @@ func newClarifyChatFixture(t *testing.T, channel string) *clarifyChatFixture {
 	s, h, bot := botFixture(t)
 	bot.ID, bot.BotID, bot.Channel, bot.TenantKey, bot.TenantState = "b-clarify-"+channel, "app-clarify-"+channel, channel, "tenant", domain.BotTenantLocked
 	bot.WriteApproval = domain.BotWriteConfirm
+	bot.ProjectID = "loop"
 	if err := s.SaveNotificationBot(bot, "secret"); err != nil {
 		t.Fatal(err)
 	}
 	bot, _ = s.NotificationBot(bot.ID)
 	bindBotTestUser(t, s, bot, "ou_member", 43)
 	bindBotTestUser(t, s, bot, "ou_owner", 42)
-	project, _ := s.Project("p")
-	project.Key = "LOOP"
-	s.PutProject(project)
-	if err := s.PutIssue(domain.Issue{ID: "iss-7", ProjectID: "p", Number: 7, Title: "登录优化", Description: "支持手机号登录"}); err != nil {
+	if err := s.PutProject(domain.Project{ID: "loop", Key: "LOOP", Name: "LOOP"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutIssue(domain.Issue{ID: "iss-7", ProjectID: "loop", Number: 7, Title: "登录优化", Description: "支持手机号登录", AssigneeUserID: 42}); err != nil {
 		t.Fatal(err)
 	}
 	f := &clarifyChatFixture{s: s, h: h, bot: bot}
@@ -297,7 +303,7 @@ func TestChatClarificationStartAttributesTheSavingMember(t *testing.T) {
 			if err := f.s.PutAgent(domain.AgentDefinition{ID: "dev-agent", Name: "开发"}); err != nil {
 				t.Fatal(err)
 			}
-			if err := f.s.PutWorkflow(domain.WorkflowDefinition{ID: "wf-dev", Name: "研发交付", ProjectID: "p", Status: "published", Nodes: []domain.WorkflowNode{{ID: "n1", Name: "开发", Type: "agent", AgentID: "dev-agent"}}}); err != nil {
+			if err := f.s.PutWorkflow(domain.WorkflowDefinition{ID: "wf-dev", Name: "研发交付", ProjectID: "loop", Status: "published", Nodes: []domain.WorkflowNode{{ID: "n1", Name: "开发", Type: "agent", AgentID: "dev-agent"}}}); err != nil {
 				t.Fatal(err)
 			}
 			issue, _ := f.s.Issue("iss-7")
@@ -579,7 +585,7 @@ func TestChatClarificationEdgePaths(t *testing.T) {
 	if err := f.s.PutAgent(domain.AgentDefinition{ID: "dev-agent", Name: "开发"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.s.PutWorkflow(domain.WorkflowDefinition{ID: "wf-dev", Name: "研发交付", ProjectID: "p", Status: "published", Nodes: []domain.WorkflowNode{{ID: "n1", Name: "开发", Type: "agent", AgentID: "dev-agent"}}}); err != nil {
+	if err := f.s.PutWorkflow(domain.WorkflowDefinition{ID: "wf-dev", Name: "研发交付", ProjectID: "loop", Status: "published", Nodes: []domain.WorkflowNode{{ID: "n1", Name: "开发", Type: "agent", AgentID: "dev-agent"}}}); err != nil {
 		t.Fatal(err)
 	}
 	issue, _ = f.s.Issue("iss-7")
@@ -652,10 +658,9 @@ func TestChatClarificationOnWeCom(t *testing.T) {
 	}
 }
 
-// A chat clarification runs as the bound account of the member who started
-// it, not the requirement's responsible person, and stops once that member
-// lost the project's execution permission. The platform clarification keeps
-// the responsible person.
+// A chat clarification runs as the bound account of the sender who started
+// it, not the requirement's responsible person, and stops once that account
+// lost the project. The platform clarification keeps the responsible person.
 func TestChatClarificationRunsAsTheStarter(t *testing.T) {
 	f := newClarifyChatFixture(t, domain.BotChannelDingTalk)
 	f.rounds = []map[string]any{clarifyQuestionsRound}
@@ -679,21 +684,17 @@ func TestChatClarificationRunsAsTheStarter(t *testing.T) {
 		t.Fatalf("platform clarification user = %+v %v", user, err)
 	}
 
-	project, _ := f.s.Project("p")
-	members := project.Members[:0]
-	for _, m := range project.Members {
-		if m.UserID != 43 {
-			members = append(members, m)
-		}
-	}
-	project.Members = members
+	// The project moves to another account: the starter is an outsider now
+	// and may not continue the clarification.
+	project, _ := f.s.Project("loop")
+	project.OwnerID = 42
 	f.s.PutProject(project)
 	if err := f.h.runBotClarifyRound(f.bot, sess, "补充：要短信"); err == nil || !strings.Contains(err.Error(), "发起澄清的成员不能继续") {
-		t.Fatalf("round after removal = %v", err)
+		t.Fatalf("round after the project moved = %v", err)
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if len(f.inputs) != 1 {
-		t.Fatalf("analysis ran after the starter was removed: %d rounds", len(f.inputs))
+		t.Fatalf("analysis ran after the starter lost the project: %d rounds", len(f.inputs))
 	}
 }

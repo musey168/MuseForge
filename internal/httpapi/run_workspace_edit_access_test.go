@@ -7,21 +7,18 @@ import (
 	"testing"
 )
 
-func TestWorkspaceEditAllowedCoversProjectRoles(t *testing.T) {
+// Workspace edit access follows the project owner: the account that holds
+// the project may edit, another account may not, and a platform admin may.
+func TestWorkspaceEditAllowedFollowsTheProjectOwner(t *testing.T) {
 	h, owner := workbenchFixture(t)
 	users := map[string]domain.User{"owner": owner}
-	for _, name := range []string{"editor", "viewer", "outsider", "admin"} {
+	for _, name := range []string{"other", "outsider", "admin"} {
 		if err := h.repo.PutUser(domain.User{LoginName: "ws-" + name}); err != nil {
 			t.Fatal(err)
 		}
 		users[name], _ = h.repo.UserByLoginName("ws-" + name)
 	}
 	if _, err := h.repo.GrantPlatformAdmin(users["admin"].LoginName); err != nil {
-		t.Fatal(err)
-	}
-	project, _ := h.repo.Project("workbench")
-	project.Members = []domain.ProjectMember{{UserID: users["editor"].ID, Role: "member"}, {UserID: users["viewer"].ID, Role: "Viewer"}}
-	if err := h.repo.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.repo.PutProject(domain.Project{ID: "unowned", Name: "Unowned"}); err != nil {
@@ -35,12 +32,11 @@ func TestWorkspaceEditAllowedCoversProjectRoles(t *testing.T) {
 		name, user, project string
 		want                bool
 	}{
-		{"owner", "owner", "workbench", true},
-		{"editor member", "editor", "workbench", true},
-		{"viewer member is case-insensitive", "viewer", "workbench", false},
+		{"the account that holds the project", "owner", "workbench", true},
+		{"another account", "other", "workbench", false},
 		{"outsider", "outsider", "workbench", false},
 		{"platform admin", "admin", "workbench", true},
-		{"unowned project without members", "outsider", "unowned", true},
+		{"unowned project", "outsider", "unowned", true},
 		{"missing project", "outsider", "missing", false},
 		{"platform admin on missing project", "admin", "missing", true},
 	}

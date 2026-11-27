@@ -95,7 +95,7 @@ func sponsorFixture(t *testing.T) (*repo.Store, domain.User) {
 	}
 	newcomer, _ := st.UserByLoginName("newcomer")
 	project, _ := st.Project("platform")
-	project.Members = append(project.Members, domain.ProjectMember{UserID: newcomer.ID, Role: "member"})
+	project.OwnerID = newcomer.ID
 	if err := st.PutProject(project); err != nil {
 		t.Fatal(err)
 	}

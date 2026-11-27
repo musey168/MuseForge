@@ -224,8 +224,7 @@ function runnerCopyCommand(btn,text,message){
 }
 function runnerProjectWritable(project){
   const userId=Number(state.currentUser?.id)||0;
-  return !!(userId>0&&project&&!project.archivedAt&&(Number(project.ownerId)===userId||
-    project.members?.some(m=>Number(m.userId)===userId&&String(m.role||'').trim().toLowerCase()!=='viewer')));
+  return !!(userId>0&&project&&!project.archivedAt&&Number(project.ownerId)===userId);
 }
 function platformRunnerCardHTML(runner,isDefault,canSetDefault){
   const name=escapeHTML(runner.name||'平台执行机器（云端）');
@@ -446,8 +445,8 @@ async function editRunnerSharing(runner){
   const projectIds=await afOpenDialog(modal=>{
     $('#confirmTitle').textContent=`共享 ${runner.name||runner.id}`;
     $('#confirmMessage').textContent=projects.length
-      ?'所选项目的可写成员可以在这台机器上运行代码，执行时使用各自的凭据。'
-      :'加入项目并获得写权限后，即可共享这台机器。';
+      ?'所选项目的负责人可以在这台机器上运行代码，执行时使用自己的凭据。'
+      :'你负责的项目可以共享这台机器。';
     const ok=$('#confirmOkBtn');
     ok.textContent='保存';
     ok.className='button primary';

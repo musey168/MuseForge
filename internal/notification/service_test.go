@@ -457,7 +457,7 @@ func TestWeComOriginDeliveryFollowsTheSendResult(t *testing.T) {
 }
 
 // A run started from a private WeCom chat reports back there only while
-// the sender is still bound to an account with access to the project.
+// the sender still holds the project.
 func TestWeComPrivateOriginRechecksTheSender(t *testing.T) {
 	svc, _, bot, run := serviceFixture(t)
 	bot.InteractionEnabled = true
@@ -479,7 +479,7 @@ func TestWeComPrivateOriginRechecksTheSender(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	code, err := svc.Store.ClaimBotBindingChallenge(token, 7, now)
+	code, err := svc.Store.ClaimBotBindingChallenge(token, 1, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -500,11 +500,11 @@ func TestWeComPrivateOriginRechecksTheSender(t *testing.T) {
 		got, _ := svc.Store.NotificationDelivery(id)
 		return got
 	}
-	if got := deliver("member"); got.Status != "sent" {
-		t.Fatalf("member = %+v", got)
+	if got := deliver("owner"); got.Status != "sent" {
+		t.Fatalf("owner = %+v", got)
 	}
 	project, _ := svc.Store.Project("p")
-	project.Members = []domain.ProjectMember{}
+	project.OwnerID = 7
 	if err := svc.Store.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
@@ -513,7 +513,7 @@ func TestWeComPrivateOriginRechecksTheSender(t *testing.T) {
 		t.Fatalf("removed member = %+v", got)
 	}
 	if _, err := svc.Store.BotInteraction(repo.BotMessageID(bot.ID, "chat-post:removed")); err == nil {
-		t.Fatal("a message was queued for a member without access")
+		t.Fatal("a message was queued for an account that no longer holds the project")
 	}
 }
 

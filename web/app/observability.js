@@ -434,8 +434,7 @@ function obsRunMatchesUser(run,uid){
 function obsUserChoices(){
   const me=Number(state.currentUser?.id||0);
   const project=currentProject();
-  const memberIds=new Set((project?.members||[]).map(m=>Number(m.userId)));
-  if(project?.ownerId)memberIds.add(Number(project.ownerId));
+  const memberIds=new Set(project?.ownerId?[Number(project.ownerId)]:[]);
   return [...(state.data.users||[])].sort((a,b)=>{
     const aid=Number(a.id),bid=Number(b.id);
     if(aid===me)return -1;
@@ -1614,12 +1613,12 @@ ${obsReportTable('交付明细',['单号','标题','LOOP','流程','责任人','
 
 function obsCanManageSources(){
   const p=currentProject(),u=state.currentUser;
-  return !!(p&&u&&!u.isGuest&&(u.isPlatformAdmin||Number(p.ownerId)===Number(u.id)||(p.members||[]).some(m=>Number(m.userId)===Number(u.id)&&m.role==='maintainer')));
+  return !!(p&&u&&!u.isGuest&&(u.isPlatformAdmin||Number(p.ownerId)===Number(u.id)));
 }
 async function openObsSources(){
   const project=currentProject();if(!project)return toast('请先选择项目');
   const dialog=document.createElement('dialog');dialog.className='obs-source-dialog';
-  const memberIds=new Set([project.ownerId,...(project.members||[]).map(m=>m.userId)].map(Number));
+  const memberIds=new Set(project.ownerId?[Number(project.ownerId)]:[]);
   const users=(state.data.users||[]).filter(u=>memberIds.has(Number(u.id)));
   const options=users.map(u=>`<option value="${Number(u.id)}">${escapeHTML(userDisplay(u))}</option>`).join('');
   dialog.setAttribute('aria-label',`${project.name} · 外部数据源`);

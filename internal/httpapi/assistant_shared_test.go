@@ -27,7 +27,7 @@ func sharedWorkbenchFixture(t *testing.T) (*assistantHandlers, domain.User, doma
 	b, _ := h.repo.UserByLoginName("peer")
 	out, _ := h.repo.UserByLoginName("outsider")
 	p, _ := h.repo.Project("workbench")
-	p.Members = append(p.Members, domain.ProjectMember{UserID: b.ID, Role: "member"})
+	p.OwnerID = b.ID
 	if err := h.repo.PutProject(p); err != nil {
 		t.Fatal(err)
 	}

@@ -25,12 +25,10 @@ func TestMySQLRunnerSharingPreservesGrantsAndClearsRevokedDefaults(t *testing.T)
 	t.Cleanup(func() {
 		_ = store.DeregisterRunner(runner.ID, time.Now().UTC())
 		_ = store.DB.Where("project_id IN ?", projects).Delete(&userProjectRunnerPrefRow{}).Error
-		_ = store.DB.Where("project_id IN ?", projects).Delete(&projectMemberRow{}).Error
 		_ = store.DB.Where("id IN ?", projects).Delete(&projectRow{}).Error
 	})
 	for _, id := range projects {
-		if err := store.PutProject(domain.Project{ID: id, Name: id, OwnerID: 1,
-}); err != nil {
+		if err := store.PutProject(domain.Project{ID: id, Name: id, OwnerID: 1}); err != nil {
 			t.Fatal(err)
 		}
 	}

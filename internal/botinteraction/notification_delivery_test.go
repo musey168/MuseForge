@@ -35,7 +35,7 @@ func TestWeComQueuedPrivateNotificationRechecksAccess(t *testing.T) {
 	if err := store.PutUser(domain.User{ID: 42, LoginName: "member"}); err != nil {
 		t.Fatal(err)
 	}
-	project := domain.Project{ID: bot.ProjectID, OwnerID: 1, }
+	project := domain.Project{ID: bot.ProjectID, OwnerID: 42}
 	if err := store.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestWeComQueuedPrivateNotificationRechecksAccess(t *testing.T) {
 		}
 	}
 	project, _ = store.Project(project.ID)
-	project.Members = []domain.ProjectMember{}
+	project.OwnerID = 7
 	if err := store.PutProject(project); err != nil {
 		t.Fatal(err)
 	}

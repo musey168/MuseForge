@@ -13,7 +13,9 @@ import (
 	"testing"
 )
 
-func TestProjectContentWritesRequireMembership(t *testing.T) {
+// The platform runs one account. A project write goes to the account that
+// holds the project; every other account is refused.
+func TestProjectContentWritesRequireTheAccountHoldingTheProject(t *testing.T) {
 	t.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
 	t.Setenv("AGENTFLOW_SCHEDULER_ENABLED", "false")
 	s, err := repo.OpenTest()
@@ -47,11 +49,9 @@ func TestProjectContentWritesRequireMembership(t *testing.T) {
 		return request(cookie, method, path, body).Code
 	}
 	session("admin")
-	owner, member, viewer, other := session("owner"), session("member"), session("viewer"), session("other")
+	owner, outsider, other := session("owner"), session("outsider"), session("other")
 	ownerUser, _ := s.UserByLoginName("owner")
-	memberUser, _ := s.UserByLoginName("member")
-	viewerUser, _ := s.UserByLoginName("viewer")
-	if err := s.PutProject(domain.Project{ID: "p1", Name: "P1", OwnerID: ownerUser.ID, }); err != nil {
+	if err := s.PutProject(domain.Project{ID: "p1", Name: "P1", OwnerID: ownerUser.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.PutProject(domain.Project{ID: "shared", Name: "Shared"}); err != nil {
@@ -60,13 +60,13 @@ func TestProjectContentWritesRequireMembership(t *testing.T) {
 
 	issue := fmt.Sprintf(`{"id":"i1","projectId":"p1","title":"Fix login","assigneeUserId":%d}`, ownerUser.ID)
 	if code := call(other, "POST", "/api/issues", issue); code != 403 {
-		t.Fatalf("non-member create issue: %d", code)
+		t.Fatalf("another account create issue: %d", code)
 	}
-	if code := call(viewer, "POST", "/api/issues", issue); code != 403 {
-		t.Fatalf("viewer create issue: %d", code)
+	if code := call(outsider, "POST", "/api/issues", issue); code != 403 {
+		t.Fatalf("another account create issue: %d", code)
 	}
-	if code := call(member, "POST", "/api/issues", issue); code != 200 {
-		t.Fatalf("member create issue: %d", code)
+	if code := call(owner, "POST", "/api/issues", issue); code != 200 {
+		t.Fatalf("the account holding the project creates the issue: %d", code)
 	}
 	t.Run("clarification catalog uses the responsible account", func(t *testing.T) {
 		const path = "/api/issues/i1/clarify-models"
@@ -75,12 +75,12 @@ func TestProjectContentWritesRequireMembership(t *testing.T) {
 		if _, err := s.UpdateUserCredentials(ownerUser.ID, repo.UserCredentialUpdate{CodexAPIKey: key, CodexModels: &models}); err != nil {
 			t.Fatal(err)
 		}
-		for _, cookie := range []*http.Cookie{other, viewer} {
+		for _, cookie := range []*http.Cookie{other, outsider} {
 			if code := call(cookie, "GET", path, ""); code != 403 {
 				t.Fatalf("clarification catalog requires project write access: %d", code)
 			}
 		}
-		w := request(member, "GET", path, "")
+		w := request(owner, "GET", path, "")
 		if w.Code != 200 || bytes.Contains(w.Body.Bytes(), []byte(key)) {
 			t.Fatalf("invalid clarification catalog response: %d", w.Code)
 		}
@@ -107,33 +107,20 @@ func TestProjectContentWritesRequireMembership(t *testing.T) {
 	if err := s.PutProject(domain.Project{ID: "ownerless-team", Name: "Ownerless team", }); err != nil {
 		t.Fatal(err)
 	}
-	if code := call(other, "POST", "/api/issues", `{"projectId":"ownerless-team","title":"Outsider idea"}`); code != 403 {
-		t.Fatalf("ownerless projects with members are limited to members: %d", code)
-	}
-	if code := call(member, "POST", "/api/issues", `{"projectId":"ownerless-team","title":"Member idea"}`); code != 200 {
-		t.Fatalf("member writes to ownerless team project: %d", code)
+	if code := call(other, "POST", "/api/issues", `{"projectId":"ownerless-team","title":"Outsider idea"}`); code != 200 {
+		t.Fatalf("ownerless projects stay open to the account: %d", code)
 	}
 
-	members := fmt.Sprintf(`[{"userId":%d,"role":" Maintainer "},{"userId":%d}]`, memberUser.ID, viewerUser.ID)
-	before, _ := s.Project("p1")
-	if code := call(owner, "PUT", "/api/projects", `{"id":"p1","name":"P1","membersVersion":"`+before.MembersVersion+`","members":`+members+`}`); code != 200 {
-		t.Fatalf("owner saves member roles: %d", code)
+	// The project response carries no member roster, no member roles and no
+	// roster version any more.
+	list := request(owner, "GET", "/api/projects", "")
+	if list.Code != 200 {
+		t.Fatalf("project list: %d", list.Code)
 	}
-	saved, _ := s.Project("p1")
-	roles := map[int64]string{}
-	for _, m := range saved.Members {
-		roles[m.UserID] = m.Role
-	}
-	if roles[memberUser.ID] != "maintainer" || roles[viewerUser.ID] != "member" {
-		t.Fatalf("member roles not normalized: %+v", saved.Members)
-	}
-	bad := fmt.Sprintf(`{"id":"p1","name":"P1","members":[{"userId":%d,"role":"admin"}]}`, memberUser.ID)
-	if code := call(owner, "PUT", "/api/projects", bad); code != 400 {
-		t.Fatalf("unknown member role accepted: %d", code)
-	}
-	restore := fmt.Sprintf(`{"id":"p1","name":"P1","membersVersion":%q,"members":[{"userId":%d,"role":"member"},{"userId":%d,"role":"viewer"}]}`, saved.MembersVersion, memberUser.ID, viewerUser.ID)
-	if code := call(owner, "PUT", "/api/projects", restore); code != 200 {
-		t.Fatalf("restore member roles: %d", code)
+	for _, field := range []string{`"members"`, `"membersVersion"`, `"businessDomainId"`} {
+		if bytes.Contains(list.Body.Bytes(), []byte(field)) {
+			t.Fatalf("the project response still carries %s: %s", field, list.Body.String())
+		}
 	}
 
 	agent := `{"id":"a1","projectId":"p1","name":"Dev","instructions":"build"}`
@@ -165,8 +152,8 @@ func TestProjectContentWritesRequireMembership(t *testing.T) {
 	if code := call(other, "DELETE", "/api/runs/r1", ""); code != 403 {
 		t.Fatalf("non-member delete run: %d", code)
 	}
-	if code := call(member, "DELETE", "/api/runs/r1", ""); code != 200 {
-		t.Fatalf("member delete run: %d", code)
+	if code := call(owner, "DELETE", "/api/runs/r1", ""); code != 200 {
+		t.Fatalf("the account holding the project deletes the run: %d", code)
 	}
 
 	rule := `{"id":"rule1","projectId":"p1","name":"Style","content":"gofmt"}`
@@ -187,21 +174,21 @@ func TestProjectContentWritesRequireMembership(t *testing.T) {
 	}
 	const sandboxBody = `{"id":"sb-project","projectId":"p1","name":"Docker","driver":"docker","dockerfile":{"content":"FROM alpine"},"privileged":%t}`
 	enable := fmt.Sprintf(sandboxBody, true)
-	if code := call(viewer, "PUT", "/api/sandboxes", enable); code != 403 {
-		t.Fatalf("viewer create privileged sandbox: %d", code)
+	if code := call(outsider, "PUT", "/api/sandboxes", enable); code != 403 {
+		t.Fatalf("another account create privileged sandbox: %d", code)
 	}
-	if code := call(member, "PUT", "/api/sandboxes", enable); code != 200 {
-		t.Fatalf("project member create privileged sandbox: %d", code)
+	if code := call(owner, "PUT", "/api/sandboxes", enable); code != 200 {
+		t.Fatalf("the account holding the project creates a privileged sandbox: %d", code)
 	}
 	if saved, ok := s.Sandbox("sb-project"); !ok || !saved.Privileged {
 		t.Fatalf("privileged mode was not saved: %+v", saved)
 	}
 	disable := fmt.Sprintf(sandboxBody, false)
 	if code := call(other, "PUT", "/api/sandboxes", disable); code != 403 {
-		t.Fatalf("non-member edit project sandbox: %d", code)
+		t.Fatalf("another account edit project sandbox: %d", code)
 	}
-	if code := call(member, "PUT", "/api/sandboxes", disable); code != 200 {
-		t.Fatalf("project member disable privileged mode: %d", code)
+	if code := call(owner, "PUT", "/api/sandboxes", disable); code != 200 {
+		t.Fatalf("the account holding the project disables privileged mode: %d", code)
 	}
 	if saved, ok := s.Sandbox("sb-project"); !ok || saved.Privileged {
 		t.Fatalf("disabling privileged mode was not saved: %+v", saved)

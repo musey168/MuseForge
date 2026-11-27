@@ -25,7 +25,7 @@ func TestProjectDeleteArchivesAndRestores(t *testing.T) {
 	}
 	t.Cleanup(s.Close)
 	users := map[string]domain.User{}
-	for _, login := range []string{"pd-admin", "pd-owner", "pd-member"} {
+	for _, login := range []string{"pd-admin", "pd-owner", "pd-outsider"} {
 		u := domain.User{LoginName: login}
 		if login == "pd-admin" {
 			u.PlatformRole = domain.PlatformRoleAdmin
@@ -35,8 +35,8 @@ func TestProjectDeleteArchivesAndRestores(t *testing.T) {
 		}
 		users[login], _ = s.UserByLoginName(login)
 	}
-	admin, owner, member := users["pd-admin"], users["pd-owner"], users["pd-member"]
-	if err := s.PutProject(domain.Project{ID: "okr-system", Name: "OKR系统", OwnerID: owner.ID, }); err != nil {
+	admin, owner, outsider := users["pd-admin"], users["pd-owner"], users["pd-outsider"]
+	if err := s.PutProject(domain.Project{ID: "okr-system", Name: "OKR系统", OwnerID: owner.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.PutProject(domain.Project{ID: "keep", Name: "保留", OwnerID: owner.ID}); err != nil {
@@ -48,13 +48,13 @@ func TestProjectDeleteArchivesAndRestores(t *testing.T) {
 	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
 	listed := func() []string {
 		var ids []string
-		for _, p := range requestJSONAuthed[[]domain.Project](t, h, member, http.MethodGet, "/api/projects", nil, 200) {
+		for _, p := range requestJSONAuthed[[]domain.Project](t, h, outsider, http.MethodGet, "/api/projects", nil, 200) {
 			ids = append(ids, p.ID)
 		}
 		return ids
 	}
 
-	requestJSONAuthed[map[string]any](t, h, member, http.MethodDelete, "/api/projects/okr-system", nil, 403)
+	requestJSONAuthed[map[string]any](t, h, outsider, http.MethodDelete, "/api/projects/okr-system", nil, 403)
 	requestJSONAuthed[map[string]any](t, h, owner, http.MethodDelete, "/api/projects/missing", nil, 404)
 
 	// Unfinished runs and enabled schedules block deletion.
@@ -99,9 +99,9 @@ func TestProjectDeleteArchivesAndRestores(t *testing.T) {
 		t.Fatal("save body archived a project")
 	}
 
-	requestJSONAuthed[map[string]any](t, h, member, http.MethodPost, "/api/projects/okr-system/restore", nil, 403)
+	requestJSONAuthed[map[string]any](t, h, outsider, http.MethodPost, "/api/projects/okr-system/restore", nil, 403)
 	restored := requestJSONAuthed[domain.Project](t, h, admin, http.MethodPost, "/api/projects/okr-system/restore", nil, 200)
-	if restored.ArchivedAt != nil || restored.Name != "OKR系统" || len(restored.Members) != 1 {
+	if restored.ArchivedAt != nil || restored.Name != "OKR系统" || restored.OwnerID != owner.ID {
 		t.Fatalf("restore lost data: %+v", restored)
 	}
 	if ids := listed(); !strings.Contains(strings.Join(ids, ","), "okr-system") {

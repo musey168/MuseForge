@@ -90,7 +90,7 @@ func TestAssistantChatRecoversWithoutJSONFollowup(t *testing.T) {
 		t.Fatal("seed user")
 	}
 	project, _ := st.Project("platform")
-	project.Members = append(project.Members, domain.ProjectMember{UserID: user.ID, Role: "member"})
+	project.OwnerID = user.ID
 	if err := st.PutProject(project); err != nil {
 		t.Fatal(err)
 	}

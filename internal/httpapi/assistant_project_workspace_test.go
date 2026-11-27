@@ -14,12 +14,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestProjectParticipantsKeepConversationToolsAndWorkspace(t *testing.T) {
-	for _, role := range []string{"member", "viewer"} {
-		t.Run(role, func(t *testing.T) {
+func TestProjectOwnerKeepsConversationToolsAndWorkspace(t *testing.T) {
+	for _, name := range []string{"owner"} {
+		t.Run(name, func(t *testing.T) {
 			h, owner, peer, outsider, _ := sharedWorkbenchFixture(t)
 			project, _ := h.repo.Project("workbench")
-			project.Members = []domain.ProjectMember{{UserID: peer.ID, Role: role}}
+			project.OwnerID = peer.ID
 			if err := h.repo.PutProject(project); err != nil {
 				t.Fatal(err)
 			}
@@ -95,7 +95,7 @@ func TestProjectParticipantsKeepConversationToolsAndWorkspace(t *testing.T) {
 func TestConversationWorkspaceInheritsProjectAccessForRunOperations(t *testing.T) {
 	h, _, peer, _, _ := sharedWorkbenchFixture(t)
 	project, _ := h.repo.Project("workbench")
-	project.Members = []domain.ProjectMember{{UserID: peer.ID, Role: "viewer"}}
+	project.OwnerID = peer.ID
 	if err := h.repo.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestProjectParticipantOpensAndSwitchesSharedWorkspace(t *testing.T) {
 	}
 	peer, _ := h.repo.UserByLoginName("workspace-peer")
 	project, _ := h.repo.Project(session.ProjectID)
-	project.Members = []domain.ProjectMember{{UserID: peer.ID, Role: "viewer"}}
+	project.OwnerID = peer.ID
 	if err := h.repo.PutProject(project); err != nil {
 		t.Fatal(err)
 	}

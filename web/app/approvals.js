@@ -123,12 +123,11 @@ function humanGateSectionsHTML(nr,run,node){
   }
   return sections.join('')+approvalArtifactLinksHTML(run,node);
 }
-// The server rejects write actions from readers; hide the controls so a
-// viewer does not have to click through a 403 to find out. Mirrors
-// runWriteGuard/projectMemberWrites: the run's project is its execution
-// context project, else its requirement's project; runs without a project,
-// projects this client cannot see, and projects with neither an owner nor
-// members are writable by any signed-in user.
+// The server rejects write actions from readers; hide the controls so an
+// outsider does not have to click through a 403 to find out. The run's
+// project is its execution context project, else its requirement's project;
+// runs without a project and projects this client cannot see stay writable,
+// and only the account that holds the project may decide.
 function runWriteProjectId(run){
   const ctx=run?.executionContext||{};
   const own=String(ctx.projectId||'').trim();
@@ -145,16 +144,14 @@ function runDecisionBlock(run){
   const projectId=runWriteProjectId(run);
   if(!projectId)return '';
   const project=(state.data?.projects||[]).find(p=>p.id===projectId);
-  if(!project||(!Number(project.ownerId)&&!(project.members||[]).length))return '';
+  if(!project||!Number(project.ownerId))return '';
   const uid=Number(user.id);
   if(uid>0&&Number(project.ownerId)===uid)return '';
-  const member=(project.members||[]).find(m=>Number(m.userId)===uid);
-  if(!member)return 'outsider';
-  return String(member.role||'').trim().toLowerCase()==='viewer'?'viewer':'';
+  return 'outsider';
 }
 function canDecideRun(run){return !runDecisionBlock(run)}
 function runReadOnlyHTML(run){
-  const text={guest:'登录后才能审批或取消这次运行。',outsider:'你不是该项目的成员，不能审批或取消这次运行。',viewer:'你是该项目的只读成员，不能审批或取消这次运行。'}[runDecisionBlock(run)]||'';
+  const text={guest:'登录后才能审批或取消这次运行。',outsider:'你不是该项目的负责人，不能审批或取消这次运行。'}[runDecisionBlock(run)]||'';
   return `<div class="human-decision"><div class="human-gate-brief"><div class="callout-section"><strong class="callout-label">只读</strong><p class="callout-text">${text}</p></div></div></div>`;
 }
 // Waiting starts when the gate asked a human, not when the run started.

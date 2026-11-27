@@ -23,8 +23,8 @@ type nodeQuestionFixture struct {
 const nodeQuestionText = "登录方式只支持手机号，还是也要支持邮箱？"
 
 // newNodeQuestionFixture starts from a run launched in a group chat of a
-// Bot of the given channel: ou-member (project member) and ou-viewer
-// (viewer) are bound.
+// Bot of the given channel: ou-member (the account that holds the project)
+// and ou-outsider (another account) are bound.
 func newNodeQuestionFixture(t *testing.T, channel string) *nodeQuestionFixture {
 	t.Helper()
 	s, h, bot := botFixture(t)
@@ -33,12 +33,13 @@ func newNodeQuestionFixture(t *testing.T, channel string) *nodeQuestionFixture {
 		t.Fatal(err)
 	}
 	bot, _ = s.NotificationBot(bot.ID)
-	s.PutUser(domain.User{ID: 44, LoginName: "viewer-user"})
+	s.PutUser(domain.User{ID: 44, LoginName: "outsider-user"})
+	// The account that answers the question holds the project.
 	project, _ := s.Project("p")
-	project.Members = append(project.Members, domain.ProjectMember{UserID: 44, Role: "viewer"})
+	project.OwnerID = 43
 	s.PutProject(project)
 	bindBotTestUser(t, s, bot, "ou-member", 43)
-	bindBotTestUser(t, s, bot, "ou-viewer", 44)
+	bindBotTestUser(t, s, bot, "ou-outsider", 44)
 	if err := s.PutIssue(domain.Issue{ID: "iss-q", ProjectID: "p", Number: 9, Title: "登录优化"}); err != nil {
 		t.Fatal(err)
 	}
@@ -202,15 +203,15 @@ func TestNodeQuestionOfCancelledRunIsRefused(t *testing.T) {
 }
 
 // Answers run as the sender's platform account: unbound senders and
-// project viewers cannot answer.
-func TestNodeAnswerChecksProjectPermission(t *testing.T) {
+// accounts that do not hold the project cannot answer.
+func TestNodeAnswerChecksProjectOwnership(t *testing.T) {
 	f := newNodeQuestionFixture(t, domain.BotChannelFeishu)
 	f.ask("run-q", nodeQuestionText)
 	if reply := f.say("ou-stranger", "回答：都要"); !strings.Contains(reply, "关联你的平台账号") {
 		t.Fatalf("unbound = %q", reply)
 	}
-	if reply := f.say("ou-viewer", "回答：都要"); !strings.Contains(reply, "没有该项目的执行权限") {
-		t.Fatalf("viewer = %q", reply)
+	if reply := f.say("ou-outsider", "回答：都要"); !strings.Contains(reply, "你不是该项目的负责人") {
+		t.Fatalf("outsider = %q", reply)
 	}
 	if node := f.node("run-q"); node.Status != "waiting_approval" || node.Feedback != "" {
 		t.Fatalf("node = %+v", node)
@@ -253,7 +254,7 @@ func TestPrivateChatAnswersNodeQuestion(t *testing.T) {
 		t.Fatalf("question = %+v", sent)
 	}
 	f.conv = domain.BotConversation{ID: "conv-other", BotID: f.bot.ID, ChatID: "cid_other", ChatType: "single"}
-	if reply := f.say("ou-viewer", "回答：都要"); !strings.Contains(reply, "没有待回答的节点问题") {
+	if reply := f.say("ou-outsider", "回答：都要"); !strings.Contains(reply, "没有待回答的节点问题") {
 		t.Fatalf("other chat = %q", reply)
 	}
 	f.conv = domain.BotConversation{ID: "conv-p2p", BotID: f.bot.ID, ChatID: "cid_p2p", ChatType: "single"}

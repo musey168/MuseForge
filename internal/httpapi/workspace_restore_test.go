@@ -242,8 +242,9 @@ func TestAsyncWorkspaceRestoreDoesNotAcknowledgeMissingSnapshot(t *testing.T) {
 func TestWorkspaceRestoreEligibilityUsesWorkspaceEditAccess(t *testing.T) {
 	t.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
 	a, owner, member, viewer, _ := sharedWorkbenchFixture(t)
+	// The account that restores the workspace holds the project.
 	project, _ := a.repo.Project("workbench")
-	project.Members = append(project.Members, domain.ProjectMember{UserID: viewer.ID, Role: "viewer"})
+	project.OwnerID = member.ID
 	if err := a.repo.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
@@ -284,9 +285,9 @@ func TestWorkspaceRestoreEligibilityUsesWorkspaceEditAccess(t *testing.T) {
 		user       domain.User
 		restorable bool
 	}{
-		{"viewer", viewer, false},
-		{"member", member, true},
-		{"owner", owner, true},
+		{"another account", viewer, false},
+		{"the previous owner", owner, false},
+		{"the account that holds the project", member, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, path := range []string{workspace, "/api/runs/shared-child/workspace"} {
@@ -308,12 +309,17 @@ func TestWorkspaceRestoreEligibilityUsesWorkspaceEditAccess(t *testing.T) {
 	request.Request.Header.Set("Prefer", "respond-async")
 	router.ServeHTTP(response, request.Request)
 	if response.Code != http.StatusForbidden {
-		t.Fatalf("viewer restore: %d %s", response.Code, response.Body)
+		t.Fatalf("another account restore: %d %s", response.Code, response.Body)
 	}
 	request, response = workbenchContext(owner, http.MethodPost, workspace+"/restore", bytes.NewBuffer(nil))
 	router.ServeHTTP(response, request.Request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("the account that lost the project restored: %d %s", response.Code, response.Body)
+	}
+	request, response = workbenchContext(member, http.MethodPost, workspace+"/restore", bytes.NewBuffer(nil))
+	router.ServeHTTP(response, request.Request)
 	if response.Code != http.StatusOK {
-		t.Fatalf("owner restore: %d %s", response.Code, response.Body)
+		t.Fatalf("the account that holds the project restore: %d %s", response.Code, response.Body)
 	}
 }
 
@@ -322,8 +328,9 @@ func TestSOPWorkspaceRestoresConversationCheckpoint(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			t.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
 			a, owner, _, viewer, _ := sharedWorkbenchFixture(t)
+			// The account that runs the conversation holds the project.
 			project, _ := a.repo.Project("workbench")
-			project.Members = append(project.Members, domain.ProjectMember{UserID: viewer.ID, Role: "viewer"})
+			project.OwnerID = owner.ID
 			if err := a.repo.PutProject(project); err != nil {
 				t.Fatal(err)
 			}

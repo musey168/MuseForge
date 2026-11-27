@@ -35,7 +35,7 @@ func TestWorkspaceOpenRefusesSOPWorkspaceForViewer(t *testing.T) {
 	}
 	viewer, _ := h.repo.UserByLoginName("ws-viewer")
 	project, _ := h.repo.Project("workbench")
-	project.Members = append(project.Members, domain.ProjectMember{UserID: viewer.ID, Role: "viewer"})
+	project.OwnerID = viewer.ID
 	if err := h.repo.PutProject(project); err != nil {
 		t.Fatal(err)
 	}

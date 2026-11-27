@@ -16,14 +16,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestWorkspacePreparationAPISeparatesReadersAndWriters(t *testing.T) {
-	a, owner, peer, out, _ := sharedWorkbenchFixture(t)
+// Workspace preparation follows the project owner: the account that holds
+// the project reads the status and runs the preparation, another account may
+// do neither.
+func TestWorkspacePreparationAPIFollowsTheProjectOwner(t *testing.T) {
+	a, _, peer, out, _ := sharedWorkbenchFixture(t)
 	if err := a.repo.PutUser(domain.User{LoginName: "read-only-workspace"}); err != nil {
 		t.Fatal(err)
 	}
-	viewer, _ := a.repo.UserByLoginName("read-only-workspace")
+	other, _ := a.repo.UserByLoginName("read-only-workspace")
+	// The account that prepares the workspace holds the project.
 	project, _ := a.repo.Project("workbench")
-	project.Members = append(project.Members, domain.ProjectMember{UserID: viewer.ID, Role: "viewer"})
+	project.OwnerID = peer.ID
 	if err := a.repo.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
@@ -49,14 +53,17 @@ func TestWorkspacePreparationAPISeparatesReadersAndWriters(t *testing.T) {
 		h.workspacePreparation(c)
 		return w.Code, w.Body.String()
 	}
+	if code, body := call(peer, "GET"); code != 200 || !strings.Contains(body, "unprepared") {
+		t.Fatal(code, body)
+	}
 	if code, _ := call(out, "GET"); code != 403 {
 		t.Fatal("outsider could read status", code)
 	}
-	if code, body := call(viewer, "GET"); code != 200 || !strings.Contains(body, "unprepared") {
-		t.Fatal(code, body)
+	if code, _ := call(other, "GET"); code != 403 {
+		t.Fatal("another account could read status", code)
 	}
-	if code, _ := call(viewer, "POST"); code != 403 {
-		t.Fatal("viewer could execute preparation", code)
+	if code, _ := call(other, "POST"); code != 403 {
+		t.Fatal("another account could execute preparation", code)
 	}
 	code, body := call(peer, "POST")
 	if code != 200 || !strings.Contains(body, `"status":"ready"`) {
@@ -65,7 +72,7 @@ func TestWorkspacePreparationAPISeparatesReadersAndWriters(t *testing.T) {
 	if strings.Contains(body, "secret-internal-output") || strings.Contains(body, "Fingerprint") || strings.Contains(body, "environment\":") {
 		t.Fatal("preparation internals leaked", body)
 	}
-	if code, body = call(owner, "GET"); code != 200 || !strings.Contains(body, `"status":"ready"`) {
+	if code, body = call(peer, "GET"); code != 200 || !strings.Contains(body, `"status":"ready"`) {
 		t.Fatal(code, body)
 	}
 	current, _ := a.repo.RunState(run.ID)

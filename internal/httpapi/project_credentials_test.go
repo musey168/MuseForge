@@ -96,6 +96,9 @@ func TestProjectCredentialsHTTPAndSessionBinding(t *testing.T) {
 	}
 }
 
+// The session owner may always clear its own credential selection, even
+// after it lost the project; only the account that holds the project may
+// bind the credential in the first place.
 func TestSessionOwnerCanClearProjectCredentialsAfterLosingAccess(t *testing.T) {
 	t.Setenv("AGENTFLOW_PROJECT_CREDENTIAL_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
 	h, owner := workbenchFixture(t)
@@ -112,14 +115,24 @@ func TestSessionOwnerCanClearProjectCredentialsAfterLosingAccess(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	for _, role := range []string{"viewer", "removed"} {
-		t.Run(role, func(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		id   string
+		held bool
+	}{
+		{"the account holds the project", "credential-chat-holder", true},
+		{"the account does not hold the project", "credential-chat-outsider", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			project, _ := h.repo.Project(projectID)
-			project.Members = []domain.ProjectMember{{UserID: member.ID, Role: "member"}}
+			project.OwnerID = owner.ID
+			if tc.held {
+				project.OwnerID = member.ID
+			}
 			if err := h.repo.PutProject(project); err != nil {
 				t.Fatal(err)
 			}
-			session := domain.AssistantSession{ID: "credential-chat-" + role, ProjectID: project.ID}
+			session := domain.AssistantSession{ID: tc.id, ProjectID: project.ID}
 			if err := h.repo.PutAssistantSession(member.ID, session); err != nil {
 				t.Fatal(err)
 			}
@@ -130,14 +143,18 @@ func TestSessionOwnerCanClearProjectCredentialsAfterLosingAccess(t *testing.T) {
 				h.sessionProjectCredentials(c)
 				return rec.Code
 			}
-			if code := bind(member, []string{credentialID}); code != http.StatusOK {
-				t.Fatalf("bind as member: %d", code)
+			// Only the account that holds the project may bind the credential.
+			code := bind(member, []string{credentialID})
+			if tc.held {
+				if code != http.StatusOK {
+					t.Fatalf("bind as the account that holds the project: %d", code)
+				}
+			} else if code != http.StatusForbidden {
+				t.Fatalf("bind without the project: %d", code)
 			}
+			// The project moves to another account: the session owner lost it.
 			project, _ = h.repo.Project(projectID)
-			project.Members = []domain.ProjectMember{}
-			if role == "viewer" {
-				project.Members = []domain.ProjectMember{{UserID: member.ID, Role: role}}
-			}
+			project.OwnerID = owner.ID
 			if err := h.repo.PutProject(project); err != nil {
 				t.Fatal(err)
 			}
@@ -166,17 +183,19 @@ func TestConversationContinuesWhenProjectCredentialsChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner, _ := h.repo.UserByLoginName("credential-project-owner")
-	setRole := func(t *testing.T, role string) {
+	setHolder := func(t *testing.T, held bool) {
 		t.Helper()
 		project, _ := h.repo.Project(session.ProjectID)
 		project.OwnerID = owner.ID
-		project.Members = []domain.ProjectMember{{UserID: user.ID, Role: role}}
+		if held {
+			project.OwnerID = user.ID
+		}
 		if err := h.repo.PutProject(project); err != nil {
 			t.Fatal(err)
 		}
 	}
-	setRole(t, "member")
-	// A platform Runner stays available after the member loses the credential grant.
+	setHolder(t, true)
+	// A platform Runner stays available after the account loses the project.
 	runner, _ := h.repo.Runner(target.RunnerID)
 	runner.OwnerUserID = 0
 	if err := h.repo.PutRunner(runner); err != nil {
@@ -338,23 +357,33 @@ func TestConversationContinuesWhenProjectCredentialsChange(t *testing.T) {
 	availableEnv := map[string]string{"ROTATED_TOKEN": "fixture-replacement", "DISABLED_TOKEN": "fixture-disabled"}
 	turn(t, availableEnv, "DISABLED_TOKEN、ROTATED_TOKEN")
 	quietTurn(t, availableEnv)
-	t.Run("viewer downgrade", func(t *testing.T) {
-		setRole(t, "viewer")
-		prompt := turn(t, nil, "本轮无权使用已绑定的项目凭据", "继续处理用户请求")
-		for _, name := range []string{"ROTATED_TOKEN", "DELETED_TOKEN", "DISABLED_TOKEN"} {
-			if strings.Contains(prompt, name) {
-				t.Errorf("viewer CLI received a credential variable name %q", name)
-			}
+	t.Run("the account loses the project", func(t *testing.T) {
+		setHolder(t, false)
+		// The account does not hold the project any more: it may not
+		// continue the conversation, and the stored bindings stay.
+		old, _ := h.repo.AssistantSession(user.ID, session.ID)
+		messages := old.Messages
+		if len(messages) == 0 || messages[len(messages)-1].Role != "user" {
+			messages = append(messages, assistantMessage{Role: "user", Content: "你好"})
 		}
-		quietTurn(t, nil)
-		editLastTurn(t)
-		quietTurn(t, nil)
+		body, err := json.Marshal(assistantRequest{
+			ProjectID: session.ProjectID, SessionID: session.ID,
+			Messages: messages,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		c, rec := workbenchContext(user, http.MethodPost, "/api/assistant/generations", bytes.NewBuffer(body))
+		h.startGeneration(c)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("the account that lost the project must not continue: %d %s", rec.Code, rec.Body.String())
+		}
 		saved, _ := h.repo.AssistantSession(user.ID, session.ID)
 		if !slices.Equal(saved.ProjectCredentialIDs, session.ProjectCredentialIDs) {
-			t.Fatal("viewer turn changed the stored bindings")
+			t.Fatal("the refused turn changed the stored bindings")
 		}
-		setRole(t, "member")
-		turn(t, availableEnv, "DISABLED_TOKEN、ROTATED_TOKEN")
+		setHolder(t, true)
+		turn(t, availableEnv, "DELETED_TOKEN、ROTATED_TOKEN")
 		quietTurn(t, availableEnv)
 	})
 }

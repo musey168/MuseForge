@@ -164,7 +164,7 @@ func joinScheduledProject(t *testing.T, st *repo.Store, projectID string, userID
 	if !ok {
 		t.Fatalf("project %s missing", projectID)
 	}
-	p.Members = append(p.Members, domain.ProjectMember{UserID: userID, Role: "member"})
+	p.OwnerID = userID
 	if err := st.PutProject(p); err != nil {
 		t.Fatal(err)
 	}

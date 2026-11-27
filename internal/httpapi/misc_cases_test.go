@@ -334,49 +334,9 @@ func TestMiscProjectPlaybooksPermissionsAndAssignments(t *testing.T) {
 		t.Fatalf("bad project playbook = %d: %s", rec.Code, rec.Body.String())
 	}
 	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodPost, "/api/projects", map[string]any{
-		"id": "cvb-domain-bypass", "name": "bad", "businessDomainId": "missing",
-	}); rec.Code != http.StatusBadRequest {
-		t.Fatalf("business domain bypass = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodPost, "/api/projects", map[string]any{
 		"id": "cvb-tapd-clear-new", "name": "clear", "tapdClear": true,
 	}); rec.Code != http.StatusOK {
 		t.Fatalf("new TAPD clear project = %d: %s", rec.Code, rec.Body.String())
-	}
-
-	if rec := cvBMiscRequestAs(t, f, outsider, http.MethodGet, "/api/projects/cvb-owned/business-domain/history", nil); rec.Code != http.StatusForbidden {
-		t.Fatalf("forbidden history = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodGet, "/api/projects/missing/business-domain/history", nil); rec.Code != http.StatusNotFound {
-		t.Fatalf("missing assignment project = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodPut, "/api/projects/cvb-owned/business-domain", map[string]any{
-		"reason": strings.Repeat("界", 501),
-	}); rec.Code != http.StatusBadRequest {
-		t.Fatalf("long assignment reason = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodPut, "/api/projects/cvb-owned/business-domain", map[string]any{
-		"businessDomainId": "missing-domain",
-	}); rec.Code != http.StatusNotFound {
-		t.Fatalf("missing assignment domain = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodPut, "/api/business-domains", map[string]any{
-		"id": "cvb-misc-domain", "name": "misc domain", "active": true,
-	}); rec.Code != http.StatusOK {
-		t.Fatalf("create domain = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodPut, "/api/projects/cvb-owned/business-domain", map[string]any{
-		"businessDomainId": "cvb-misc-domain", "reason": "assign",
-	}); rec.Code != http.StatusOK {
-		t.Fatalf("assign domain = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodGet, "/api/projects/cvb-owned/business-domain/history", nil); rec.Code != http.StatusOK {
-		t.Fatalf("assignment history = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodPut, "/api/projects/cvb-owned/business-domain", map[string]any{
-		"expectedDomainId": "wrong",
-	}); rec.Code != http.StatusConflict {
-		t.Fatalf("assignment conflict = %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -424,10 +384,12 @@ func TestMiscRoomAuthorizationRosterAndSuccessHTTP(t *testing.T) {
 		body   any
 		want   int
 	}{
-		{viewer, http.MethodGet, base, nil, http.StatusOK},
+		{viewer, http.MethodGet, base, nil, http.StatusForbidden},
 		{viewer, http.MethodPost, base + "/messages", map[string]any{"body": "no"}, http.StatusForbidden},
-		{member, http.MethodPost, base + "/messages", map[string]any{"body": "yes"}, http.StatusCreated},
+		{member, http.MethodPost, base + "/messages", map[string]any{"body": "yes"}, http.StatusForbidden},
 		{outsider, http.MethodGet, base, nil, http.StatusForbidden},
+		{owner, http.MethodGet, base, nil, http.StatusOK},
+		{owner, http.MethodPost, base + "/messages", map[string]any{"body": "yes"}, http.StatusCreated},
 		{owner, http.MethodPost, base + "/issues", map[string]any{"title": "new issue", "description": "work", "workflowId": "cvb-room-wf"}, http.StatusCreated},
 	} {
 		rec := cvBMiscRequestAs(t, f, tc.user, tc.method, tc.path, tc.body)
@@ -441,13 +403,13 @@ func TestMiscRoomAuthorizationRosterAndSuccessHTTP(t *testing.T) {
 		t.Fatalf("missing roster = %+v", roster)
 	}
 	roster := h.projectRoster(project.ID)
-	if len(roster) != 4 || roster[0].Name != "owner(所有者)" || roster[3].Name != "中文名" {
+	if len(roster) != 1 || roster[0].Name != "owner(所有者)" {
 		t.Fatalf("roster = %+v", roster)
 	}
 	views := h.roomViews([]domain.ChatRoom{
 		{ID: "one", ProjectID: project.ID}, {ID: "two", ProjectID: project.ID},
 	})
-	if len(views) != 2 || len(views[0].Members) != 4 || len(h.roomView(domain.ChatRoom{ProjectID: project.ID}).Members) != 4 {
+	if len(views) != 2 || len(views[0].Members) != 1 || len(h.roomView(domain.ChatRoom{ProjectID: project.ID}).Members) != 1 {
 		t.Fatalf("room views = %+v", views)
 	}
 

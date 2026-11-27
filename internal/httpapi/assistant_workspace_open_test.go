@@ -106,7 +106,7 @@ func TestConversationWorkspaceOpensBindsAndIsReused(t *testing.T) {
 	}
 	viewer, _ := h.repo.UserByLoginName("viewer")
 	project, _ := h.repo.Project("workbench")
-	project.Members = []domain.ProjectMember{{UserID: viewer.ID, Role: "viewer"}}
+	project.OwnerID = viewer.ID
 	if err := h.repo.PutProject(project); err != nil {
 		t.Fatal(err)
 	}

@@ -52,17 +52,22 @@ func botTestToolSession(t *testing.T, userID int64) *AgentToolSession {
 	return nil
 }
 
-// Removing project access or unbinding takes effect on the next turn.
+// Losing the project or unbinding takes effect on the next turn.
 func TestBotRevocationAppliesToNextTurn(t *testing.T) {
 	s, h, bot := botFixture(t)
+	// The sender's account holds the project.
+	project, _ := s.Project("p")
+	project.OwnerID = 43
+	s.PutProject(project)
 	if _, err := h.botExecutionUser(bot, "new-wecom-user"); err != nil {
 		t.Fatal(err)
 	}
-	project, _ := s.Project("p")
-	project.Members = []domain.ProjectMember{}
+	// The project moves to another account: the sender is an outsider now.
+	project, _ = s.Project("p")
+	project.OwnerID = 42
 	s.PutProject(project)
 	if _, err := h.botExecutionUser(bot, "new-wecom-user"); err == nil {
-		t.Fatal("removed member kept execution rights")
+		t.Fatal("the account that lost the project kept execution rights")
 	}
 	binding, _ := s.BotUserBinding(bot.IdentityScope(), "bound-member")
 	if err := s.RevokeBotUserBinding(binding.ID, binding.UserID, time.Now().UTC()); err != nil {

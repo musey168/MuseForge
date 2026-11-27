@@ -452,7 +452,7 @@ func (h *assistantHandlers) generationDiagnostics(c *gin.Context) {
 		return
 	}
 	// Like attachments outside the transcript, error excerpts require project
-	// membership. Public project-conversation links expose only the safe summary.
+	// ownership. Public project-conversation links expose only the safe summary.
 	ownerID, _, err := h.conversationScope(c, c.Param("id"), "", "", user.ID)
 	if err != nil {
 		c.JSON(403, gin.H{"error": err.Error()})

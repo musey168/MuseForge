@@ -39,6 +39,10 @@ func confirmModeFixtureFor(t *testing.T, channel string) (*repo.Store, *assistan
 		t.Fatal(err)
 	}
 	bot, _ = s.NotificationBot(bot.ID)
+	// The account that writes through the Bot holds the project.
+	project, _ := s.Project("p")
+	project.OwnerID = 43
+	s.PutProject(project)
 	if channel != domain.BotChannelWeCom {
 		// Feishu/DingTalk identities are scoped by the configuration.
 		bindBotTestUser(t, s, bot, "new-wecom-user", 43)
@@ -124,30 +128,30 @@ func draftCall(t *testing.T, h *assistantHandlers, user domain.User, method, pat
 
 func TestWeComConfirmModeExecutesConfirmedDraftOnce(t *testing.T) {
 	s, h, _, ask := confirmModeFixture(t)
-	member, _ := s.User(43)
-	owner, _ := s.User(42)
+	account, _ := s.User(43)
+	other, _ := s.User(42)
 	before := len(s.Issues())
 	id := ask()
 	if len(s.Issues()) != before {
 		t.Fatal("draft executed before confirmation")
 	}
-	if code, _ := draftCall(t, h, owner, "GET", "/api/bot-drafts/"+id, false); code != 404 {
+	if code, _ := draftCall(t, h, other, "GET", "/api/bot-drafts/"+id, false); code != 404 {
 		t.Fatalf("other user can read the draft: %d", code)
 	}
-	code, view := draftCall(t, h, member, "GET", "/api/bot-drafts/"+id, false)
+	code, view := draftCall(t, h, account, "GET", "/api/bot-drafts/"+id, false)
 	if code != 200 || view["status"] != repo.BotDraftPending || len(view["operations"].([]any)) != 1 || !strings.HasPrefix(view["operations"].([]any)[0].(string), "1. 保存需求：网页确认的需求!（LOOP：") {
 		t.Fatalf("view = %d %v", code, view)
 	}
 	if _, ok := view["drafts"]; ok {
 		t.Fatal("frozen draft JSON exposed")
 	}
-	if code, _ := draftCall(t, h, owner, "POST", "/api/bot-drafts/"+id+"/confirm", true); code != 404 {
+	if code, _ := draftCall(t, h, other, "POST", "/api/bot-drafts/"+id+"/confirm", true); code != 404 {
 		t.Fatalf("other user confirmed: %d", code)
 	}
-	if code, _ := draftCall(t, h, member, "POST", "/api/bot-drafts/"+id+"/confirm", false); code != 403 {
+	if code, _ := draftCall(t, h, account, "POST", "/api/bot-drafts/"+id+"/confirm", false); code != 403 {
 		t.Fatalf("cross-origin confirm = %d", code)
 	}
-	code, done := draftCall(t, h, member, "POST", "/api/bot-drafts/"+id+"/confirm", true)
+	code, done := draftCall(t, h, account, "POST", "/api/bot-drafts/"+id+"/confirm", true)
 	if code != 200 || done["status"] != repo.BotDraftExecuted {
 		t.Fatalf("confirm = %d %v", code, done)
 	}
@@ -155,36 +159,36 @@ func TestWeComConfirmModeExecutesConfirmedDraftOnce(t *testing.T) {
 		t.Fatalf("issues = %d, want %d", len(s.Issues()), before+1)
 	}
 	// A repeated click returns the current state and writes nothing.
-	code, again := draftCall(t, h, member, "POST", "/api/bot-drafts/"+id+"/confirm", true)
+	code, again := draftCall(t, h, account, "POST", "/api/bot-drafts/"+id+"/confirm", true)
 	if code != 200 || again["status"] != repo.BotDraftExecuted || len(s.Issues()) != before+1 {
 		t.Fatalf("repeat = %d %v issues=%d", code, again, len(s.Issues()))
 	}
 	// Cancel by the user.
 	second := ask()
-	if _, out := draftCall(t, h, member, "POST", "/api/bot-drafts/"+second+"/cancel", true); out["status"] != repo.BotDraftCancelled {
+	if _, out := draftCall(t, h, account, "POST", "/api/bot-drafts/"+second+"/cancel", true); out["status"] != repo.BotDraftCancelled {
 		t.Fatalf("cancel = %v", out)
 	}
-	if _, out := draftCall(t, h, member, "POST", "/api/bot-drafts/"+second+"/confirm", true); out["status"] != repo.BotDraftCancelled || len(s.Issues()) != before+1 {
+	if _, out := draftCall(t, h, account, "POST", "/api/bot-drafts/"+second+"/confirm", true); out["status"] != repo.BotDraftCancelled || len(s.Issues()) != before+1 {
 		t.Fatalf("confirm after cancel = %v", out)
 	}
 }
 
 func TestWeComConfirmDraftsInvalidatedByRevocationAndModeChange(t *testing.T) {
 	s, h, bot, ask := confirmModeFixture(t)
-	member, _ := s.User(43)
+	account, _ := s.User(43)
 	before := len(s.Issues())
-	// Losing project permission invalidates at confirmation.
+	// Losing the project invalidates the draft at confirmation.
 	id := ask()
 	project, _ := s.Project("p")
-	project.Members = []domain.ProjectMember{}
+	project.OwnerID = 42
 	if err := s.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
-	if code, out := draftCall(t, h, member, "POST", "/api/bot-drafts/"+id+"/confirm", true); code != 409 || out["code"] != "draft_invalidated" {
+	if code, out := draftCall(t, h, account, "POST", "/api/bot-drafts/"+id+"/confirm", true); code != 409 || out["code"] != "draft_invalidated" {
 		t.Fatalf("after revoke = %d %v", code, out)
 	}
 	project, _ = s.Project(project.ID)
-	project.Members = []domain.ProjectMember{{UserID: 43, Role: "member"}}
+	project.OwnerID = 43
 	if err := s.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +201,7 @@ func TestWeComConfirmDraftsInvalidatedByRevocationAndModeChange(t *testing.T) {
 	if err := s.RevokeBotUserBinding(binding.ID, 43, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
-	if _, out := draftCall(t, h, member, "POST", "/api/bot-drafts/"+id+"/confirm", true); out["status"] != repo.BotDraftCancelled || !strings.Contains(out["reason"].(string), "绑定") {
+	if _, out := draftCall(t, h, account, "POST", "/api/bot-drafts/"+id+"/confirm", true); out["status"] != repo.BotDraftCancelled || !strings.Contains(out["reason"].(string), "绑定") {
 		t.Fatalf("after unbind = %v", out)
 	}
 	// Leaving the confirm mode cancels pending drafts (another sender).
@@ -212,7 +216,7 @@ func TestWeComConfirmDraftsInvalidatedByRevocationAndModeChange(t *testing.T) {
 	if err := s.SaveNotificationBot(bot, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, out := draftCall(t, h, member, "GET", "/api/bot-drafts/"+m[1], false); out["status"] != repo.BotDraftCancelled {
+	if _, out := draftCall(t, h, account, "GET", "/api/bot-drafts/"+m[1], false); out["status"] != repo.BotDraftCancelled {
 		t.Fatalf("after mode change = %v", out)
 	}
 	if len(s.Issues()) != before {

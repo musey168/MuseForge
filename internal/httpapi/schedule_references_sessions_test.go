@@ -74,8 +74,9 @@ func TestScheduleReferencesWithSessionModesAndSharedKey(t *testing.T) {
 						t.Fatal(err)
 					}
 					user, _ = h.repo.UserByLoginName("reference-member")
+					// The account the job runs as holds the project.
 					project, _ := h.repo.Project(job.ProjectID)
-					project.Members = []domain.ProjectMember{{UserID: user.ID, Role: "member"}}
+					project.OwnerID = user.ID
 					if err := h.repo.PutProject(project); err != nil {
 						t.Fatal(err)
 					}

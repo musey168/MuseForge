@@ -58,7 +58,7 @@ func TestSteerAfterRunnerShareIsRevoked(t *testing.T) {
 		t.Fatal(err)
 	}
 	project, _ := h.repo.Project(projectID)
-	project.Members = append(project.Members, domain.ProjectMember{UserID: member.ID, Role: domain.ProjectRoleMember})
+	project.OwnerID = member.ID
 	if err := h.repo.PutProject(project); err != nil {
 		t.Fatal(err)
 	}

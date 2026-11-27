@@ -89,7 +89,7 @@ func TestMainBotBrowserStartsAndDrivesRunBrowser(t *testing.T) {
 	defer page.Close()
 	a, owner, peer, _, _ := sharedWorkbenchFixture(t)
 	project, _ := a.repo.Project("workbench")
-	project.Members = []domain.ProjectMember{{UserID: peer.ID, Role: "viewer"}}
+	project.OwnerID = peer.ID
 	if err := a.repo.PutProject(project); err != nil {
 		t.Fatal(err)
 	}

@@ -107,10 +107,6 @@ func TestAssistantAuthorizationMetadataBatches(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.DB.Where("id IN ?", ids).Delete(&projectRow{}) })
-	if err := s.DB.Create(&projectMemberRow{ProjectID: ids[0], UserID: 43, Role: "member"}).Error; err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.DB.Where("project_id = ?", ids[0]).Delete(&projectMemberRow{}) })
 	recorder := &queryRecorder{Interface: logger.Default}
 	s.DB.Logger = recorder
 	requested := append(append([]string{}, ids...), prefix+"missing")
@@ -118,27 +114,24 @@ func TestAssistantAuthorizationMetadataBatches(t *testing.T) {
 	if err != nil || len(gotRuns) != len(ids) {
 		t.Fatalf("run scopes: count=%d err=%v", len(gotRuns), err)
 	}
-	gotProjects, err := s.ProjectMemberships(requested)
+	gotProjects, err := s.ProjectOwners(requested)
 	if err != nil || len(gotProjects) != len(ids) {
-		t.Fatalf("project memberships: count=%d err=%v", len(gotProjects), err)
+		t.Fatalf("project owners: count=%d err=%v", len(gotProjects), err)
 	}
 	for _, id := range ids {
 		if gotRuns[id] != id || gotProjects[id].ID != id || gotProjects[id].OwnerID != ownerID || gotProjects[id].Name != "" {
 			t.Fatalf("incorrect authorization metadata for %s", id)
 		}
 	}
-	if members := gotProjects[ids[0]].Members; len(members) != 1 || members[0].UserID != 43 {
-		t.Fatalf("project membership lost: %+v", members)
-	}
-	if len(recorder.queries) != 6 {
-		t.Fatalf("expected two batches of three metadata queries, got %d", len(recorder.queries))
+	if len(recorder.queries) != 4 {
+		t.Fatalf("expected two batches of two metadata queries, got %d", len(recorder.queries))
 	}
 	before := len(recorder.queries)
 	if empty, err := s.RunProjectIDs(nil); err != nil || len(empty) != 0 {
 		t.Fatal("empty run scopes")
 	}
-	if empty, err := s.ProjectMemberships(nil); err != nil || len(empty) != 0 {
-		t.Fatal("empty project memberships")
+	if empty, err := s.ProjectOwners(nil); err != nil || len(empty) != 0 {
+		t.Fatal("empty project owners")
 	}
 	if len(recorder.queries) != before {
 		t.Fatal("empty metadata lookup queried the database")

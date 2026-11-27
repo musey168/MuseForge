@@ -38,7 +38,7 @@ func TestBotTabsListAndGuidedSteps(t *testing.T) {
 	}
 	script := `
 const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
-const ctx={escapeHTML:x=>String(x??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]),isPlatformAdmin:()=>false,currentProject:()=>ctx.project,project:{name:'AgentFlow',ownerId:9,members:[]},state:{authRequired:false}};
+const ctx={escapeHTML:x=>String(x??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]),isPlatformAdmin:()=>false,currentProject:()=>ctx.project,project:{name:'AgentFlow',ownerId:9},state:{authRequired:false}};
 vm.createContext(ctx);vm.runInContext(fs.readFileSync('app/bots.js','utf8'),ctx);
 
 assert.equal(ctx.botStepAllowed({name:''},1),true);
@@ -65,12 +65,12 @@ assert.doesNotMatch(list,/bot-btn-label|bot-bar|data-bot-new/,'list has no text 
 assert.ok(!list.includes('bot-guide'));
 assert.match(ctx.botRowHTML({id:'b3',name:'对话',model:'gpt-6.1-sol',interactionEnabled:true,enabled:true}),/gpt-6.1-sol · 已启用对话/);
 
-ctx.state={authRequired:true,currentUser:{id:1}};ctx.project={name:'AgentFlow',ownerId:9,members:[{userId:1,role:'developer'}]};
+ctx.state={authRequired:true,currentUser:{id:1}};ctx.project={name:'AgentFlow',ownerId:9};
 const limited=ctx.botListHTML(bots);
 assert.match(limited,/data-bot-delete="b1"/,'creator keeps delete');
 assert.doesNotMatch(limited,/data-bot-delete="b2"/,'non-manager loses delete');
-ctx.project={name:'AgentFlow',ownerId:9,members:[{userId:1,role:'viewer'}]};
-assert.match(ctx.botListHTML([]),/data-bot-new disabled/,'viewer cannot add');
+ctx.project={name:'AgentFlow',ownerId:9};
+assert.match(ctx.botListHTML([]),/data-bot-new disabled/,'another account cannot add');
 ctx.state={authRequired:false};
 
 const guide=ctx.botListHTML([]);
@@ -102,7 +102,7 @@ assert.match(ctx.botPanelHeadHTML(),/data-bot-back disabled/,'busy editor cannot
 vm.runInContext('botUI.busy=false;botUI.selected={name:""}',ctx);
 const fresh=ctx.botPanelHeadHTML();
 assert.match(fresh,/aria-current="page">新建 Bot</);assert.doesNotMatch(fresh,/botDelete/,'unsaved bot has no delete');
-ctx.state={authRequired:true,currentUser:{id:5}};ctx.project={ownerId:9,members:[]};
+ctx.state={authRequired:true,currentUser:{id:5}};ctx.project={ownerId:9};
 vm.runInContext('botUI.selected={id:"b1",name:"研发通知",ownerId:2}',ctx);
 assert.doesNotMatch(ctx.botPanelHeadHTML(),/botDelete/,'non-manager has no delete');
 ctx.state={authRequired:false};
@@ -205,7 +205,7 @@ func TestBotHeadingAddButtonState(t *testing.T) {
 	script := `
 const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 const add={hidden:false,disabled:false,onclick:null};
-const ctx={escapeHTML:String,isPlatformAdmin:()=>false,currentProject:()=>ctx.project,project:{ownerId:9,members:[]},state:{authRequired:false,projectFilter:'p1'},$:sel=>sel==='#botNew'?add:null};
+const ctx={escapeHTML:String,isPlatformAdmin:()=>false,currentProject:()=>ctx.project,project:{ownerId:9},state:{authRequired:false,projectFilter:'p1'},$:sel=>sel==='#botNew'?add:null};
 vm.createContext(ctx);vm.runInContext(fs.readFileSync('app/bots.js','utf8'),ctx);
 const paint=()=>vm.runInContext('renderBotHeading()',ctx);
 paint();assert.equal(add.hidden,true,'empty list hides the heading button; the guide offers 开始添加');
@@ -218,8 +218,8 @@ vm.runInContext('botUI.tab="list";botUI.selected=null;botUI.items=[];botUI.loadi
 assert.equal(add.hidden,false,'loading keeps it in place');assert.equal(add.disabled,true,'loading disables');
 vm.runInContext('botUI.loading=false;botUI.items=[{id:"b1",name:"x"}]',ctx);
 vm.runInContext('botUI.busy=true',ctx);paint();assert.equal(add.disabled,true,'busy disables');
-vm.runInContext('botUI.busy=false',ctx);ctx.state={authRequired:true,currentUser:{id:1},projectFilter:'p1'};ctx.project={ownerId:9,members:[{userId:1,role:'viewer'}]};
-paint();assert.equal(add.disabled,true,'viewer cannot add');
+vm.runInContext('botUI.busy=false',ctx);ctx.state={authRequired:true,currentUser:{id:1},projectFilter:'p1'};ctx.project={ownerId:9};
+paint();assert.equal(add.disabled,true,'another account cannot add');
 ctx.state={authRequired:false,projectFilter:''};paint();assert.equal(add.hidden,true,'no project, no add');
 console.log('BOT_HEADING_OK');
 `

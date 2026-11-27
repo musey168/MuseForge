@@ -2,8 +2,8 @@ package domain
 
 import "time"
 
-// ChatRoom is a project group chat. Anyone working in the project can read
-// and post; membership shown in the room is the project member list.
+// ChatRoom is a project group chat. The account that holds the project can
+// read and post; the roster shown in the room lists that account.
 type ChatRoom struct {
 	ID        string    `json:"id"`
 	ProjectID string    `json:"projectId"`

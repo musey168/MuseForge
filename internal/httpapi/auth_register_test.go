@@ -167,9 +167,17 @@ func TestRegisterFirstAccountBecomesAdminAndSignupToggle(t *testing.T) {
 	}
 	var registered struct{ User struct{ ID int64 } }
 	_ = json.Unmarshal(w.Body.Bytes(), &registered)
-	welcome, _ := s.Project(welcomeProjectID)
-	if len(welcome.Members) != 1 || welcome.Members[0].UserID != registered.User.ID || registered.User.ID == 0 {
-		t.Fatalf("new account must join the welcome project: %+v user=%d", welcome.Members, registered.User.ID)
+	if registered.User.ID == 0 {
+		t.Fatal("the new account must have an id")
+	}
+	// The welcome project has no owner, so it stays open to the signed-in
+	// account; there is no roster to join.
+	welcome, ok := s.Project(welcomeProjectID)
+	if !ok {
+		t.Fatal("welcome project not found")
+	}
+	if !welcome.AccountOwns(registered.User.ID) {
+		t.Fatalf("an ownerless project must stay open to the signed-in account: %+v", welcome)
 	}
 
 	t.Setenv("AGENTFLOW_ALLOW_SIGNUP", "false")

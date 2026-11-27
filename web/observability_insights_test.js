@@ -7,7 +7,7 @@ const ctx = {
   lfT: zh => zh,
   formatTokens: x => String(x),
   state: {obsScope:'project',obsTrendGrain:'all',obsOriginFilter:'external',data:{users:[]}},
-  projectQuery:()=>'?projectId=p',currentProject:()=>({id:'p',ownerId:7,members:[{userId:8,role:'maintainer'}]}),
+  projectQuery:()=>'?projectId=p',currentProject:()=>({id:'p',ownerId:7}),
 };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync('app/obs-charts.js','utf8'),ctx,{filename:path.resolve('app/obs-charts.js')});
@@ -16,7 +16,7 @@ assert.match(ctx.analyticsQuery({overview:true}),/origin=external/);
 assert.match(ctx.analyticsQuery({overview:true}),/projectId=p/);
 assert.doesNotMatch(ctx.analyticsQuery({crossProject:true}),/projectId=/);
 ctx.state.currentUser={id:7};assert.equal(ctx.obsCanManageSources(),true);
-ctx.state.currentUser={id:8};assert.equal(ctx.obsCanManageSources(),true);
+ctx.state.currentUser={id:8};assert.equal(ctx.obsCanManageSources(),false);
 ctx.state.currentUser={id:9};assert.equal(ctx.obsCanManageSources(),false);
 ctx.state.analytics={userUsage:[
   {userId:'7',runs:1,tokens:100,costKnown:true,costCny:0.5},

@@ -214,7 +214,7 @@ func (h *assistantHandlers) callAssistantPlatform(ctx context.Context, user doma
 		return "", fmt.Errorf("%s", truncateRunes(text, 500))
 	}
 	// Conversations legitimately belong to a project other than the current one;
-	// the handler already scopes them by owner / shared run / membership.
+	// the handler already scopes them by owner / shared run / project ownership.
 	if !assistantSessionReadOperation(op.Name) && !scheduledAssetRead(ctx, projectID, op.Name, input.Path["id"]) {
 		if err := assistantRejectForeignProject(projectID, result.Body); err != nil {
 			return "", err

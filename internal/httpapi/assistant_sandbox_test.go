@@ -224,7 +224,7 @@ func TestConversationSandboxHTTPValidatesScopeAndLocks(t *testing.T) {
 	}
 	peer, _ := h.repo.UserByLoginName("sandbox-peer")
 	project, _ := h.repo.Project(s.ProjectID)
-	project.Members = append(project.Members, domain.ProjectMember{UserID: peer.ID, Role: "viewer"})
+	project.OwnerID = peer.ID
 	if err := h.repo.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
@@ -459,7 +459,7 @@ func TestDispatchFromConversationLinksIssue(t *testing.T) {
 	}
 	peer, _ := h.repo.UserByLoginName("dispatch-peer")
 	project, _ := h.repo.Project("workbench")
-	project.Members = append(project.Members, domain.ProjectMember{UserID: peer.ID, Role: "viewer"})
+	project.OwnerID = peer.ID
 	if err := h.repo.PutProject(project); err != nil {
 		t.Fatal(err)
 	}

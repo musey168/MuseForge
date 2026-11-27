@@ -109,7 +109,7 @@ func TestIssueResponsibilityFallsBackToProjectOwner(t *testing.T) {
 	if err := st.PutUser(domain.User{ID: 42, LoginName: "zhangsan", ChineseName: "张三", GitToken: "git-user", CodeBuddyAPIKey: "ck-user"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.PutProject(domain.Project{ID: "owned", Name: "Owned", OwnerID: 42, }); err != nil {
+	if err := st.PutProject(domain.Project{ID: "owned", Name: "Owned", OwnerID: 42}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.PutIssue(domain.Issue{ID: "req-owner", ProjectID: "owned", Title: "fallback"}); err != nil {
@@ -220,28 +220,25 @@ func TestMySQLUserOwnershipRelations(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner, _ := st.UserByLoginName(login)
-	if err := st.PutProject(domain.Project{ID: projectID, Name: "Owned", OwnerID: owner.ID, }); err != nil {
+	if err := st.PutProject(domain.Project{ID: projectID, Name: "Owned", OwnerID: owner.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.PutIssue(domain.Issue{ID: issueID, ProjectID: projectID, Title: "Fallback"}); err != nil {
 		t.Fatal(err)
 	}
 	project, ok := st.Project(projectID)
-	if !ok || project.OwnerID != owner.ID || len(project.Members) != 1 || project.Members[0].UserID != owner.ID {
-		t.Fatalf("project relations not hydrated: %+v", project)
+	if !ok || project.OwnerID != owner.ID {
+		t.Fatalf("project owner not hydrated: %+v", project)
 	}
 	issue, ok := st.Issue(issueID)
 	if !ok || issue.AssigneeUserID != owner.ID {
 		t.Fatalf("issue responsibility not persisted: %+v", issue)
 	}
-	var memberRows, assignedRows int
-	if err := st.DB.Raw(`SELECT COUNT(*) FROM project_members WHERE project_id=? AND user_id=?`, projectID, owner.ID).Scan(&memberRows).Error; err != nil {
-		t.Fatal(err)
-	}
+	var assignedRows int
 	if err := st.DB.Raw(`SELECT COUNT(*) FROM issues WHERE id=? AND assignee_user_id=?`, issueID, owner.ID).Scan(&assignedRows).Error; err != nil {
 		t.Fatal(err)
 	}
-	if memberRows != 1 || assignedRows != 1 {
-		t.Fatalf("relation rows: members=%d assigned=%d", memberRows, assignedRows)
+	if assignedRows != 1 {
+		t.Fatalf("relation rows: assigned=%d", assignedRows)
 	}
 }

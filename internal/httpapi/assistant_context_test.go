@@ -71,18 +71,12 @@ func TestSessionIssueBindingContextAndPrivacy(t *testing.T) {
 	if err := h.prepareWorkbenchContext(c, &req, u); err != nil || !strings.Contains(req.contextText, "主需求最新版") || strings.Contains(req.contextText, "主需求初版") {
 		t.Fatal(err, req.contextText)
 	}
-	// Project conversations linked to an issue are visible to project members.
-	if err := h.repo.PutUser(domain.User{LoginName: "context-peer"}); err != nil {
-		t.Fatal(err)
-	}
-	peer, _ := h.repo.UserByLoginName("context-peer")
-	p, _ := h.repo.Project("workbench")
-	p.Members = append(p.Members, domain.ProjectMember{UserID: peer.ID, Role: "member"})
-	_ = h.repo.PutProject(p)
+	// Project conversations linked to an issue are visible to the account that
+	// holds the project.
 	for _, tc := range []struct {
 		actor domain.User
 		want  int
-	}{{u, 1}, {peer, 1}} {
+	}{{u, 1}} {
 		c, w := workbenchContext(tc.actor, "GET", "/", bytes.NewBuffer(nil))
 		c.Params = gin.Params{{Key: "id", Value: "primary"}}
 		h.issueConversations(c)

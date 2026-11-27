@@ -424,23 +424,23 @@ func TestConversationDispatchRechecksRunnerShareBeforeStarting(t *testing.T) {
 	h, owner := workbenchFixture(t)
 	project, _ := h.repo.Project("workbench")
 	actorID := owner.ID + 1
-	project.Members = []domain.ProjectMember{{UserID: actorID, Role: "member"}}
+	project.OwnerID = actorID
 	if err := h.repo.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
 	runnerID := "shared-dispatch"
-	if err := h.repo.PutRunner(domain.Runner{ID: runnerID, OwnerUserID: owner.ID,
+	if err := h.repo.PutRunner(domain.Runner{ID: runnerID, OwnerUserID: actorID,
 		Status: domain.RunnerStatusOnline, RunnerVersion: domain.RunnerVersionConversationCLI}); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.repo.SetRunnerSharedProjects(runnerID, owner.ID, []string{project.ID}); err != nil {
+	if err := h.repo.SetRunnerSharedProjects(runnerID, actorID, []string{project.ID}); err != nil {
 		t.Fatal(err)
 	}
 	hub := quietRunnerHub()
 	h.runnerControls = hub
 	conn := testRunnerConn(runnerID)
 	registerTestConn(hub, conn)
-	session := &AgentToolSession{ChatOwnerID: owner.ID, ChatSessionID: "shared-dispatch",
+	session := &AgentToolSession{ChatOwnerID: actorID, ChatSessionID: "shared-dispatch",
 		UserID: actorID, ProjectID: project.ID, ExecutionRunnerID: runnerID}
 	root := t.TempDir()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -464,7 +464,7 @@ func TestConversationDispatchRechecksRunnerShareBeforeStarting(t *testing.T) {
 				t.Fatalf("dispatched %q after revocation", req.Operation)
 			}
 			if req.Operation == "resetAssets" {
-				if err := h.repo.SetRunnerSharedProjects(runnerID, owner.ID, nil); err != nil {
+				if err := h.repo.SetRunnerSharedProjects(runnerID, actorID, nil); err != nil {
 					t.Fatal(err)
 				}
 				revoked = true
