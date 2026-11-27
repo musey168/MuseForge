@@ -253,10 +253,6 @@ func TestMiscProjectPlaybooksPermissionsAndAssignments(t *testing.T) {
 	if err := f.s.PutUser(outsider); err != nil {
 		t.Fatal(err)
 	}
-	f.user.PlatformRole = domain.PlatformRoleAdmin
-	if err := f.s.PutUser(f.user); err != nil {
-		t.Fatal(err)
-	}
 	if err := f.s.PutWorkflow(domain.WorkflowDefinition{
 		ID: "cvb-playbook-wf", Name: "playbook", ProjectID: "platform",
 		Status: "published", Version: 1, SandboxProfileID: "test-native",

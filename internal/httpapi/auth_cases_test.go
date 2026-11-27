@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"bytes"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,59 +11,10 @@ import (
 	"agentflow/internal/auth"
 )
 
-func TestAuthTokenLifecycleAndValidation(t *testing.T) {
-	f := cvBNewHTTPFixture(t)
-	for _, tc := range []struct {
-		body any
-		want int
-	}{
-		{map[string]any{"name": strings.Repeat("x", 129)}, http.StatusBadRequest},
-		{map[string]any{"name": "bad-days", "expiresInDays": -1}, http.StatusBadRequest},
-		{map[string]any{"name": "too-long", "expiresInDays": 366}, http.StatusBadRequest},
-		{map[string]any{"name": "default-expiry"}, http.StatusCreated},
-	} {
-		rec := cvBRequest(t, f, http.MethodPost, "/api/auth/tokens", tc.body, true)
-		if rec.Code != tc.want {
-			t.Errorf("token create = %d want %d: %s", rec.Code, tc.want, rec.Body.String())
-		}
-	}
-	list := cvBRequest(t, f, http.MethodGet, "/api/auth/tokens", nil, true)
-	if list.Code != http.StatusOK {
-		t.Fatalf("token list = %d: %s", list.Code, list.Body.String())
-	}
-	var tokens []struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(list.Body.Bytes(), &tokens); err != nil || len(tokens) == 0 {
-		t.Fatalf("tokens: %v %s", err, list.Body.String())
-	}
-	if rec := cvBRequest(t, f, http.MethodDelete, "/api/auth/tokens/"+tokens[0].ID, nil, true); rec.Code != http.StatusOK {
-		t.Fatalf("token revoke = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBRequest(t, f, http.MethodDelete, "/api/auth/tokens/"+tokens[0].ID, nil, true); rec.Code != http.StatusNotFound {
-		t.Fatalf("token second revoke = %d: %s", rec.Code, rec.Body.String())
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/auth/tokens", nil)
-	req.Header.Set("Authorization", "Bearer invalid")
-	rec := httptest.NewRecorder()
-	f.h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("bearer token management = %d: %s", rec.Code, rec.Body.String())
-	}
-	if token, err := newAPIToken(); err != nil || !strings.HasPrefix(token, "afp_") {
-		t.Fatalf("new token = %q, %v", token, err)
-	}
-	if tokenPrefix("short") != "short" || len(tokenPrefix(strings.Repeat("x", 20))) != 12 {
-		t.Fatal("tokenPrefix")
-	}
-}
-
 func TestAuthPathPreviewAndLocalLogin(t *testing.T) {
 	for path, want := range map[string]bool{
 		insightIngestPath: false, "/mcp": true, "/static/x": false,
 		"/api/health": false, "/api/auth/photo/user/100": false,
-		"/api/auth/tokens": false, "/api/auth/tokens/id": false,
 		"/api/projects": true, "/api/runners/tasks/id/start": false,
 	} {
 		if got := protectedAccessPath(path); got != want {

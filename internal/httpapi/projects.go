@@ -246,8 +246,8 @@ func (h *projectsHandlers) projectForArchive(c *gin.Context) (domain.Project, in
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
 		return domain.Project{}, 0, false
 	}
-	if p.OwnerID != user.ID && !h.isAccount(c.Request) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "只有项目 Owner 或平台管理员可以删除或恢复项目"})
+	if !h.accountHoldsProject(p.ID, user.ID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "只有项目负责人可以删除或恢复项目"})
 		return domain.Project{}, 0, false
 	}
 	return p, user.ID, true

@@ -13,7 +13,7 @@ import (
 // modelCatalogEngines lists the CLIs the caller may run with: their own keys
 // and — for a scheduled AI job — the account login on their default machine.
 func modelCatalogEngines(r *repo.Store, user domain.User, projectID string, schedule bool) []assistantEngineOption {
-	options := assistantEngineOptions(user, false)
+	options := assistantEngineOptions(user)
 	if schedule {
 		for i := range options {
 			if scheduleLoginRunner(r, user.ID, projectID, options[i].ID).ID != "" {

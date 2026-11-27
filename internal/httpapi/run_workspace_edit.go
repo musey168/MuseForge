@@ -142,14 +142,11 @@ func (h *runsHandlers) workspaceWrite(c *gin.Context) {
 }
 
 // workspaceEditAllowed reports whether userID may edit run's task workspace
-// from the task panel: platform admins, the project owner, anyone on an
-// unowned project without members, and non-viewer project members.
+// from the task panel: the account that holds the project, and anyone on an
+// unowned project.
 func (h *runsHandlers) workspaceEditAllowed(r *http.Request, run domain.Run, userID int64) bool {
 	if run.IsPersonalWorkspace() {
 		return userID > 0 && userID == run.ExecutionContext.ResponsibleUserID
-	}
-	if h.isAccount(r) {
-		return true
 	}
 	project, ok := h.repo.Project(run.ExecutionContext.ProjectID)
 	if !ok {
@@ -199,8 +196,7 @@ func (h *runsHandlers) workspaceTerminal(c *gin.Context) {
 			if trustedRequest.PreparationInvocation != nil {
 				preparationKeys = trustedRequest.PreparationInvocation.GitSSHKeys
 			}
-			ctx = gitwork.WithSSHKnownHostsLookup(ctx, h.repo.PlatformSSHKnownHosts)
-			ctx = gitwork.SnapshotSSHKnownHostsLookup(ctx, credentials.SSHKeys, trustedRequest.TerminalGitSSHKeys, preparationKeys)
+			ctx = gitwork.WithSSHKnownHosts(ctx, gitwork.SSHKnownHostsForKeys(ctx, credentials.SSHKeys, trustedRequest.TerminalGitSSHKeys, preparationKeys))
 		}
 		return h.withWorkspaceWriter(c, run.ID, user, func(locked domain.Run) error {
 			req.ExpiresAt = locked.WorkspaceEditUntil

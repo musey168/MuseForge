@@ -2,8 +2,6 @@ package httpapi
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -869,13 +867,8 @@ func TestRunnerTaskManagementRequiresAdminAndOwnership(t *testing.T) {
 	if err := s.PutUser(domain.User{ID: 42, LoginName: "alice"}); err != nil {
 		t.Fatal(err)
 	}
-	raw := "af_test_alice_token"
-	sum := sha256.Sum256([]byte(raw))
-	if err := s.PutAPIToken(domain.APIToken{ID: "tok-alice", UserID: 42, Name: "t", Prefix: "af_test", TokenHash: hex.EncodeToString(sum[:])}); err != nil {
-		t.Fatal(err)
-	}
 	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
-	alice := map[string]string{"Authorization": "Bearer " + raw}
+	alice := map[string]string{"Authorization": "Bearer not-an-account-token"}
 	for _, tc := range []struct{ method, path string }{
 		{http.MethodGet, "/api/runners/tasks"},
 		{http.MethodPost, "/api/runners/tasks"},

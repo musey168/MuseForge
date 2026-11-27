@@ -279,7 +279,7 @@ func (h *scheduleHandlers) bindScheduleRunAs(c *gin.Context, job *domain.Schedul
 		c.JSON(200, stored)
 		return true
 	}
-	_, ok := scheduleCredentialUser(h.repo, self, job.ProjectID, engine)
+	_, ok = scheduleCredentialUser(h.repo, self, job.ProjectID, engine)
 	if !ok {
 		if stopOnly() {
 			return false

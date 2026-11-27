@@ -104,13 +104,6 @@ func TestRunnerProjectModesAndLoadPayload(t *testing.T) {
 
 func TestPlatformRunnerRunLimitWriteGuardAndPromotion(t *testing.T) {
 	f := cvBNewHTTPFixture(t)
-	member := domain.User{ID: 95, LoginName: "limit-member"}
-	if err := f.s.PutUser(member); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.s.GrantPlatformAdmin(f.user.LoginName); err != nil {
-		t.Fatal(err)
-	}
 	const path = "/api/runners/platform/run-limit"
 	put := func(user domain.User, origin, body string, want int) *httptest.ResponseRecorder {
 		t.Helper()
@@ -126,7 +119,6 @@ func TestPlatformRunnerRunLimitWriteGuardAndPromotion(t *testing.T) {
 		return rec
 	}
 	const origin = "http://localhost"
-	put(member, origin, `{"runLimit":5}`, 403)
 	put(f.user, "https://other.example", `{"runLimit":5}`, 403)
 	put(f.user, "", `{"runLimit":5}`, 403)
 	for _, body := range []string{`{}`, `{"runLimit":null}`, `{"runLimit":-1}`, `{"runLimit":1.5}`} {

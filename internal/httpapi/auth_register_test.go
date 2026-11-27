@@ -63,44 +63,7 @@ func TestLocalSignupOptionsPartialSSOKeepsPasswordSetup(t *testing.T) {
 	}
 }
 
-func TestRegisterRejectsConfiguredPlatformAdmin(t *testing.T) {
-	t.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
-	t.Setenv("AGENTFLOW_SCHEDULER_ENABLED", "false")
-	t.Setenv("AGENTFLOW_TRUST_IDENTITY_HEADERS", "false")
-	t.Setenv("AGENTFLOW_SSO_APP_TOKEN", "")
-	t.Setenv("AGENTFLOW_SSO_LOGIN_URL", "")
-	t.Setenv("AGENTFLOW_PLATFORM_ADMINS", "alice")
-	t.Setenv("AGENTFLOW_ALLOW_SIGNUP", "true")
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(s.Close)
-	h := New(s, engine.New(s, runtime.NewManager(t.TempDir())), nil, "", "")
-	call := func(method, path, body string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest(method, "http://localhost"+path, bytes.NewBufferString(body))
-		r.Header.Set("Content-Type", "application/json")
-		r.Header.Set("Origin", "http://localhost")
-		w := httptest.NewRecorder()
-		h.ServeHTTP(w, r)
-		return w
-	}
-	w := call("GET", "/api/auth/setup", "")
-	var setup struct{ NeedsSetup, SignupEnabled bool }
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &setup) != nil || setup.NeedsSetup || !setup.SignupEnabled {
-		t.Fatalf("setup with a configured admin: %d %s", w.Code, w.Body.String())
-	}
-	w = call("POST", "/api/auth/register", `{"login":"alice","password":"a-long-enough-password"}`)
-	if w.Code != 403 || !strings.Contains(w.Body.String(), "账号命令") {
-		t.Fatalf("configured admin register: %d %s", w.Code, w.Body.String())
-	}
-	w = call("POST", "/api/auth/register", `{"login":"bob","password":"a-long-enough-password"}`)
-	if w.Code != 200 || s.IsPlatformAdmin("bob") {
-		t.Fatalf("regular signup while an admin is configured: %d admin=%v %s", w.Code, s.IsPlatformAdmin("bob"), w.Body.String())
-	}
-}
-
-func TestRegisterFirstAccountBecomesAdminAndSignupToggle(t *testing.T) {
+func TestRegisterFirstAccountAndSignupToggle(t *testing.T) {
 	t.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
 	t.Setenv("AGENTFLOW_SCHEDULER_ENABLED", "false")
 	t.Setenv("AGENTFLOW_TRUST_IDENTITY_HEADERS", "false")
@@ -146,11 +109,8 @@ func TestRegisterFirstAccountBecomesAdminAndSignupToggle(t *testing.T) {
 		t.Fatalf("short password: %d", w.Code)
 	}
 	w := register("owner")
-	if w.Code != 200 || len(w.Result().Cookies()) != 1 || !strings.Contains(w.Body.String(), `"admin":true`) {
+	if w.Code != 200 || len(w.Result().Cookies()) != 1 {
 		t.Fatalf("first register: %d %s", w.Code, w.Body.String())
-	}
-	if !s.IsPlatformAdmin("owner") {
-		t.Fatal("first account must administer the platform")
 	}
 	if needs, signup := setup(); needs || !signup {
 		t.Fatalf("after setup: needs=%v signup=%v", needs, signup)
@@ -162,8 +122,8 @@ func TestRegisterFirstAccountBecomesAdminAndSignupToggle(t *testing.T) {
 		t.Fatal(err)
 	}
 	w = register("member")
-	if w.Code != 200 || s.IsPlatformAdmin("member") {
-		t.Fatalf("member register: %d admin=%v", w.Code, s.IsPlatformAdmin("member"))
+	if w.Code != 200 {
+		t.Fatalf("member register: %d", w.Code)
 	}
 	var registered struct{ User struct{ ID int64 } }
 	_ = json.Unmarshal(w.Body.Bytes(), &registered)

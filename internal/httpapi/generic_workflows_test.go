@@ -662,42 +662,31 @@ func TestGenericTemplateCloneThenEditIsAllowed(t *testing.T) {
 	}
 }
 
-func TestPlatformAdminCanEditGenericTemplate(t *testing.T) {
-	t.Setenv("AGENTFLOW_PLATFORM_ADMINS", "example-admin")
+func TestTheAccountCanEditGenericTemplate(t *testing.T) {
 	t.Setenv("AGENTFLOW_SESSION_SECRET", "generic-admin-session-secret")
 	h, s := newGenericTemplateServer(t)
 	if err := s.PutUser(domain.User{LoginName: "example-admin", ChineseName: "Robert"}); err != nil {
 		t.Fatal(err)
 	}
 	admin, _ := s.UserByLoginName("example-admin")
-	if !s.IsPlatformAdmin(admin.LoginName) {
-		t.Fatal("example-admin must be a platform admin")
-	}
 	detail := requestJSONAuthed[domain.WorkflowDefinition](t, h, admin, http.MethodGet,
 		"/api/workflows/"+repo.GenericBackendDeliveryWorkflowID, nil, http.StatusOK)
-	detail.Description = "admin patched the platform template"
+	detail.Description = "account patched the platform template"
 	saved := requestJSONAuthed[domain.WorkflowDefinition](t, h, admin, http.MethodPut, "/api/workflows", detail, http.StatusOK)
-	if saved.Description != "admin patched the platform template" || !saved.Generic {
-		t.Fatalf("admin save = %+v", saved)
+	if saved.Description != "account patched the platform template" || !saved.Generic {
+		t.Fatalf("account save = %+v", saved)
 	}
 	if workflowRowExists(t, s, repo.GenericBackendDeliveryWorkflowID) {
-		t.Fatal("admin edit must stay in generic_templates, not workflows")
+		t.Fatal("the template edit must stay in generic_templates, not workflows")
 	}
 	got, ok := s.GenericTemplateByWorkflow(repo.GenericBackendDeliveryWorkflowID)
-	if !ok || got.Workflow.Description != "admin patched the platform template" {
+	if !ok || got.Workflow.Description != "account patched the platform template" {
 		t.Fatalf("stored template was not updated: %+v", got.Workflow)
 	}
-	if err := s.PutUser(domain.User{LoginName: "alice", ChineseName: "爱丽丝"}); err != nil {
-		t.Fatal(err)
-	}
-	alice, _ := s.UserByLoginName("alice")
-	requestJSONAuthed[map[string]string](t, h, alice, http.MethodPut, "/api/workflows", domain.WorkflowDefinition{
-		ID: repo.GenericBackendDeliveryWorkflowID, Name: "hijack", SandboxProfileID: "test-native",
-	}, http.StatusConflict)
 	published := requestJSONAuthed[domain.WorkflowDefinition](t, h, admin, http.MethodPost,
 		"/api/workflows/"+repo.GenericBackendDeliveryWorkflowID+"/publish", map[string]any{}, http.StatusOK)
 	if published.Version < 2 {
-		t.Fatalf("admin publish version = %d", published.Version)
+		t.Fatalf("publish version = %d", published.Version)
 	}
 }
 
@@ -744,38 +733,6 @@ func TestGenericTemplateAgentsAreNotTheCurrentProjectCatalog(t *testing.T) {
 		"/api/workflows/"+repo.GenericBackendDeliveryWorkflowID+"/agents", *review, http.StatusConflict)
 }
 
-func TestPlatformAdminsAPIIsConfigurable(t *testing.T) {
-	t.Setenv("AGENTFLOW_PLATFORM_ADMINS", "example-admin")
-	t.Setenv("AGENTFLOW_SESSION_SECRET", "generic-admin-session-secret")
-	h, s := newGenericTemplateServer(t)
-	if err := s.PutUser(domain.User{LoginName: "example-admin", ChineseName: "Robert"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutUser(domain.User{LoginName: "alice", ChineseName: "爱丽丝"}); err != nil {
-		t.Fatal(err)
-	}
-	admin, _ := s.UserByLoginName("example-admin")
-	alice, _ := s.UserByLoginName("alice")
-	requestJSONAuthed[map[string]string](t, h, alice, http.MethodGet, "/api/platform/admins", nil, http.StatusForbidden)
-	listed := requestJSONAuthed[[]repo.PlatformAdminRecord](t, h, admin, http.MethodGet, "/api/platform/admins", nil, http.StatusOK)
-	if len(listed) == 0 {
-		t.Fatal("admin list must include builtin owners")
-	}
-	afterGrant := requestJSONAuthed[[]repo.PlatformAdminRecord](t, h, admin, http.MethodPut, "/api/platform/admins",
-		map[string]any{"loginName": "alice", "role": "admin"}, http.StatusOK)
-	found := false
-	for _, rec := range afterGrant {
-		if rec.LoginName == "alice" && rec.Revocable {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("granted alice missing: %+v", afterGrant)
-	}
-	if !s.IsPlatformAdmin("alice") {
-		t.Fatal("alice should be platform admin after grant")
-	}
-}
 
 func TestPutDeletedWorkflowIsRejected(t *testing.T) {
 	h, s := newGenericTemplateServer(t)

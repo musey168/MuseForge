@@ -1405,7 +1405,7 @@ func (h *catalogHandlers) validateWorkflowProjectCredentials(c *gin.Context, wf 
 		return false
 	}
 	user, ok := h.requestUser(c.Request)
-	use, _ := h.projectCredentialAccess(c.Request, wf.ProjectID, user.ID)
+	use, _ := h.projectCredentialAccess(wf.ProjectID, user.ID)
 	if !ok || !use {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权在该 LOOP 中绑定项目凭据"})
 		return false

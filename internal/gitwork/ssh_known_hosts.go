@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"maps"
 	"os"
 	"slices"
@@ -18,31 +17,6 @@ import (
 )
 
 type sshKnownHostsContext struct{}
-type sshKnownHostsLookupContext struct{}
-
-// SSHKnownHostsLookup reads the platform-managed entries for the requested
-// canonical host:port scopes. It is installed only on platform operations.
-type SSHKnownHostsLookup func(context.Context, []string) ([]byte, error)
-
-func WithSSHKnownHostsLookup(ctx context.Context, lookup SSHKnownHostsLookup) context.Context {
-	if lookup == nil || ctx.Value(sshKnownHostsLookupContext{}) != nil {
-		return ctx
-	}
-	return context.WithValue(ctx, sshKnownHostsLookupContext{}, lookup)
-}
-
-// SnapshotSSHKnownHostsLookup loads managed pins before the workspace editor
-// can hold a database transaction while it opens a terminal.
-func SnapshotSSHKnownHostsLookup(ctx context.Context, keySets ...map[string]string) context.Context {
-	lookup, _ := ctx.Value(sshKnownHostsLookupContext{}).(SSHKnownHostsLookup)
-	scopes := sshKnownHostScopes(keySets)
-	if lookup == nil || len(scopes) == 0 {
-		return ctx
-	}
-	entries, err := lookup(ctx, scopes)
-	snapshot := SSHKnownHostsLookup(func(context.Context, []string) ([]byte, error) { return entries, err })
-	return context.WithValue(ctx, sshKnownHostsLookupContext{}, snapshot)
-}
 
 // WithSSHKnownHosts makes the platform's pins available to Git commands and
 // sandbox credential bindings for this runner request.
@@ -64,7 +38,7 @@ func SSHKnownHostsForKeys(ctx context.Context, keySets ...map[string]string) *do
 	for _, scope := range scopes {
 		endpoints[knownhosts.Normalize(scope)] = struct{}{}
 	}
-	content, err := readConfiguredSSHKnownHosts(ctx, scopes)
+	content, err := readConfiguredSSHKnownHosts()
 	if err != nil {
 		return &domain.GitSSHKnownHosts{ReadFailed: true}
 	}
@@ -102,23 +76,13 @@ func sshKnownHostScopes(keySets []map[string]string) []string {
 	return slices.Sorted(maps.Keys(scopes))
 }
 
-func readConfiguredSSHKnownHosts(ctx context.Context, scopes []string) ([]byte, error) {
+func readConfiguredSSHKnownHosts() ([]byte, error) {
 	var content []byte
 	if path := strings.TrimSpace(os.Getenv(SSHKnownHostsEnv)); path != "" {
 		var err error
 		content, err = os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("无法读取 %s 指定的主机密钥文件", SSHKnownHostsEnv)
-		}
-	}
-	if lookup, _ := ctx.Value(sshKnownHostsLookupContext{}).(SSHKnownHostsLookup); lookup != nil {
-		managed, err := lookup(ctx, scopes)
-		if err != nil {
-			// The registry contributes positive keys. The deployment file
-			// and its revocations remain authoritative during an outage.
-			log.Printf("read platform Git SSH host trust registry: %v", err)
-		} else if len(managed) > 0 {
-			content = append(append(content, '\n'), managed...)
 		}
 	}
 	return content, nil
@@ -142,7 +106,7 @@ func sshHostKeys(ctx context.Context, remotes []SSHRemote) ([]byte, error) {
 		}
 		platformEntries = []byte(platform.Entries)
 	}
-	localEntries, err := readConfiguredSSHKnownHosts(ctx, scopes)
+	localEntries, err := readConfiguredSSHKnownHosts()
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +126,7 @@ func sshHostKeys(ctx context.Context, remotes []SSHRemote) ([]byte, error) {
 			keys = localPins.keys
 		}
 		if len(keys) == 0 && len(defaults.keys) == 0 {
-			return nil, fmt.Errorf("SSH 主机 %s 未获信任。请平台管理员在「平台管理 → Git 主机信任」核验并登记公钥，部署也可通过 %s 配置", endpoint, SSHKnownHostsEnv)
+			return nil, fmt.Errorf("SSH 主机 %s 未获信任。请在部署中通过 %s 配置该主机的公钥", endpoint, SSHKnownHostsEnv)
 		}
 		pinned = append(pinned, keys...)
 		bundled = append(bundled, defaults.revocations...)

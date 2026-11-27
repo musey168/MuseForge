@@ -152,7 +152,7 @@ func scheduledAssistantDefault(r *repo.Store, user domain.User, projectID, model
 	if preferred := personalDefaultModel(user); preferred != "" {
 		return preferred
 	}
-	for _, option := range assistantEngineOptions(user, false) {
+	for _, option := range assistantEngineOptions(user) {
 		if !scheduleHasPersonalCredential(r, user, projectID, option.ID) {
 			continue
 		}
@@ -354,9 +354,6 @@ const (
 	// tools/list, which can exceed CodeBuddy's ~2s headless MCP wait.
 	agentToolSessionMCPStartupWait = 30 * time.Second
 )
-
-// The model the platform's shared CodeBuddy key sponsors.
-const assistantSponsoredModel = repo.SponsoredCodeBuddyModel
 
 // assistantExecutor maps a legacy executor field onto a CLI kind.
 func assistantExecutor(id string) string {

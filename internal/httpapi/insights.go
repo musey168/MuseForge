@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -86,12 +88,11 @@ func (h *insightsHandlers) sources(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "有效期须为 1–365 天"})
 		return
 	}
-	token, err := newAPIToken()
+	token, err := newInsightToken()
 	if err != nil {
 		respond(c, err)
 		return
 	}
-	token = "afi_" + strings.TrimPrefix(token, "afp_")
 	now := time.Now().UTC()
 	source := domain.InsightSource{ID: "src-" + randomID(), ProjectID: input.ProjectID, Name: input.Name, UserMappings: input.UserMappings, TokenPrefix: tokenPrefix(token), CreatedAt: now, ExpiresAt: now.Add(time.Duration(days) * 24 * time.Hour)}
 	if err := h.repo.CreateInsightSource(source, insightTokenHash(token)); err != nil {
@@ -123,6 +124,24 @@ func (h *insightsHandlers) revokeSource(c *gin.Context) {
 func insightTokenHash(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+
+// newInsightToken mints the reporting credential the external reporter posts
+// with. It is independent of the login state and stays revocable.
+func newInsightToken() (string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return "afi_" + base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+// tokenPrefix is the short, storable form of a token.
+func tokenPrefix(token string) string {
+	if len(token) <= 12 {
+		return token
+	}
+	return token[:12]
 }
 func decodeInsightJSON(c *gin.Context, dst any) bool {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)

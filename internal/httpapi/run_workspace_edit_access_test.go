@@ -8,18 +8,15 @@ import (
 )
 
 // Workspace edit access follows the project owner: the account that holds
-// the project may edit, another account may not, and a platform admin may.
+// the project may edit, another account may not.
 func TestWorkspaceEditAllowedFollowsTheProjectOwner(t *testing.T) {
 	h, owner := workbenchFixture(t)
 	users := map[string]domain.User{"owner": owner}
-	for _, name := range []string{"other", "outsider", "admin"} {
+	for _, name := range []string{"other", "outsider"} {
 		if err := h.repo.PutUser(domain.User{LoginName: "ws-" + name}); err != nil {
 			t.Fatal(err)
 		}
 		users[name], _ = h.repo.UserByLoginName("ws-" + name)
-	}
-	if _, err := h.repo.GrantPlatformAdmin(users["admin"].LoginName); err != nil {
-		t.Fatal(err)
 	}
 	if err := h.repo.PutProject(domain.Project{ID: "unowned", Name: "Unowned"}); err != nil {
 		t.Fatal(err)
@@ -35,10 +32,8 @@ func TestWorkspaceEditAllowedFollowsTheProjectOwner(t *testing.T) {
 		{"the account that holds the project", "owner", "workbench", true},
 		{"another account", "other", "workbench", false},
 		{"outsider", "outsider", "workbench", false},
-		{"platform admin", "admin", "workbench", true},
 		{"unowned project", "outsider", "unowned", true},
 		{"missing project", "outsider", "missing", false},
-		{"platform admin on missing project", "admin", "missing", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

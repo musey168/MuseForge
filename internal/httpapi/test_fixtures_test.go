@@ -12,6 +12,28 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// staticPublicURL is a fixed external address for handlers that resolve it on
+// each use.
+func staticPublicURL(address string) func() string {
+	return func() string { return address }
+}
+
+// stubCLIModelDiscovery keeps tests from running the CodeBuddy CLI.
+func stubCLIModelDiscovery(t *testing.T) {
+	t.Helper()
+	old := discoverCLIModels
+	discoverCLIModels = func(context.Context, string, string) []string { return nil }
+	cliModelMu.Lock()
+	cliModelCache = map[string]cliModelEntry{}
+	cliModelMu.Unlock()
+	t.Cleanup(func() {
+		discoverCLIModels = old
+		cliModelMu.Lock()
+		cliModelCache = map[string]cliModelEntry{}
+		cliModelMu.Unlock()
+	})
+}
+
 // cvAStore opens an in-process store for a handler test.
 func cvAStore(t *testing.T) *repo.Store {
 	t.Helper()

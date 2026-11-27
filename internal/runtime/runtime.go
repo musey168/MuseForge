@@ -42,11 +42,6 @@ type CodeBuddyCredential struct {
 	APIKey              string
 	BaseURL             string `json:",omitempty"`
 	InternetEnvironment string
-	// Sponsored is set when the responsible user has no key of their own and
-	// the platform's shared key is used; such runs are limited to
-	// SponsoredModels (the default first).
-	Sponsored       bool
-	SponsoredModels []string
 }
 
 func CodeBuddyUserCredential(user domain.User) CodeBuddyCredential {

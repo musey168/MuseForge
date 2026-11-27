@@ -55,9 +55,6 @@ func TestPreparedWorkspaceRequestScopesTerminalGitCredentials(t *testing.T) {
 	const preparationHost = "prepare.example.invalid"
 	const terminalHost = "terminal.example.invalid"
 	for userID, host := range map[int64]string{run.ExecutionContext.ResponsibleUserID: preparationHost, ownerID: terminalHost} {
-		if err := st.CreatePlatformGitHTTPHost(t.Context(), &repo.PlatformGitHTTPHost{Host: host}); err != nil {
-			t.Fatal(err)
-		}
 		for _, scope := range []string{host, "http://" + host} {
 			credential := domain.GitHTTPCredentialSecret{
 				GitHTTPCredential: domain.GitHTTPCredential{Host: scope, Name: scope, Platform: domain.GitPlatformOther},

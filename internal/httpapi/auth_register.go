@@ -89,7 +89,7 @@ func (h *authHandlers) authRegister(c *gin.Context) {
 		return
 	}
 	registerMu.Lock()
-	first, allowed, err := h.localSignupOptions()
+	_, allowed, err := h.localSignupOptions()
 	if err != nil {
 		registerMu.Unlock()
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "无法读取注册状态"})

@@ -19,11 +19,10 @@ type SOPExecutorRequirement struct {
 var errSOPExecutorUnconfigured = errors.New("请在个人配置中添加当前执行环境可用的执行器，再重试此节点")
 
 type sopExecutorAccess struct {
-	user            domain.User
-	runner          domain.Runner
-	usesRunner      bool
-	execution       domain.TelemetryContext
-	sharedCodeBuddy bool
+	user       domain.User
+	runner     domain.Runner
+	usesRunner bool
+	execution  domain.TelemetryContext
 }
 
 func (e *Engine) sopExecutorAccess(ec domain.TelemetryContext) sopExecutorAccess {
@@ -35,7 +34,6 @@ func newSOPExecutorAccess(s *repo.Store, ec domain.TelemetryContext) sopExecutor
 	runner, _ := s.Runner(ec.ExecutionRunnerID)
 	return sopExecutorAccess{
 		user: user, runner: runner, usesRunner: ec.ExecutionRunnerID != "", execution: ec,
-		sharedCodeBuddy: resolveCodeBuddyCredential(s, user.ID).Sponsored,
 	}
 }
 
@@ -113,13 +111,12 @@ func (a sopExecutorAccess) configured(kind string) bool {
 	return a.hasCredential(kind)
 }
 
-// hasCredential accepts a personal key, the platform's shared CodeBuddy Key,
-// or account login on the run's machine.
+// hasCredential accepts a personal key or account login on the run's machine.
 func (a sopExecutorAccess) hasCredential(kind string) bool {
 	if a.runner.SupportsProvider(kind) && a.runnerLogin(kind) {
 		return true
 	}
-	return a.user.HasExecutorCredential(kind) || kind == "codebuddy" && a.sharedCodeBuddy
+	return a.user.HasExecutorCredential(kind)
 }
 
 func (a sopExecutorAccess) defaults() domain.ExecutorDefaults {

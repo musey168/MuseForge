@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/repo"
 )
 
 func TestSOPGitCredentialsAreHydratedOnlyOnAuthenticatedRunnerClaim(t *testing.T) {
@@ -21,9 +20,6 @@ func TestSOPGitCredentialsAreHydratedOnlyOnAuthenticatedRunnerClaim(t *testing.T
 	}
 	const host, token = "unfamiliar.example.org", "fake-runner-http-secret"
 	const plainHost, plainToken = "http://git.example.org:8080", "fixture-plain-runner-token"
-	if err := f.s.CreatePlatformGitHTTPHost(t.Context(), &repo.PlatformGitHTTPHost{Host: "git.example.org:8080"}); err != nil {
-		t.Fatal(err)
-	}
 	if err := f.s.SaveGitHTTPCredential(f.user.ID, "", domain.GitHTTPCredentialSecret{
 		GitHTTPCredential: domain.GitHTTPCredential{Host: plainHost},
 		Token:             plainToken,

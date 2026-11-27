@@ -667,7 +667,6 @@ func TestClosedRepositoryErrorResponses(t *testing.T) {
 	insights := &insightsHandlers{deps: d}
 	schedules := &scheduleHandlers{deps: d}
 	runners := &runnersHandlers{deps: d, runnerWaiters: newRunnerWaiterRegistry()}
-	tokens := &tokenHandlers{deps: d}
 
 	cases := []struct {
 		method, path string
@@ -684,8 +683,6 @@ func TestClosedRepositoryErrorResponses(t *testing.T) {
 			runners.runnerTasksCollection, nil, http.StatusInternalServerError},
 		{http.MethodPost, "/runner-tasks/id/cancel", nil, runners.runnerTaskCancel,
 			map[string]string{"id": "id"}, http.StatusInternalServerError},
-		{http.MethodPost, "/tokens", map[string]any{"name": "closed", "expiresInDays": 1},
-			tokens.authTokens, nil, http.StatusInternalServerError},
 	}
 	for _, tc := range cases {
 		rec := cvBDirectHandlerRequest(t, f, tc.method, tc.path, tc.body, tc.handler, tc.params, true)

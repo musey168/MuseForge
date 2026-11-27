@@ -81,7 +81,6 @@ type runnerControlHub struct {
 	reconnectGrace time.Duration
 	startupGrace   time.Duration
 	handoverDrain  time.Duration
-	sshHostLookup  gitwork.SSHKnownHostsLookup
 }
 
 type runnerWorkspaceWaiter struct {
@@ -264,7 +263,7 @@ func (h *runnerControlHub) send(ctx context.Context, conn *runnerControlConn, re
 		request.SSHHostKeyOwnerID = 0
 	}
 	// Older runners ignore the optional workspace field when decoding JSON.
-	request.GitSSHKnownHosts = runnerWorkspaceSSHKnownHosts(gitwork.WithSSHKnownHostsLookup(ctx, h.sshHostLookup), request)
+	request.GitSSHKnownHosts = runnerWorkspaceSSHKnownHosts(ctx, request)
 	observeImageBuild := runtime.DockerBuildProgressObserver(ctx)
 	h.mu.Lock()
 	h.nextID++

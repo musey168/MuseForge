@@ -3,9 +3,7 @@ package httpapi
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"net/http"
 	"os"
 	"strconv"
@@ -14,7 +12,6 @@ import (
 
 	"agentflow/internal/auth"
 	"agentflow/internal/domain"
-	"agentflow/internal/repo"
 
 	"github.com/gin-gonic/gin"
 )

@@ -337,20 +337,13 @@ func TestEvolutionSOPDetectionRunsForEnabledPolicyWithoutGlobalSwitch(t *testing
 	}
 }
 
-func TestEvolutionSOPAutoBatchOptInSharedKeyAndOutsiderIsolation(t *testing.T) {
+func TestEvolutionSOPAutoBatchOptInAndOutsiderIsolation(t *testing.T) {
 	env := newEvoTestEnv(t)
 	now := time.Now().UTC()
 
-	// Remove personal CodeBuddy key from user and configure platform shared CodeBuddy key instead.
+	// The account runs the SOP with its own personal CodeBuddy key.
 	u := env.user
-	if _, err := env.store.UpdateUserCredentials(u.ID, repo.UserCredentialUpdate{CodeBuddyAPIKeyClear: true}); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.store.SetPlatformCodeBuddyKey(repo.PlatformCodeBuddyKeyUpdate{
-		APIKey:              "ck_shared_test_key",
-		InternetEnvironment: "internal",
-		Models:              []string{"claude-sonnet-5"},
-	}, u.ID); err != nil {
+	if _, err := env.store.UpdateUserCredentials(u.ID, repo.UserCredentialUpdate{CodeBuddyAPIKey: "ck_account_test_key"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -424,8 +417,8 @@ func TestEvolutionSOPAutoBatchOptInSharedKeyAndOutsiderIsolation(t *testing.T) {
 	}
 
 	actor, model, ok := env.h.resolveSOPActorUser(ownerPolicy, env.wf)
-	if !ok || actor.CodeBuddyAPIKey != "ck_shared_test_key" || model != "claude-sonnet-5" {
-		t.Fatalf("expected shared key resolution for policy owner, got ok=%v key=%q model=%q", ok, actor.CodeBuddyAPIKey, model)
+	if !ok || actor.CodeBuddyAPIKey != "ck_account_test_key" || model == "" {
+		t.Fatalf("expected the account's own key for the policy owner, got ok=%v key=%q model=%q", ok, actor.CodeBuddyAPIKey, model)
 	}
 
 	// P1-3: GET /api/evolution/overview must be strictly read-only and never create proposals.

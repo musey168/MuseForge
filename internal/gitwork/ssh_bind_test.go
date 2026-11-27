@@ -1,9 +1,7 @@
 package gitwork
 
 import (
-	"context"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -216,7 +214,7 @@ func TestUnreadablePlatformSSHKnownHostsFailsClosed(t *testing.T) {
 	}
 }
 
-func TestSSHHostTrustRegistryReadFailureUsesKnownHostsFallbacks(t *testing.T) {
+func TestConfiguredKnownHostsFallbacks(t *testing.T) {
 	_, _, key, _, _, err := ssh.ParseKnownHosts([]byte(builtinKnownHosts))
 	if err != nil {
 		t.Fatal(err)
@@ -230,9 +228,7 @@ func TestSSHHostTrustRegistryReadFailureUsesKnownHostsFallbacks(t *testing.T) {
 	}
 	t.Setenv(SSHKnownHostsEnv, path)
 	keys := map[string]string{"github.com:22": "identity", host + ":22": "identity"}
-	ctx := WithSSHKnownHostsLookup(t.Context(), func(context.Context, []string) ([]byte, error) {
-		return []byte("registry.example.org " + publicKey), errors.New("registry unavailable")
-	})
+	ctx := t.Context()
 	platform := SSHKnownHostsForKeys(ctx, keys)
 	if platform == nil || platform.ReadFailed || !strings.Contains(platform.Entries, "@revoked github.com "+publicKey) ||
 		!strings.Contains(platform.Entries, host+" "+publicKey) {
@@ -240,13 +236,13 @@ func TestSSHHostTrustRegistryReadFailureUsesKnownHostsFallbacks(t *testing.T) {
 	}
 
 	remotes := []SSHRemote{{Host: "github.com", Port: "22"}, {Host: host, Port: "22"}}
-	pins, err := sshHostKeys(SnapshotSSHKnownHostsLookup(ctx, keys), remotes)
+	pins, err := sshHostKeys(ctx, remotes)
 	if err != nil || !strings.Contains(string(pins), "github.com ssh-rsa ") || !strings.Contains(string(pins), "@revoked github.com "+publicKey) ||
 		!strings.Contains(string(pins), host+" "+publicKey) {
 		t.Fatalf("local fallback pins: %s, %v", pins, err)
 	}
-	if _, err := sshHostKeys(ctx, []SSHRemote{{Host: "registry.example.org", Port: "22"}}); err == nil {
-		t.Fatal("accepted a pin returned by a failed registry read")
+	if _, err := sshHostKeys(ctx, []SSHRemote{{Host: "unknown.example.org", Port: "22"}}); err == nil {
+		t.Fatal("accepted an untrusted host")
 	}
 	t.Setenv(SSHKnownHostsEnv, "")
 	runnerPins, err := sshHostKeys(WithSSHKnownHosts(t.Context(), platform), remotes)
@@ -254,7 +250,7 @@ func TestSSHHostTrustRegistryReadFailureUsesKnownHostsFallbacks(t *testing.T) {
 		t.Fatalf("Runner fallback pins: %s, %v", runnerPins, err)
 	}
 	if platform := SSHKnownHostsForKeys(ctx, keys); platform != nil {
-		t.Fatalf("registry-only read failure was sent to the Runner: %+v", platform)
+		t.Fatalf("an empty deployment file still produced pins: %+v", platform)
 	}
 }
 
