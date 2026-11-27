@@ -371,7 +371,7 @@ func (h *catalogHandlers) agents(c *gin.Context) {
 				c.JSON(http.StatusNotFound, map[string]string{"error": "project not found"})
 				return
 			}
-			if !h.requireProjectWriter(c, v.ProjectID) {
+			if !h.requireAccountWrite(c, v.ProjectID) {
 				return
 			}
 			if err := validateCatalogAgentExecutor(&v); err != nil {
@@ -415,7 +415,7 @@ func (h *catalogHandlers) requireAgentWriter(c *gin.Context, agent domain.AgentD
 	if strings.TrimSpace(agent.ProjectID) == "" {
 		return h.requirePlatformAdmin(c)
 	}
-	return h.requireProjectWriter(c, agent.ProjectID)
+	return h.requireAccountWrite(c, agent.ProjectID)
 }
 
 func validateCatalogAgentExecutor(agent *domain.AgentDefinition) error {
@@ -538,7 +538,7 @@ func (h *catalogHandlers) agent(c *gin.Context) {
 			c.JSON(http.StatusNotFound, map[string]string{"error": "project not found"})
 			return
 		}
-		if !h.requireProjectWriter(c, targetProject) {
+		if !h.requireAccountWrite(c, targetProject) {
 			return
 		}
 		if taken, exists := h.repo.Agent(req.ID); exists && !h.requireAgentWriter(c, taken) {
@@ -551,9 +551,7 @@ func (h *catalogHandlers) agent(c *gin.Context) {
 		sourceWritable := h.projectWriterAllowed(c, v.ProjectID, userID)
 		if !v.Shared && !sourceWritable {
 			project, ok := h.repo.Project(v.ProjectID)
-			if !ok || userID <= 0 || !slices.ContainsFunc(project.Members, func(member domain.ProjectMember) bool {
-				return member.UserID == userID
-			}) {
+			if !ok || userID <= 0 || !project.AccountOwns(userID) {
 				c.JSON(http.StatusForbidden, gin.H{"error": "无权复制源项目中未共享的角色"})
 				return
 			}
@@ -1052,7 +1050,7 @@ func (h *catalogHandlers) workflows(c *gin.Context) {
 			if needsNotificationAccess && !h.notifications.access(c, projectID, true) {
 				return
 			}
-			if !h.requireProjectWriter(c, v.ProjectID, previousProjectID) {
+			if !h.requireAccountWrite(c, v.ProjectID, previousProjectID) {
 				return
 			}
 			if previous, exists := h.repo.Workflow(v.ID); exists && previous.Shared && !v.Shared && h.sharedScheduleReferences("sop", v.ID) {
@@ -1179,7 +1177,7 @@ func (h *catalogHandlers) workflow(c *gin.Context) {
 	if c.Request.Method != http.MethodGet && workflowHasNotifications(v) && !h.notifications.access(c, v.ProjectID, true) {
 		return
 	}
-	if c.Request.Method != http.MethodGet && c.FullPath() != "/api/workflows/:id/clone" && !h.requireProjectWriter(c, v.ProjectID) {
+	if c.Request.Method != http.MethodGet && c.FullPath() != "/api/workflows/:id/clone" && !h.requireAccountWrite(c, v.ProjectID) {
 		return
 	}
 	switch c.FullPath() {
@@ -1357,7 +1355,7 @@ func (h *catalogHandlers) workflow(c *gin.Context) {
 			req.ProjectID = strings.TrimSpace(v.ProjectID)
 		}
 		taken, _ := h.repo.Workflow(req.ID)
-		if !h.requireProjectWriter(c, req.ProjectID, taken.ProjectID) {
+		if !h.requireAccountWrite(c, req.ProjectID, taken.ProjectID) {
 			return
 		}
 		if req.AutoSelectSandbox {

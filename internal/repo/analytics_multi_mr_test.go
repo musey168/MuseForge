@@ -94,13 +94,6 @@ func checkAnalyticsMultiRepositoryMRCounts(t *testing.T, s *Store) {
 	if got.Summary.MergedMRs != 2 {
 		t.Fatalf("efficiency total must also count both MRs: %+v", got.Summary)
 	}
-	report, err := s.BusinessDomainReport(filter, []domain.Project{project}, nil)
-	if err != nil || report.DeliveryMetrics.MergedMRs != 2 || report.DeliveryMetrics.CompletedIssues != 1 {
-		t.Fatalf("business report must count two MRs and one requirement: %+v, %v", report.DeliveryMetrics, err)
-	}
-	if report.DeliveryMetrics.CompletionToMergeSamples != 2 || report.DeliveryMetrics.AverageCompletionToMergeMs != int64(70*time.Minute/time.Millisecond) {
-		t.Fatalf("MR latency must have two samples (40m + 100m) and average 70m: %+v", report.DeliveryMetrics)
-	}
 	// Legacy work items can carry both links only on the issue, without artifacts.
 	stored, _ := s.Issue(issue.ID)
 	stored.SetDeliveryMRs([]domain.DeliveryMR{{Project: a, IID: 1, URL: domain.GongfengMRURL(a, 1)}, {Project: b, IID: 1, URL: domain.GongfengMRURL(b, 1)}})

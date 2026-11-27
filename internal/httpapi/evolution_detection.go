@@ -29,7 +29,7 @@ func (h *evolutionHandlers) putSOPDetection(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请选择项目"})
 		return
 	}
-	if !h.requireProjectReader(c, projectID) || !h.requireProjectWriter(c, projectID) {
+	if !h.requireProjectReader(c, projectID) || !h.requireAccountWrite(c, projectID) {
 		return
 	}
 	project, ok := h.repo.Project(projectID)
@@ -261,7 +261,7 @@ func (h *evolutionHandlers) detectSOPRunWithConfig(ctx context.Context, projectI
 
 func (h *evolutionHandlers) evaluateSOPTrace(ctx context.Context, projectID string, cfg domain.SOPDetectionConfig, run domain.Run) (domain.RunEvalResult, error) {
 	user, exists := h.repo.User(cfg.ConfiguredBy)
-	if !exists || !h.speakerProjectWriter(projectID, user, cfg.ConfiguredBy) {
+	if !exists || !h.speakerAccountWriter(projectID, user, cfg.ConfiguredBy) {
 		return domain.RunEvalResult{}, fmt.Errorf("检测配置账号已失去项目权限")
 	}
 	model, err := resolveFeatureModel(user, cfg.Model)

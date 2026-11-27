@@ -114,13 +114,8 @@ func (s *Service) chatMember(bot domain.NotificationBot, sender string) (domain.
 	if !ok {
 		return user, "机器人所属项目不存在"
 	}
-	if project.OwnerID == user.ID || s.Store.IsPlatformAdmin(user.LoginName) {
+	if project.AccountOwns(user.ID) || s.Store.IsPlatformAdmin(user.LoginName) {
 		return user, ""
-	}
-	for _, m := range project.Members {
-		if m.UserID == user.ID && !strings.EqualFold(strings.TrimSpace(m.Role), "viewer") {
-			return user, ""
-		}
 	}
 	return user, "你的平台账号没有该项目的执行权限"
 }

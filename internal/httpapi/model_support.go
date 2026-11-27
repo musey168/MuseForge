@@ -486,13 +486,8 @@ func botExecutionUser(store *repo.Store, bot domain.NotificationBot, senderID st
 	if !ok {
 		return user, errors.New("Bot 项目不存在")
 	}
-	if project.OwnerID == user.ID || store.IsPlatformAdmin(user.LoginName) {
+	if project.AccountOwns(user.ID) || store.IsPlatformAdmin(user.LoginName) {
 		return user, nil
-	}
-	for _, member := range project.Members {
-		if member.UserID == user.ID && !strings.EqualFold(strings.TrimSpace(member.Role), "viewer") {
-			return user, nil
-		}
 	}
 	return user, errors.New("你的平台账号没有该项目的执行权限")
 }
@@ -555,13 +550,5 @@ func repositoryBaseBranchName(rc domain.RepositoryContext) string {
 	return strings.TrimSpace(rc.DefaultBranch)
 }
 func workbenchProjectAllowsUser(p domain.Project, userID int64, platformAdmin bool) bool {
-	if platformAdmin || p.OwnerID == userID || (p.OwnerID == 0 && len(p.Members) == 0) {
-		return true
-	}
-	for _, m := range p.Members {
-		if m.UserID == userID {
-			return true
-		}
-	}
-	return false
+	return platformAdmin || p.AccountOwns(userID)
 }

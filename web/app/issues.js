@@ -57,12 +57,10 @@ function bindIssueHeadingMenu(){
 function renderIssueAssigneeFilter(projectIssues=[]){
   const sel=$('#issueAssigneeFilter');if(!sel)return;
   const current=state.issueAssigneeFilter||'';
-  const members=projectMembers(state.projectFilter);
+  const project=(state.data.projects||[]).find(p=>p.id===state.projectFilter);
   const userMap=new Map();
-  members.forEach(m=>{
-    const u=userById(m.userId);
-    if(u)userMap.set(String(u.id), userDisplay(u));
-  });
+  const owner=project?userById(project.ownerId):null;
+  if(owner)userMap.set(String(owner.id),userDisplay(owner));
   projectIssues.forEach(i=>{
     if(i.assigneeUserId){
       const uid=String(i.assigneeUserId);

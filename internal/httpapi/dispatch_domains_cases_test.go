@@ -91,32 +91,3 @@ func cvBHTTPStatusRound2(err error) int {
 	}
 	return 0
 }
-
-func TestBusinessDomainHTTPValidation(t *testing.T) {
-	f := cvBNewHTTPFixture(t)
-	for _, tc := range []struct {
-		method, path string
-		body         any
-		want         int
-	}{
-		{http.MethodGet, "/api/business-domains", nil, 200},
-		{http.MethodPut, "/api/business-domains", map[string]any{"id": "all", "name": "Bad"}, 400},
-		{http.MethodPut, "/api/business-domains", map[string]any{"id": "bad space", "name": "Bad"}, 400},
-		{http.MethodPut, "/api/business-domains", map[string]any{"id": "cvb-r2-domain", "name": "Domain", "managerIds": []int64{f.user.ID, f.user.ID}}, 400},
-		{http.MethodPut, "/api/business-domains", map[string]any{"id": "cvb-r2-domain", "name": "Domain", "managerIds": []int64{999999}}, 400},
-		{http.MethodGet, "/api/business-domain-report?businessDomainId=missing", nil, 404},
-		{http.MethodGet, "/api/business-domain-report?timeZone=Invalid/Zone", nil, 400},
-		{http.MethodGet, "/api/business-domain-report?grain=hour", nil, 400},
-		{http.MethodGet, "/api/business-domain-report?from=bad", nil, 400},
-		{http.MethodGet, "/api/business-domain-report?from=2026-01-02T00:00:00Z&to=2026-01-01T00:00:00Z", nil, 400},
-		{http.MethodGet, "/api/business-domain-report?grain=week&timeZone=UTC", nil, 200},
-	} {
-		rec := cvBRequest(t, f, tc.method, tc.path, tc.body, true)
-		if rec.Code != tc.want {
-			t.Errorf("%s %s = %d want %d: %s", tc.method, tc.path, rec.Code, tc.want, rec.Body.String())
-		}
-	}
-	if !hasBusinessUser([]int64{f.user.ID}, f.user.ID) || hasBusinessUser([]int64{f.user.ID}, 0) {
-		t.Fatal("hasBusinessUser")
-	}
-}

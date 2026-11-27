@@ -395,13 +395,12 @@ func TestEvolutionQueueAPIStartsFreshAndReauthorizes(t *testing.T) {
 func TestEvolutionQueuePermissionsAndCrossProjectIsolation(t *testing.T) {
 	env := newEvoTestEnv(t)
 	t.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
-	if err := env.store.PutUser(domain.User{StaffID: 3102, LoginName: "queue-viewer"}); err != nil {
+	if err := env.store.PutUser(domain.User{StaffID: 3102, LoginName: "queue-outsider"}); err != nil {
 		t.Fatal(err)
 	}
-	viewer, _ := env.store.UserByLoginName("queue-viewer")
+	outsider, _ := env.store.UserByLoginName("queue-outsider")
 	project, _ := env.store.Project("evo-p")
 	project.OwnerID = env.user.ID
-	project.Members = []domain.ProjectMember{{UserID: viewer.ID, Role: "viewer"}}
 	if err := env.store.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
@@ -420,7 +419,7 @@ func TestEvolutionQueuePermissionsAndCrossProjectIsolation(t *testing.T) {
 	if err := env.store.PutEvoFinding(f); err != nil {
 		t.Fatal(err)
 	}
-	requestJSONAuthed[map[string]any](t, env.router, viewer, http.MethodPost, "/api/evolution/proposals", map[string]any{"findingId": f.ID}, http.StatusForbidden)
+	requestJSONAuthed[map[string]any](t, env.router, outsider, http.MethodPost, "/api/evolution/proposals", map[string]any{"findingId": f.ID}, http.StatusForbidden)
 	requestJSONAuthed[map[string]any](t, env.router, env.user, http.MethodPost, "/api/evolution/proposals", map[string]any{"findingId": f.ID}, http.StatusConflict)
 	// Existing shared-asset queues remain cancellable after the scope is
 	// narrowed; new API requests must no longer add shared-asset work.
@@ -429,8 +428,8 @@ func TestEvolutionQueuePermissionsAndCrossProjectIsolation(t *testing.T) {
 		t.Fatalf("legacy queue: %+v %v", legacy, err)
 	}
 	queued := struct{ QueueID string }{legacy.ID}
-	requestJSONAuthed[map[string]any](t, env.router, viewer, http.MethodPost, "/api/evolution/queue/"+queued.QueueID+"/start", nil, http.StatusForbidden)
-	requestJSONAuthed[map[string]any](t, env.router, viewer, http.MethodPost, "/api/evolution/queue/"+queued.QueueID+"/reject", nil, http.StatusForbidden)
+	requestJSONAuthed[map[string]any](t, env.router, outsider, http.MethodPost, "/api/evolution/queue/"+queued.QueueID+"/start", nil, http.StatusForbidden)
+	requestJSONAuthed[map[string]any](t, env.router, outsider, http.MethodPost, "/api/evolution/queue/"+queued.QueueID+"/reject", nil, http.StatusForbidden)
 	overview := requestJSONAuthed[domain.EvoOverview](t, env.router, env.user, http.MethodGet, "/api/evolution/overview?projectId=evo-p", nil, http.StatusOK)
 	if len(overview.Queue) != 1 || len(overview.Pending) != 0 || len(overview.Trial) != 0 {
 		t.Fatalf("other project's current must not leak through overview: %+v", overview)

@@ -107,14 +107,16 @@ func TestGenericSOPExecutorPrefersRunnerLoginOverSharedKey(t *testing.T) {
 	}
 }
 
-func TestSharedRunnerSOPUsesProjectDefaultAndResponsibleUserCredentials(t *testing.T) {
+// The platform runs one account: the person, the project and the machine are
+// the same. The account grants its own machine to the project it holds; a
+// project the machine was not granted to falls back to the cloud.
+func TestSharedRunnerSOPUsesProjectDefaultAndAccountCredentials(t *testing.T) {
 	st, err := repo.OpenTest()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(st.Close)
-	if err := st.PutProject(domain.Project{ID: "shared-compute", Name: "Shared compute", OwnerID: 1,
-		Members: []domain.ProjectMember{{UserID: 42, Role: "member"}}}); err != nil {
+	if err := st.PutProject(domain.Project{ID: "shared-compute", Name: "Shared compute", OwnerID: 42}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.PutProject(domain.Project{ID: "unshared-compute", Name: "Unshared compute", OwnerID: 42}); err != nil {
@@ -128,7 +130,7 @@ func TestSharedRunnerSOPUsesProjectDefaultAndResponsibleUserCredentials(t *testi
 	if err := st.SetRunnerSharedProjects(runner.ID, 42, []string{"shared-compute"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetProjectDefaultRunner(1, "shared-compute", runner.ID); err != nil {
+	if err := st.SetProjectDefaultRunner(42, "shared-compute", runner.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.SetDefaultRunner(42, runner.ID, time.Now()); err != nil {
@@ -149,30 +151,19 @@ func TestSharedRunnerSOPUsesProjectDefaultAndResponsibleUserCredentials(t *testi
 			t.Fatalf("owner target for %q = %+v, want %s %q", tc.projectID, ownerExecution, tc.mode, tc.runnerID)
 		}
 	}
-	execution := domain.TelemetryContext{ProjectID: "shared-compute", ResponsibleUserID: 1}
+	execution := domain.TelemetryContext{ProjectID: "shared-compute", ResponsibleUserID: 42}
 	e.selectSOPExecutionTarget(&execution, false)
 	if execution.ExecutionRunnerID != runner.ID || execution.ExecutionMode != domain.ExecutionModeRunner {
 		t.Fatalf("project target = %+v", execution)
 	}
-	if e.sopExecutorAccess(execution).configured("codex") {
-		t.Fatal("a project member inherited the machine owner's local login")
-	}
-	if _, err := st.UpdateUserCredentials(1, repo.UserCredentialUpdate{CodexAPIKey: "member-key"}); err != nil {
-		t.Fatal(err)
-	}
 	if !e.sopExecutorAccess(execution).configured("codex") {
-		t.Fatal("the responsible user's personal key is unavailable on the shared machine")
+		t.Fatal("the account cannot use the local login of its own machine")
 	}
-	setMembers := func(t *testing.T, members []domain.ProjectMember) {
-		t.Helper()
-		project, ok := st.Project("shared-compute")
-		if !ok {
-			t.Fatal("shared-compute project not found")
-		}
-		project.Members = members
-		if err := st.PutProject(project); err != nil {
-			t.Fatal(err)
-		}
+	// An account that does not hold the project gets no machine at all.
+	outsider := domain.TelemetryContext{ProjectID: "shared-compute", ResponsibleUserID: 1}
+	e.selectSOPExecutionTarget(&outsider, false)
+	if outsider.ExecutionRunnerID != "" || outsider.ExecutionMode != domain.ExecutionModeCloud {
+		t.Fatalf("outsider target = %+v", outsider)
 	}
 	checkRevocation := func(t *testing.T) {
 		t.Helper()
@@ -187,20 +178,24 @@ func TestSharedRunnerSOPUsesProjectDefaultAndResponsibleUserCredentials(t *testi
 			}
 		}
 	}
-	for _, tc := range []struct {
-		name    string
-		members []domain.ProjectMember
-	}{
-		{"owner becomes viewer", []domain.ProjectMember{{UserID: 42, Role: "viewer"}}},
-		{"owner removed", []domain.ProjectMember{}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			setMembers(t, tc.members)
-			checkRevocation(t)
-		})
-	}
+	t.Run("project changes owner", func(t *testing.T) {
+		project, ok := st.Project("shared-compute")
+		if !ok {
+			t.Fatal("shared-compute project not found")
+		}
+		project.OwnerID = 1
+		if err := st.PutProject(project); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			project.OwnerID = 42
+			if err := st.PutProject(project); err != nil {
+				t.Fatal(err)
+			}
+		}()
+		checkRevocation(t)
+	})
 	t.Run("owner withdraws grant", func(t *testing.T) {
-		setMembers(t, []domain.ProjectMember{{UserID: 42, Role: "member"}})
 		if err := st.SetRunnerSharedProjects(runner.ID, 42, nil); err != nil {
 			t.Fatal(err)
 		}
@@ -216,11 +211,7 @@ func TestSOPDefaultSnapshotFollowsRunnerAuthMode(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(st.Close)
-			if err := st.PutUser(domain.User{ID: 42, LoginName: "member"}); err != nil {
-				t.Fatal(err)
-			}
-			project := domain.Project{ID: "sop-auth", Name: "SOP auth", OwnerID: 1,
-				Members: []domain.ProjectMember{{UserID: 42, Role: "member"}}}
+			project := domain.Project{ID: "sop-auth", Name: "SOP auth", OwnerID: 1}
 			if err := st.PutProject(project); err != nil {
 				t.Fatal(err)
 			}
@@ -234,11 +225,10 @@ func TestSOPDefaultSnapshotFollowsRunnerAuthMode(t *testing.T) {
 			}
 			ex, _ := repo.BuiltInExecutorForKind(kind)
 			personal := domain.ExecutorDefaults{Executor: kind, Model: "owner-gateway", Effort: "high"}
-			member := domain.ExecutorDefaults{Executor: kind, Model: "member-gateway", Effort: "high"}
 			for _, user := range []struct {
 				id       int64
 				defaults *domain.ExecutorDefaults
-			}{{1, &personal}, {42, &member}} {
+			}{{1, &personal}} {
 				if err := st.SetProjectDefaultRunner(user.id, project.ID, runner.ID); err != nil {
 					t.Fatal(err)
 				}
@@ -295,7 +285,6 @@ func TestSOPDefaultSnapshotFollowsRunnerAuthMode(t *testing.T) {
 			model := domain.CLIModel{ID: "machine-account", ReasoningEfforts: &[]string{"low"}, DiscoveredReasoningEfforts: &[]string{"medium"}}
 			saveAccountModel(model)
 			check("account login", 1, model.ID, "low")
-			check("shared machine uses member key", 42, member.Model, member.Effort)
 			model.ReasoningEfforts = &[]string{}
 			saveAccountModel(model)
 			check("model uses native effort", 1, model.ID, "")

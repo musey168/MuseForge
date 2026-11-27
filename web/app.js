@@ -869,13 +869,12 @@ async function refreshDashboard(){
 }
 function currentProject(){return (state.data.projects||[]).find(p=>p.id===state.projectFilter)||(state.data.projects||[])[0]}
 // Newcomers (no project in the URL or saved from an earlier visit) start in a
-// project they belong to, then the welcome project, then the first project.
+// project they own, then the welcome project, then the first project.
 const DEFAULT_PROJECT_ID='welcome';
-function defaultProjectId(projects,userId){const list=projects||[];const mine=userId?list.find(p=>p.ownerId===userId||(p.members||[]).some(m=>m.userId===userId)):null;return (mine||list.find(p=>p.id===DEFAULT_PROJECT_ID)||list[0])?.id||''}
+function defaultProjectId(projects,userId){const list=projects||[];const mine=userId?list.find(p=>Number(p.ownerId)===Number(userId)):null;return (mine||list.find(p=>p.id===DEFAULT_PROJECT_ID)||list[0])?.id||''}
 function currentRepository(project=currentProject()){const id=project?.defaultRepositoryId;return (state.data.repositories||[]).find(r=>r.id===id)}
 function userById(id){return (state.data.users||[]).find(u=>Number(u.id)===Number(id))}
 function userDisplay(user){return user?(user.chineseName&&user.loginName?`${user.loginName}(${user.chineseName})`:user.loginName||user.chineseName||`用户 ${user.id}`):''}
-function projectMembers(projectId){return ((state.data.projects||[]).find(p=>p.id===projectId)||{}).members||[]}
 function issueAssigneeName(issue){
 	if(issue?.assigneeUserId)return userDisplay(userById(issue.assigneeUserId));
 	if(!issue?.assigneeId)return '';

@@ -78,7 +78,7 @@ func (d deps) allowMCPServerWrite(c *gin.Context, server domain.MCPServerDefinit
 		return false
 	}
 	if project := strings.TrimSpace(server.ProjectID); project != "" {
-		return d.requireProjectWriter(c, project)
+		return d.requireAccountWrite(c, project)
 	}
 	return d.requirePlatformAdmin(c)
 }

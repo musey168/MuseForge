@@ -1,11 +1,9 @@
 package httpapi
 
 import (
-	"agentflow/internal/domain"
 	"agentflow/internal/repo"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -60,26 +58,6 @@ func (h *authHandlers) authSetup(c *gin.Context) {
 
 const welcomeProjectID = "welcome"
 
-// joinWelcomeProject makes the seeded demo project usable by new accounts so
-// the onboarding path works before they create a project of their own.
-func (h *authHandlers) joinWelcomeProject(userID int64) { joinWelcomeProject(h.repo, userID) }
-
-func joinWelcomeProject(store *repo.Store, userID int64) {
-	project, ok := store.Project(welcomeProjectID)
-	if !ok {
-		return
-	}
-	for _, m := range project.Members {
-		if m.UserID == userID {
-			return
-		}
-	}
-	project.Members = append(project.Members, domain.ProjectMember{UserID: userID, Role: "member"})
-	if err := store.PutProject(project); err != nil {
-		log.Printf("join welcome project: %v", err)
-	}
-}
-
 func (h *authHandlers) authRegister(c *gin.Context) {
 	origin, err := url.Parse(c.GetHeader("Origin"))
 	if err != nil || origin.Host != c.Request.Host || (origin.Scheme != "http" && origin.Scheme != "https") {
@@ -128,9 +106,6 @@ func (h *authHandlers) authRegister(c *gin.Context) {
 		return
 	}
 	u, err := h.repo.CreateLocalAccount(input.Login, input.Password, first)
-	if err == nil && !first {
-		h.joinWelcomeProject(u.ID)
-	}
 	registerMu.Unlock()
 	if errors.Is(err, repo.ErrLoginTaken) {
 		c.JSON(http.StatusConflict, gin.H{"error": "该用户名已被使用"})

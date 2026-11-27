@@ -107,28 +107,27 @@ func TestQuerySummaryProjectionAndScope(t *testing.T) {
 	}
 }
 
-func TestProjectListBatchesMembers(t *testing.T) {
+func TestProjectListUsesSingleQuery(t *testing.T) {
 	s := queryTestStore(t)
 	prefix := fmt.Sprintf("project-query-%d-", time.Now().UnixNano())
 	for i := 0; i < 8; i++ {
 		id := fmt.Sprintf("%s%d", prefix, i)
-		if err := s.PutProject(domain.Project{ID: id, Name: id, Members: []domain.ProjectMember{{UserID: 1, Role: "maintainer"}}}); err != nil {
+		if err := s.PutProject(domain.Project{ID: id, Name: id, OwnerID: 1}); err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() {
-			s.DB.Exec("DELETE FROM project_members WHERE project_id=?", id)
 			s.DB.Exec("DELETE FROM projects WHERE id=?", id)
 		})
 	}
 	recorder := &queryRecorder{Interface: logger.Default}
 	s.DB.Logger = recorder
 	projects := s.Projects()
-	if len(recorder.queries) != 2 {
-		t.Fatalf("expected 2 queries regardless of project count, got %d", len(recorder.queries))
+	if len(recorder.queries) != 1 {
+		t.Fatalf("expected 1 query regardless of project count, got %d", len(recorder.queries))
 	}
 	for _, p := range projects {
-		if strings.HasPrefix(p.ID, prefix) && (len(p.Members) != 1 || p.Members[0].UserID != 1) {
-			t.Fatalf("members lost: %+v", p)
+		if strings.HasPrefix(p.ID, prefix) && p.OwnerID != 1 {
+			t.Fatalf("owner lost: %+v", p)
 		}
 	}
 }

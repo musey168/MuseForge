@@ -50,7 +50,7 @@ func sharedWorkbenchFixture(t *testing.T) (*deps, domain.User, domain.User, doma
 	peer, _ := h.repo.UserByLoginName("peer")
 	out, _ := h.repo.UserByLoginName("outsider")
 	p, _ := h.repo.Project("workbench")
-	p.Members = append(p.Members, domain.ProjectMember{UserID: peer.ID, Role: "member"})
+	// One account owns the platform; there is no roster to extend.
 	if err := h.repo.PutProject(p); err != nil {
 		t.Fatal(err)
 	}

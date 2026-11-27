@@ -28,7 +28,7 @@ func botFixture(t *testing.T) (*repo.Store, *deps, domain.NotificationBot) {
 	t.Cleanup(func() { s.Close() })
 	s.PutUser(domain.User{ID: 42, LoginName: "bot-owner", CodeBuddyAPIKey: "owner-key", CodeBuddyInternetEnvironment: "ioa"})
 	s.PutUser(domain.User{ID: 43, LoginName: "other-user", CodeBuddyAPIKey: "other-key", CodeBuddyInternetEnvironment: "ioa"})
-	s.PutProject(domain.Project{ID: "p", OwnerID: 42, Members: []domain.ProjectMember{{UserID: 43, Role: "member"}}})
+	s.PutProject(domain.Project{ID: "p", OwnerID: 42})
 	bot := domain.NotificationBot{ID: "b", BotID: "external", ProjectID: "p", OwnerID: 42, Enabled: true, InteractionEnabled: true, Model: domain.DefaultNotificationReportModel}
 	if err = s.SaveNotificationBot(bot, "secret"); err != nil {
 		t.Fatal(err)

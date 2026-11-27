@@ -160,8 +160,8 @@ test('runner sharing saves multiple projects and offers project defaults for eli
     state.runnerBindCode={code:'fixture',expiresAt:'2099-01-01T00:00:00Z'};
     state.data.projects=[
       {id:'one',name:'One',ownerId:1},
-      {id:'two',name:'Two',ownerId:2,members:[{userId:1,role:'member'}]},
-      {id:'viewer',name:'Viewer',ownerId:2,members:[{userId:1,role:'viewer'}]},
+      {id:'two',name:'Two',ownerId:2},
+      {id:'viewer',name:'Viewer',ownerId:2},
     ];
   `);
   await app.evaluate('refreshRunners()');
@@ -171,11 +171,11 @@ test('runner sharing saves multiple projects and offers project defaults for eli
   await app.evaluate('refreshRunners()');
   app.document.querySelector('[data-runner-share="mine"]').click();
   const projects = [...app.document.querySelectorAll('.runner-share-projects input')];
-  assert.deepEqual(projects.map(box => box.value), ['one', 'two']);
+  assert.deepEqual(projects.map(box => box.value), ['one']);
   projects.forEach(box => box.click());
   app.document.querySelector('#confirmOkBtn').click();
   await settle();
-  assert.deepEqual(app.router.calls.find(c => c.path === '/api/runners/mine/shared-projects').body, {projectIds: ['one', 'two']});
+  assert.deepEqual(app.router.calls.find(c => c.path === '/api/runners/mine/shared-projects').body, {projectIds: ['one']});
   assert.equal(app.document.querySelector('[data-runner-share="team"]'), null);
   await app.evaluate(`saveRunnerRunLimit('desktop','25')`);
   const ownerChoice = app.document.querySelector('[data-set-project-default="desktop"]');
@@ -285,8 +285,8 @@ test('platform runner card and auto assignment respect project and admin permiss
     state.currentUser={id:1};
     state.projectFilter='write';
     state.data.projects=[
-      {id:'write',name:'Writable',ownerId:2,members:[{userId:1,role:'member'}]},
-      {id:'read',name:'Read only',ownerId:2,members:[{userId:1,role:'viewer'}]},
+      {id:'write',name:'Writable',ownerId:1},
+      {id:'read',name:'Read only',ownerId:2},
     ];
     state.runnerBindCode={code:'fixture',expiresAt:'2099-01-01T00:00:00Z'};
   `);

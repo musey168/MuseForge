@@ -33,15 +33,10 @@ func (h *insightsHandlers) manageProject(c *gin.Context, projectID string) bool 
 		c.JSON(404, gin.H{"error": "项目不存在"})
 		return false
 	}
-	if h.isPlatformAdmin(c.Request) || (user.ID > 0 && project.OwnerID == user.ID) {
+	if h.isPlatformAdmin(c.Request) || project.AccountOwns(user.ID) {
 		return true
 	}
-	for _, member := range project.Members {
-		if member.UserID == user.ID && member.Role == "maintainer" {
-			return true
-		}
-	}
-	c.JSON(403, gin.H{"error": "只有项目负责人、维护者或平台管理员可以管理上报数据源"})
+	c.JSON(403, gin.H{"error": "只有项目负责人或平台管理员可以管理上报数据源"})
 	return false
 }
 func (h *insightsHandlers) sources(c *gin.Context) {
@@ -76,15 +71,10 @@ func (h *insightsHandlers) sources(c *gin.Context) {
 	}
 	project, _ := h.repo.Project(input.ProjectID)
 	for externalID, uid := range input.UserMappings {
-		member := uid > 0 && project.OwnerID == uid
-		for _, m := range project.Members {
-			if m.UserID == uid {
-				member = true
-			}
-		}
+		member := uid > 0 && project.AccountOwns(uid)
 		_, exists := h.repo.User(uid)
 		if strings.TrimSpace(externalID) == "" || len(externalID) > 128 || !exists || !member {
-			c.JSON(400, gin.H{"error": "外部用户须映射到本项目的现有成员或负责人"})
+			c.JSON(400, gin.H{"error": "外部用户须映射到本项目的现有负责人"})
 			return
 		}
 	}

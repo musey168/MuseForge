@@ -89,9 +89,6 @@ func (h *usersHandlers) createPlatformAccount(c *gin.Context) {
 	}
 	registerMu.Lock()
 	u, err := h.repo.CreateLocalAccount(input.LoginName, input.Password, input.Admin)
-	if err == nil {
-		joinWelcomeProject(h.repo, u.ID)
-	}
 	registerMu.Unlock()
 	if errors.Is(err, repo.ErrLoginTaken) {
 		c.JSON(http.StatusConflict, gin.H{"error": "该用户名已被使用"})

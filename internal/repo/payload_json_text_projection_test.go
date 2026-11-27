@@ -45,7 +45,11 @@ func TestIssueAnalyticsViewsProjectsPayloadJSONColumns(t *testing.T) {
 	}
 }
 
-func TestBusinessDeliveryIssuesProjectsPayloadJSONColumns(t *testing.T) {
+// The lifecycle evidence of an issue lives in its stored payload. The
+// analytics projection reads the clarification timestamp out of that payload
+// through sqlPayloadJSONText, and the full issue read returns the remaining
+// lifecycle columns.
+func TestIssueLifecyclePayloadColumnsRoundTrip(t *testing.T) {
 	s, err := OpenTest()
 	if err != nil {
 		t.Fatal(err)
@@ -69,22 +73,22 @@ func TestBusinessDeliveryIssuesProjectsPayloadJSONColumns(t *testing.T) {
 	if !ok || stored.CompletedAt.IsZero() {
 		t.Fatalf("stored completion = %+v (found=%v)", stored.CompletedAt, ok)
 	}
-	completed := stored.CompletedAt
-	if err := s.PutIssue(domain.Issue{ID: "iss-other", ProjectID: "beta", Title: "other"}); err != nil {
-		t.Fatal(err)
+	if !stored.Clarification.StartedAt.Equal(started) {
+		t.Fatalf("stored clarification startedAt = %v, want %v", stored.Clarification.StartedAt, started)
 	}
-	issues, err := s.AnalyticsRepo.businessDeliveryIssues([]string{"alpha"})
-	if err != nil {
-		t.Fatal(err)
+	if len(stored.Operations) < 2 || stored.Operations[0].Action != "create" || stored.Operations[len(stored.Operations)-1].Action != "close" {
+		t.Fatalf("stored operations = %+v", stored.Operations)
 	}
-	if len(issues) != 1 || issues[0].ID != "iss-lifecycle" {
-		t.Fatalf("issues = %+v", issues)
+	view := domain.Issue{}
+	for _, candidate := range s.IssueAnalyticsViews() {
+		if candidate.ID == issue.ID {
+			view = candidate
+		}
 	}
-	got := issues[0]
-	if !got.CompletedAt.Equal(completed) || !got.Clarification.StartedAt.Equal(started) {
-		t.Fatalf("lifecycle times completed=%v started=%v", got.CompletedAt, got.Clarification.StartedAt)
+	if view.ID == "" {
+		t.Fatalf("issue %s missing from the analytics projection", issue.ID)
 	}
-	if len(got.Operations) < 2 || got.Operations[0].Action != "create" || got.Operations[len(got.Operations)-1].Action != "close" {
-		t.Fatalf("operations = %+v", got.Operations)
+	if !view.Clarification.StartedAt.Equal(started) {
+		t.Fatalf("projected clarification startedAt = %v, want %v", view.Clarification.StartedAt, started)
 	}
 }

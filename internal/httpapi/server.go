@@ -80,7 +80,6 @@ type Server struct {
 	projects        *projectsHandlers
 	credentials     *projectCredentialsHandlers
 	insights        *insightsHandlers
-	businessDomains *businessDomainsHandlers
 	catalog         *catalogHandlers  // catalog.go
 	mcp             *mcpHandlers      // mcp.go
 	market          *marketHandlers   // mcp_market.go
@@ -165,7 +164,6 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 		platformSetting: &platformSettingsHandlers{deps: d, envPublicURL: func() string { return notifications.PublicURL }},
 		httpHostTrust:   &gitHTTPHostTrustHandlers{deps: d, hosts: s.GitHTTPHostTrustRepo},
 		catalog:         &catalogHandlers{deps: d},
-		businessDomains: &businessDomainsHandlers{deps: d},
 		insights:        &insightsHandlers{deps: d},
 		projects:        &projectsHandlers{deps: d},
 		credentials:     &projectCredentialsHandlers{deps: d},
@@ -344,11 +342,6 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 	g.GET("/api/executor-models", api.catalog.executorModels)
 	g.GET("/api/openapi.yaml", api.openAPI)
 	g.GET("/api/bootstrap", api.bootstrap)
-	g.GET("/api/business-domains", api.businessDomains.domains)
-	g.PUT("/api/business-domains", api.businessDomains.domains)
-	g.GET("/api/business-domain-report", api.businessDomains.report)
-	g.PUT("/api/projects/:id/business-domain", api.projects.businessDomainAssignment)
-	g.GET("/api/projects/:id/business-domain/history", api.projects.businessDomainAssignment)
 	g.GET("/api/projects", api.projects.projects)
 	g.PUT("/api/projects", api.projects.projects)
 	g.POST("/api/projects", api.projects.projects)
@@ -359,11 +352,6 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 	g.DELETE("/api/projects/:id/credentials/:credentialId", api.credentials.delete)
 	g.DELETE("/api/projects/:id", api.projects.deleteProject)
 	g.POST("/api/projects/:id/restore", api.projects.restoreProject)
-	g.POST("/api/projects/:id/join-requests", api.projects.createJoinRequest)
-	g.GET("/api/project-join-requests", api.projects.joinRequests)
-	g.POST("/api/project-join-requests/:id/approve", api.projects.approveJoinRequest)
-	g.POST("/api/project-join-requests/:id/reject", api.projects.rejectJoinRequest)
-	g.POST("/api/project-join-requests/:id/withdraw", api.projects.withdrawJoinRequest)
 	g.GET("/api/repositories", api.catalog.repositories)
 	g.POST("/api/repositories", api.catalog.repositories)
 	g.PUT("/api/repositories", api.catalog.repositories)
@@ -730,11 +718,6 @@ func (s *Server) bootstrap(c *gin.Context) {
 	}()
 	go func() { defer load.Done(); users = s.repo.Users() }()
 	load.Wait()
-	businessDomains, err := s.repo.BusinessDomains()
-	if err != nil {
-		respond(c, err)
-		return
-	}
 	var currentUserID int64
 	if current, ok := s.requestUser(c.Request, true); ok {
 		currentUserID = current.ID
@@ -746,7 +729,7 @@ func (s *Server) bootstrap(c *gin.Context) {
 		sponsoredModel = sharedModels[0]
 	}
 	c.JSON(200, map[string]any{
-		"businessDomains": businessDomains, "projects": domain.PublicProjects(projects), "repositories": domain.PublicRepositories(repositories),
+		"projects": domain.PublicProjects(projects), "repositories": domain.PublicRepositories(repositories),
 		"agents": catalogAgents(agents), "rules": rules, "skills": skills, "mcpServers": mcpServers,
 		"executors": executors, "sandboxes": sandboxes,
 		"workflows": workflows, "syncConfig": syncConfig, "scheduleJobs": scheduleJobs, "schedulerEnabled": schedulerEnabled(),

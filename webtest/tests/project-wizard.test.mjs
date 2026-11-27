@@ -43,8 +43,6 @@ test('project wizard creates a project, binds a repository, skips optional steps
   );
 
   await app.evaluate(`projectWizardNext()`);
-  assert.equal(host().querySelector('.pw-dialog').dataset.pwStep, 'members');
-  await app.evaluate(`projectWizardSkip()`);
   assert.equal(host().querySelector('.pw-dialog').dataset.pwStep, 'tapd');
   input('tapdWorkspaceId', '20375341');
   input('tapdIterationId', '88');
@@ -53,6 +51,7 @@ test('project wizard creates a project, binds a repository, skips optional steps
   assert.equal(host().querySelector('.pw-dialog').dataset.pwStep, 'done');
   assert.match(host().textContent, /项目「Web Console」已创建/);
   assert.match(host().querySelector('[data-pw-summary="tapd"]').textContent, /20375341/);
+  assert.equal(host().querySelector('[data-pw-summary="members"]'), null, 'the summary lists no member roster');
   assert.equal(app.evaluate(`projectWizardDirty()`), false);
 });
 
@@ -71,7 +70,7 @@ test('wizard validates names and repository URLs with actionable errors', async 
   assert.match(app.document.querySelector('#projectWizard [role="alert"]').textContent, /请先粘贴 Git 仓库地址/);
 });
 
-test('without a TAPD integration the wizard goes from members straight to done', async (t) => {
+test('without a TAPD integration the wizard goes from the repositories straight to done', async (t) => {
   const app = await loadApp();
   t.after(app.close);
   app.router.post('/api/projects', (call) => ({ ...call.body, id: call.body.id, key: call.body.key }));
@@ -93,9 +92,7 @@ test('without a TAPD integration the wizard goes from members straight to done',
   assert.equal(host().querySelector('.pw-dialog').dataset.pwStep, 'repos');
   assert.doesNotMatch(host().textContent, /TAPD/);
   await app.evaluate(`projectWizardNext()`);
-  assert.equal(host().querySelector('.pw-dialog').dataset.pwStep, 'members');
-  await app.evaluate(`projectWizardSkip()`);
-  await settle(6);
   assert.equal(host().querySelector('.pw-dialog').dataset.pwStep, 'done');
+  await settle(6);
   assert.equal(host().querySelector('[data-pw-summary="tapd"]'), null);
 });

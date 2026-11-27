@@ -75,19 +75,6 @@ function defaultPayload(pathname, method) {
   if (pathname === '/api/workflow-metrics') return sampleBootstrap().workflowMetrics;
   if (pathname === '/api/notification-bots') return sampleBootstrap().bots;
   if (pathname === '/api/notification-deliveries') return [];
-  if (pathname === '/api/business-domains') return {
-    items: sampleBootstrap().businessDomains.map((domain) => ({ domain, canView: true, canManage: true })),
-    canAdmin: true,
-    userId: 1,
-  };
-  if (pathname === '/api/business-domain-report') return {
-    summary: { uniqueIssues: 1, totalRuns: 1, succeededRuns: 1, failedRuns: 0, successRate: 100,
-      totalTokens: 1200, costReportedCny: 0.2, costCoveragePct: 100 },
-    deliveryMetrics: { completedIssues: 1, mergedMrs: 1, cycleSamples: 1,
-      averageCycleDurationMs: 3600000, p95CycleDurationMs: 3600000 },
-    businessDomains: [], projects: [], trend: [], deliveryTrend: [], grain: 'day',
-    timeZone: 'UTC', generatedAt: '2026-10-21T10:00:00Z',
-  };
   if (pathname === '/api/knowledge/connector-types') return [
     {
       type: 'weknora',
@@ -148,7 +135,7 @@ function defaultPayload(pathname, method) {
 
 export function sampleBootstrap() {
   const project = { id: 'project-1', name: 'Atlas', identifier: 'ATL', description: 'Test project',
-    status: 'active', defaultRepositoryId: 'repo-1', businessDomainId: 'domain-1', memberCount: 2 };
+    status: 'active', defaultRepositoryId: 'repo-1', ownerId: 1 };
   const repository = { id: 'repo-1', projectId: project.id, name: 'atlas-web', provider: 'gongfeng',
     gongfengProjectId: '1001', webUrl: 'https://git.example/atlas', cloneUrl: 'git@example:atlas.git',
     defaultBranch: 'main', integrateBranch: 'develop', localPath: '/workspace/atlas' };
@@ -182,7 +169,6 @@ export function sampleBootstrap() {
     scheduleJobs: [{ id: 'job-1', name: 'Nightly sync', cron: '0 2 * * *', enabled: true }],
     syncLogs: [{ id: 'log-1', status: 'success', message: 'Synced', createdAt: '2026-10-20T10:00:00Z' }],
     bots: [{ id: 'bot-1', name: 'Helper', type: 'wecom', enabled: true }],
-    businessDomains: [{ id: 'domain-1', name: 'Commerce', description: 'Commerce systems' }],
   };
 }
 

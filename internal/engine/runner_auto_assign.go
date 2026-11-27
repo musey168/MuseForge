@@ -66,7 +66,7 @@ func (e *Engine) platformAutoCandidates(projectID string, includeOffline bool) [
 
 func (e *Engine) autoAssignCandidates(ec domain.TelemetryContext, includeOffline bool) []autoAssignCandidate {
 	project, ok := e.repo.Project(ec.ProjectID)
-	if !ok || project.ArchivedAt != nil || !project.HasWritableMember(ec.ResponsibleUserID) {
+	if !ok || project.ArchivedAt != nil || !project.AccountOwns(ec.ResponsibleUserID) {
 		return nil
 	}
 	candidates := e.platformAutoCandidates(ec.ProjectID, includeOffline)

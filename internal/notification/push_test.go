@@ -56,7 +56,7 @@ func pushFixture(t *testing.T, channel string) (*Service, *fakePushChannel, doma
 	t.Cleanup(func() { store.Close() })
 	store.PutUser(domain.User{ID: 42, LoginName: "owner"})
 	store.PutUser(domain.User{ID: 43, LoginName: "member", ChineseName: "成员"})
-	store.PutProject(domain.Project{ID: "p", OwnerID: 42, Members: []domain.ProjectMember{{UserID: 43, Role: "member"}}})
+	store.PutProject(domain.Project{ID: "p", OwnerID: 42, })
 	svc := New(store)
 	svc.PublicURL = "https://platform.example"
 	fake := &fakePushChannel{kind: channel}

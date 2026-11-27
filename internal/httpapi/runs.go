@@ -88,7 +88,7 @@ func (h *runsHandlers) runs(c *gin.Context) {
 		if workflow, ok := h.repo.Workflow(strings.TrimSpace(req.WorkflowID)); ok && !workflow.Shared && !workflow.Generic {
 			workflowProject = workflow.ProjectID
 		}
-		if !h.requireProjectWriter(c, req.ProjectID, workflowProject) {
+		if !h.requireAccountWrite(c, req.ProjectID, workflowProject) {
 			return
 		}
 		executionContext := domain.TelemetryContext{ProjectID: req.ProjectID, ResponsibleUserID: project.OwnerID}

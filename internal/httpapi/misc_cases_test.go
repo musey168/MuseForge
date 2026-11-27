@@ -333,49 +333,9 @@ func TestMiscProjectPlaybooksPermissionsAndAssignments(t *testing.T) {
 		t.Fatalf("bad project playbook = %d: %s", rec.Code, rec.Body.String())
 	}
 	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodPost, "/api/projects", map[string]any{
-		"id": "cvb-domain-bypass", "name": "bad", "businessDomainId": "missing",
-	}); rec.Code != http.StatusBadRequest {
-		t.Fatalf("business domain bypass = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodPost, "/api/projects", map[string]any{
 		"id": "cvb-tapd-clear-new", "name": "clear", "tapdClear": true,
 	}); rec.Code != http.StatusOK {
 		t.Fatalf("new TAPD clear project = %d: %s", rec.Code, rec.Body.String())
-	}
-
-	if rec := cvBMiscRequestAs(t, f, outsider, http.MethodGet, "/api/projects/cvb-owned/business-domain/history", nil); rec.Code != http.StatusForbidden {
-		t.Fatalf("forbidden history = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodGet, "/api/projects/missing/business-domain/history", nil); rec.Code != http.StatusNotFound {
-		t.Fatalf("missing assignment project = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodPut, "/api/projects/cvb-owned/business-domain", map[string]any{
-		"reason": strings.Repeat("界", 501),
-	}); rec.Code != http.StatusBadRequest {
-		t.Fatalf("long assignment reason = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodPut, "/api/projects/cvb-owned/business-domain", map[string]any{
-		"businessDomainId": "missing-domain",
-	}); rec.Code != http.StatusNotFound {
-		t.Fatalf("missing assignment domain = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodPut, "/api/business-domains", map[string]any{
-		"id": "cvb-misc-domain", "name": "misc domain", "active": true,
-	}); rec.Code != http.StatusOK {
-		t.Fatalf("create domain = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodPut, "/api/projects/cvb-owned/business-domain", map[string]any{
-		"businessDomainId": "cvb-misc-domain", "reason": "assign",
-	}); rec.Code != http.StatusOK {
-		t.Fatalf("assign domain = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodGet, "/api/projects/cvb-owned/business-domain/history", nil); rec.Code != http.StatusOK {
-		t.Fatalf("assignment history = %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := cvBMiscRequestAs(t, f, f.user, http.MethodPut, "/api/projects/cvb-owned/business-domain", map[string]any{
-		"expectedDomainId": "wrong",
-	}); rec.Code != http.StatusConflict {
-		t.Fatalf("assignment conflict = %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

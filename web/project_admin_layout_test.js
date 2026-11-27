@@ -16,9 +16,9 @@ function extract(source, name) {
 const requests = [], notices = [], failures = [];
 const users = [{id:1,loginName:"alice",chineseName:"爱丽丝"},{id:2,loginName:"bob"},{id:3,loginName:"carol"},{id:4,loginName:"dave"},{id:5,loginName:"erin"}];
 const projects = [
-  {id:"agentflow",key:"AF",name:"AgentFlow",ownerId:1,members:[{userId:2},{userId:3},{userId:4},{userId:5}],workflowId:"wf",defaultRepositoryId:"r1",tapdWorkspaceId:"203",description:"平台本体"},
-  {id:"web-console",key:"WC",name:"Web Console",ownerId:2,members:[],workflowId:"wf",defaultRepositoryId:""},
-  {id:"lonely",key:"LO",name:"Lonely",ownerId:3,members:[{userId:1}],workflowId:"wf",defaultRepositoryId:""},
+  {id:"agentflow",key:"AF",name:"AgentFlow",ownerId:1,workflowId:"wf",defaultRepositoryId:"r1",tapdWorkspaceId:"203",description:"平台本体"},
+  {id:"web-console",key:"WC",name:"Web Console",ownerId:2,workflowId:"wf",defaultRepositoryId:""},
+  {id:"lonely",key:"LO",name:"Lonely",ownerId:3,workflowId:"wf",defaultRepositoryId:""},
 ];
 const repositories = [
   {id:"r1",projectId:"agentflow",name:"agent-flow",gongfengProjectId:"example/agent-flow",webUrl:"https://git.example.com/example/agent-flow",defaultBranch:"preview",integrateBranch:"agentflow/integration",updatedAt:new Date(Date.now()-3*86400e3).toISOString()},
@@ -36,29 +36,11 @@ function el(props = {}) {
     setAttribute(){},removeAttribute(){},focus(){},querySelector:()=>null,querySelectorAll:()=>[],
   }, props);
 }
-// Model the membership controls read by captureProjectAdminForm. Replacing the
-// members panel must replace these controls too, as it does in the browser.
-function membershipForm(project) {
+// Minimal form stub for the settings page: it carries the fields the draft
+// capture reads and nothing else.
+function settingsForm(project) {
   const elements=Object.fromEntries(Object.entries(project).map(([name,value])=>[name,el({value})]));
-  let rows=[],html="";
-  const panel=el();
-  Object.defineProperty(panel,"innerHTML",{
-    get:()=>html,
-    set(value){
-      html=value;
-      elements.ownerId.value=/name="ownerId" value="(\d*)"/.exec(html)?.[1]||"";
-      rows=[...html.matchAll(/data-member-row="\d+"([^]*?)data-remove-member=/g)].map(([,row])=>{
-        const user=el({value:/name="member-\d+" value="(\d*)"/.exec(row)?.[1]||""});
-        const role=el({value:/<option value="([^"]+)" selected>/.exec(row)?.[1]||"member"});
-        return el({querySelector:sel=>sel==='input[type="hidden"]'?user:sel==='[data-m="role"]'?role:null});
-      });
-    },
-  });
-  panel.innerHTML=ctx.projectAdminFormHTML(project,{creating:false,custom:false,repos:[],saved:project});
-  const form=el({dataset:{projectFor:project.id,mode:"edit"},elements,
-    querySelector:sel=>sel==='[data-pa-panel="members"]'?panel:null,
-    querySelectorAll:sel=>sel==='[data-member-row]'?rows:[]});
-  return {form,panel};
+  return el({dataset:{projectFor:project.id,mode:"edit"},elements,querySelector:()=>null,querySelectorAll:()=>[]});
 }
 const dom = {};
 const ctx = {
@@ -120,12 +102,11 @@ for(const name of ["Alpha Beta Gamma Delta Epsilon Zeta Eta","v2 API Gateway","E
 
 // List filtering.
 const ids=list=>list.map(p=>p.id);
-same(ids(ctx.filterAdminProjects(projects,repositories,"","all",1)),["agentflow","web-console","lonely"]);
-same(ids(ctx.filterAdminProjects(projects,repositories,"","setup",1)),["lonely"]);
-same(ids(ctx.filterAdminProjects(projects,repositories,"","mine",1)),["agentflow","lonely"]);
-same(ids(ctx.filterAdminProjects(projects,repositories,"example-maintainer/agent","all",1)),["agentflow"]);
-same(ids(ctx.filterAdminProjects(projects,repositories,"wc","all",1)),["web-console"]);
-same(ids(ctx.filterAdminProjects(projects,repositories,"nothing","all",1)),[]);
+same(ids(ctx.filterAdminProjects(projects,repositories,"","all")),["agentflow","web-console","lonely"]);
+same(ids(ctx.filterAdminProjects(projects,repositories,"","setup")),["lonely"]);
+same(ids(ctx.filterAdminProjects(projects,repositories,"example-maintainer/agent","all")),["agentflow"]);
+same(ids(ctx.filterAdminProjects(projects,repositories,"wc","all")),["web-console"]);
+same(ids(ctx.filterAdminProjects(projects,repositories,"nothing","all")),[]);
 
 // Routes.
 same({...ctx.parseProjectAdminRoute("#/projects/agentflow/repos")},{id:"agentflow",tab:"repos"});
@@ -136,7 +117,7 @@ assert.equal(ctx.parseProjectAdminRoute("#/issues/x"),null);
 assert.equal(ctx.projectAdminHash("agentflow","basic"),"#/projects/agentflow");
 assert.equal(ctx.projectAdminHash("agentflow","tapd"),"#/projects/agentflow/tapd");
 assert.equal(ctx.projectAdminHash("",""),"#/projects");
-assert.equal(ctx.projectAdminHash("a b","members"),"#/projects/a%20b/members");
+assert.equal(ctx.projectAdminHash("a b","tapd"),"#/projects/a%20b/tapd");
 
 // Project cards.
 const card=ctx.projectCardHTML(projects[0],{repos:repositories,issues,currentId:"agentflow",workflowName:ctx.projectWorkflowName});
@@ -149,8 +130,8 @@ assert.match(card,/agent-flow \+1/);
 assert.match(card,/通用 · Backend/);
 assert.match(card,/TAPD/);
 assert.match(card,/class="pa-chip cur">当前/);
-assert.equal((card.match(/class="pa-av"/g)||[]).length,3,"at most three avatars");
-assert.match(card,/pa-av more">\+2/);
+assert.ok(!card.includes("pa-av"),"a project card shows no member avatars");
+assert.doesNotMatch(card,/data-project-join/,"a project card offers no join request");
 assert.match(card,/<b>3<\/b> 需求/);
 assert.match(card,/<b>2<\/b> 推进中/);
 const bare=ctx.projectCardHTML(projects[2],{repos:repositories,issues,currentId:"agentflow"});
@@ -182,53 +163,27 @@ assert.match(empty,/粘贴 Git HTTP\(S\) 链接或 Git SSH 地址[^]*确认分�
 assert.match(empty,/添加第一个仓库/);
 
 // Detail panels.
-same(vm.runInContext("PROJECT_ADMIN_TABS.map(t=>t.id)",ctx),["basic","repos","members","tapd"]);
+same(vm.runInContext("PROJECT_ADMIN_TABS.map(t=>t.id)",ctx),["basic","repos","tapd"]);
 const draft=ctx.projectDraftFrom(projects[0]);
-same(draft.members.map(m=>m.userId),[2,3,4,5]);
-same([...ctx.projectPeopleIds(draft)],[1,2,3,4,5]);
-same(draft.members.map(m=>m.role),["member","member","member","member"],"missing roles default to member");
+same(draft.ownerId,1);
+assert.ok(!("members" in draft),"a project draft carries no roster");
+assert.ok(!("membersVersion" in draft),"a project draft carries no roster token");
+assert.ok(!("businessDomainId" in draft),"a project draft carries no business domain");
 {
-  const roled={...projects[0],members:[{userId:2,role:"maintainer"},{userId:3,role:"Viewer"},{userId:4,role:"bogus"}]};
-  const d=ctx.projectDraftFrom(roled);
-  same(d.members.map(m=>m.role),["maintainer","viewer","member"],"draft keeps saved roles");
-  same(ctx.buildProjectPayload(roled,{members:d.members}).members.map(m=>m.role),["maintainer","viewer","member"],"saving keeps member roles");
-  const html=ctx.projectAdminFormHTML(d,{creating:false,custom:false,repos:[],saved:roled});
-  assert.match(html,/data-member-row="0"[^]*?<option value="maintainer" selected>维护者/);
-  assert.match(html,/data-member-row="1"[^]*?<option value="viewer" selected>只读/);
-  const changed=ctx.clone(d);changed.members[0].role="member";
-  assert.equal(ctx.projectDraftDirty(changed,d),true,"changing a role marks the draft dirty");
+  const changed=ctx.clone(draft);changed.ownerId=2;
+  assert.equal(ctx.projectDraftDirty(changed,draft),true,"changing the owner marks the draft dirty");
 }
 
-// Join requests: entry on the card for outsiders, review rows for owners and maintainers.
+// No membership controls anywhere in the project view.
 {
-  ctx.platformAdmin=false;ctx.state.authRequired=true;
-  const outsider={id:"team",key:"TM",name:"Team",ownerId:2,members:[{userId:3,role:"member"}],workflowId:"wf"};
-  const open={id:"open",key:"OP",name:"Open",ownerId:0,members:[],workflowId:"wf"};
-  ctx.state.projectJoinRequests=[];
-  assert.match(ctx.projectCardHTML(outsider,{}),/data-project-join="team"[^>]*>申请加入/,"outsiders can apply");
-  assert.doesNotMatch(ctx.projectCardHTML(open,{}),/data-project-join/,"open projects need no request");
-  assert.doesNotMatch(ctx.projectCardHTML(projects[2],{}),/data-project-join/,"members do not apply");
-  ctx.state.projectJoinRequests=[{id:7,projectId:"team",userId:1,role:"member",status:"pending",createdAt:new Date().toISOString()}];
-  const pendingCard=ctx.projectCardHTML(outsider,{});
-  assert.match(pendingCard,/申请中[^]*data-project-join-withdraw="7"/);
-  assert.doesNotMatch(pendingCard,/data-project-join="/);
-
-  ctx.state.projectJoinRequests=[{id:8,projectId:"agentflow",userId:5,role:"member",reason:"做前端",status:"pending",createdAt:new Date().toISOString()},{id:9,projectId:"agentflow",userId:4,role:"member",status:"rejected"}];
-  assert.equal(ctx.canReviewProjectJoin(projects[0]),true,"owner reviews");
-  assert.equal(ctx.canReviewProjectJoin(projects[2]),false,"plain members do not review");
-  assert.equal(ctx.canReviewProjectJoin({ownerId:2,members:[{userId:1,role:"maintainer"}]}),true,"maintainers review");
-  assert.match(ctx.projectCardHTML(projects[0],{}),/1 个加入申请/,"reviewers see the pending count");
-  const rows=ctx.projectJoinRowsHTML(projects[0]);
-  assert.equal((rows.match(/data-join-row=/g)||[]).length,1,"only pending requests are listed");
-  assert.match(rows,/做前端[^]*data-join-approve="8"[^]*data-join-reject="8"/);
-  assert.match(rows,/<option value="maintainer"/,"owners may grant maintainer");
-  assert.doesNotMatch(ctx.projectJoinRowsHTML({id:"agentflow",ownerId:2,members:[{userId:1,role:"maintainer"}]}),/value="maintainer"/,"maintainers cannot grant maintainer");
-  assert.match(ctx.projectAdminFormHTML(ctx.projectDraftFrom(projects[0]),{creating:false,custom:false,repos:[],saved:projects[0]}),/加入申请[^]*data-pa-join-box/);
-  assert.doesNotMatch(ctx.projectAdminFormHTML(ctx.projectDraftFrom(projects[2]),{creating:false,custom:false,repos:[],saved:projects[2]}),/data-pa-join-box/);
-  ctx.platformAdmin=undefined;ctx.state.authRequired=false;
+  const html=ctx.projectAdminFormHTML(draft,{creating:false,custom:false,repos:[],saved:projects[0]});
+  assert.doesNotMatch(html,/data-member-row|member-role|data-remove-member|data-pa-join-box|加入申请/,"the settings page has no member or join-request controls");
+  assert.doesNotMatch(html,/项目成员/,"the settings page has no members section");
+  assert.doesNotMatch(ctx.projectCardHTML(projects[0],{}),/data-project-join|申请加入|加入申请/,"a project card offers no join request");
+  assert.doesNotMatch(ctx.projectCardHTML(projects[0],{}),/位成员/,"a project card shows no member count");
 }
 const edit=ctx.projectAdminFormHTML(draft,{creating:false,custom:false,repos:repositories.slice(0,2),saved:projects[0]});
-assert.equal((edit.match(/data-pa-panel="/g)||[]).length,4);
+assert.equal((edit.match(/data-pa-panel="/g)||[]).length,3);
 assert.match(edit,/name="id" value="agentflow" required readonly/);
 assert.match(edit,/修改 Key/);
 assert.match(edit,/标识用于接口与链接，创建后不可修改/);
@@ -245,14 +200,13 @@ assert.match(edit,/name="tapdWorkspaceId"/,"projects already using TAPD keep its
   assert.match(ctx.projectAdminFormHTML(ctx.projectDraftFrom(plain),{creating:false,custom:false,repos:[],saved:plain}),/name="tapdWorkspaceId"/,"a TAPD MCP enables the settings");
   ctx.state.data.mcpServers=[];
 }
-assert.match(edit,/data-member-row="3"/);
 assert.match(edit,/data-pa-panel="repos"[^>]* hidden/);
 const fresh=ctx.projectAdminFormHTML({...ctx.blankProjectDraft(),name:"Web Console",id:"web-console",key:"WC"},{creating:true,custom:false,repos:[],saved:null});
 assert.match(fresh,/自定义/);
 assert.match(fresh,/恢复自动/);
 assert.match(fresh,/根据项目名称自动生成/);
 assert.match(fresh,/data-pa-panel="repos"[^>]*><\/section>/,"locked tabs render no content while creating");
-assert.match(fresh,/data-pa-panel="members"[^>]*><\/section>/);
+assert.match(fresh,/data-pa-panel="tapd"[^>]*><\/section>/);
 assert.ok(!/name="id"[^>]*readonly/.test(fresh));
 assert.match(fresh,/保存项目后，在「代码仓库」中添加/);
 assert.ok(!fresh.includes('name="ownerId"'),"signed-in users own new projects without a picker");
@@ -270,8 +224,8 @@ const base=ctx.clone(draft);
 assert.equal(ctx.projectDraftDirty(draft,base),false);
 assert.equal(ctx.projectDraftDirty({...draft,key:"af"},base),false,"key compare is case-insensitive");
 assert.equal(ctx.projectDraftDirty({...draft,name:"AgentFlow 2"},base),true);
-assert.equal(ctx.projectDraftDirty({...draft,members:[...draft.members,{userId:0}]},base),true);
 assert.equal(ctx.projectDraftDirty({...draft,ownerId:"1"},base),false);
+assert.equal(ctx.projectDraftDirty({...draft,ownerId:2},base),true,"changing the owner marks the draft dirty");
 assert.equal(ctx.projectDraftDirty({...draft,tapdClear:true},base),true);
 
 (async()=>{
@@ -373,158 +327,80 @@ assert.equal(ctx.projectDraftDirty({...draft,tapdClear:true},base),true);
   ctx.state.projectDraft.defaultRepositoryId="r3";
   ctx.syncProjectDraftDefaultRepo("web-console","","r9");
   assert.equal(ctx.state.projectDraft.defaultRepositoryId,"r3");
-  // Approving mirrors the new member into the open draft so a later save keeps them.
+  // A fresh project read replaces the cached project and keeps the open draft
+  // in step with the server.
   {
     const api=ctx.api,calls=[];
-    const base={...projects[0],members:[{userId:2},{userId:3}],membersVersion:"before-approval"};
-    const fresh={...base,members:[...base.members,{userId:5,role:"viewer"},{userId:4,role:"maintainer"}],membersVersion:"after-approval"};
-    ctx.api=async(url,init)=>{calls.push({url,body:init&&init.body?JSON.parse(init.body):null});if(url.endsWith("/approve"))return {id:8,projectId:"agentflow",userId:5,role:"viewer",status:"approved"};if(url==="/api/projects/agentflow")return fresh;return null};
-    ctx.state.projectDraft=ctx.projectDraftFrom(base);ctx.state.projectDraftBase=ctx.projectDraftFrom(base);ctx.state.projectDraftFor="agentflow";
-    ctx.state.projectJoinRequests=[{id:8,projectId:"agentflow",userId:5,role:"member",status:"pending"}];
-    await ctx.reviewProjectJoin(8,true,"viewer");
-    same(calls[0],{url:"/api/project-join-requests/8/approve",body:{role:"viewer"}});
-    same(ctx.state.projectDraft.members.map(m=>[m.userId,m.role]),[[2,"member"],[3,"member"],[5,"viewer"],[4,"maintainer"]],"the whole current roster is adopted");
-    assert.equal(ctx.state.projectDraft.membersVersion,"after-approval");
-    assert.equal(ctx.buildProjectPayload(ctx.state.projectDraft).membersVersion,"after-approval","save sends the roster's token");
-    assert.equal(ctx.projectDraftDirty(ctx.state.projectDraft,ctx.state.projectDraftBase),false,"approval does not mark the draft dirty");
-    assert.equal(ctx.state.projectJoinRequests[0].status,"approved");
-
-    // Settings edits survive a roster refresh, while conflicting member edits
-    // retain the old token and must be resolved by a fresh server read.
-    ctx.state.projectDraft=ctx.projectDraftFrom(base);ctx.state.projectDraftBase=ctx.projectDraftFrom(base);
-    ctx.state.projectDraft.description="unsaved settings";
-    await ctx.refreshProjectJoinMembers("agentflow");
-    assert.equal(ctx.state.projectDraft.description,"unsaved settings");
-    assert.equal(ctx.state.projectDraft.membersVersion,"after-approval");
-    assert.equal(ctx.projectDraftDirty(ctx.state.projectDraft,ctx.state.projectDraftBase),true);
-    ctx.state.projectDraft=ctx.projectDraftFrom(base);ctx.state.projectDraftBase=ctx.projectDraftFrom(base);
-    ctx.state.projectDraft.members[0].role="viewer";
-    await ctx.refreshProjectJoinMembers("agentflow");
-    assert.equal(ctx.state.projectDraft.members[0].role,"viewer");
-    assert.equal(ctx.state.projectDraft.membersVersion,"before-approval","never pair a partial old roster with a new token");
-    ctx.api=api;
+    const base={...projects[0],ownerId:1};
+    const fresh={...base,ownerId:2,description:"renamed elsewhere"};
+    ctx.api=async(url,init)=>{calls.push({url,body:init&&init.body?JSON.parse(init.body):null});if(url==="/api/projects/agentflow")return fresh;return null};
+    ctx.storeSavedProject(base);
+    ctx.state.projectAdminDetailId=base.id;ctx.state.projectAdminTab="basic";
+    ctx.state.projectDraft=ctx.projectDraftFrom(base);ctx.state.projectDraftBase=ctx.projectDraftFrom(base);ctx.state.projectDraftFor=base.id;
+    const form=settingsForm(base);dom["#projectAdminForm"]=form;
+    const ok=await ctx.refreshProjectSnapshot("agentflow");
+    assert.equal(ok,true);
+    assert.ok(calls.some(c=>c.url==="/api/projects/agentflow"),"the project is read back from the server");
+    same(ctx.state.data.projects.find(p=>p.id===base.id),fresh,"the read replaces the cached project");
+    assert.equal(ctx.state.projectDraft.ownerId,2,"the draft follows the server owner");
+    assert.equal(ctx.state.projectDraftBase.ownerId,2);
+    assert.equal(ctx.projectDraftDirty(ctx.state.projectDraft,ctx.state.projectDraftBase),false,"a read does not create unsaved changes");
+    delete dom["#projectAdminForm"];ctx.api=api;
   }
 
-  // An owner's historical approval can refresh the roster while the hidden
-  // members panel still contains an older snapshot. A settings-only save must
-  // send the refreshed controls and token together.
+  // Settings typed while a project read is in flight survive it.
   {
     const api=ctx.api;
-    const base={...projects[0],members:[{userId:2,role:"member"}],membersVersion:"old-controls"};
-    const fresh={...base,members:[...base.members,{userId:5,role:"viewer"}],membersVersion:"current-controls"};
+    const base={...projects[0],ownerId:1};
+    const fresh={...base,ownerId:2};
     ctx.storeSavedProject(base);
     ctx.state.authRequired=true;ctx.state.currentUser={id:1};ctx.state.projectAdminDetailId=base.id;ctx.state.projectAdminTab="basic";
     ctx.state.projectDraft=ctx.projectDraftFrom(base);ctx.state.projectDraftBase=ctx.projectDraftFrom(base);ctx.state.projectDraftFor=base.id;
-    ctx.state.projectJoinRequests=[];
-    const {form,panel}=membershipForm(base);dom["#projectAdminForm"]=form;
+    const form=settingsForm(base);dom["#projectAdminForm"]=form;
     form.elements.description.value="settings typed during refresh";
     ctx.document.activeElement=form.elements.description;
     let saved;
     ctx.api=async(url,init)=>{
-      if(url==="/api/project-join-requests")return [{id:83,projectId:base.id,userId:1,status:"approved"}];
       if(url==="/api/projects/"+base.id)return fresh;
       if(url==="/api/projects"){saved=JSON.parse(init.body);return saved}
       throw new Error("unexpected API call: "+url);
     };
-    await ctx.loadProjectJoinRequests(true);
-    assert.match(panel.innerHTML,/name="member-1" value="5"/,"refresh updates the hidden membership controls");
+    await ctx.refreshProjectSnapshot(base.id);
     assert.equal(ctx.document.activeElement,form.elements.description,"other settings retain focus");
     assert.equal(form.elements.description.value,"settings typed during refresh");
-    ctx.captureProjectAdminForm();
-    same(ctx.state.projectDraft.members,fresh.members,"later input cannot restore the old roster");
-    assert.equal(ctx.state.projectDraft.membersVersion,fresh.membersVersion);
     assert.equal(ctx.state.projectDraft.description,"settings typed during refresh");
     assert.equal(ctx.state.projectDraftBase.description,base.description,"unsaved settings retain their baseline");
     assert.equal(ctx.projectAdminDirty(),true);
+    // The reopened form shows the owner the server reported.
+    form.elements.ownerId.value=String(fresh.ownerId);
     await ctx.saveProjectAdmin({preventDefault(){},currentTarget:form});
-    same(saved.members,fresh.members,"settings-only save preserves the newly approved member");
-    assert.equal(saved.membersVersion,fresh.membersVersion);
     assert.equal(saved.description,"settings typed during refresh");
+    assert.equal(saved.ownerId,2,"the save carries the owner the server reported");
     delete dom["#projectAdminForm"];ctx.document.activeElement=null;
     ctx.api=api;ctx.state.authRequired=false;
   }
 
-  // Concurrent approvals can return project snapshots out of order. Only the
-  // newest refresh for each project may update its cache, draft and controls.
+  // Concurrent reads can return project snapshots out of order. Only the newest
+  // read for each project may update the cache.
   {
     const api=ctx.api,reads=[];
-    const base={...projects[0],members:[{userId:2,role:"member"}],membersVersion:"before-both"};
-    const earlier={...base,members:[...base.members,{userId:4,role:"member"}],membersVersion:"after-first"};
-    const latest={...earlier,members:[...earlier.members,{userId:5,role:"viewer"}],membersVersion:"after-both"};
-    const other={...projects[1],membersVersion:"independent-project"};
+    const base={...projects[0],ownerId:1};
+    const earlier={...base,description:"earlier"};
+    const latest={...base,description:"latest"};
+    const other={...projects[1],description:"independent"};
     ctx.storeSavedProject(base);
     ctx.state.projectAdminDetailId=base.id;ctx.state.projectDraftFor=base.id;
     ctx.state.projectDraft=ctx.projectDraftFrom(base);ctx.state.projectDraftBase=ctx.projectDraftFrom(base);
-    const {form,panel}=membershipForm(base);dom["#projectAdminForm"]=form;
+    const form=settingsForm(base);dom["#projectAdminForm"]=form;
     ctx.api=url=>new Promise(resolve=>reads.push({url,resolve}));
-    const first=ctx.refreshProjectJoinMembers(base.id),second=ctx.refreshProjectJoinMembers(base.id),independent=ctx.refreshProjectJoinMembers(other.id);
+    const first=ctx.refreshProjectSnapshot(base.id),second=ctx.refreshProjectSnapshot(base.id),independent=ctx.refreshProjectSnapshot(other.id);
     assert.equal(reads.length,3);
     reads[1].resolve(latest);await second;
     reads[2].resolve(other);await independent;
     reads[0].resolve(earlier);await first;
     same(ctx.state.data.projects.find(p=>p.id===base.id),latest,"late earlier response cannot roll back the project cache");
-    assert.equal(ctx.state.data.projects.find(p=>p.id===other.id).membersVersion,other.membersVersion,"different projects refresh independently");
-    ctx.captureProjectAdminForm();
-    same(ctx.state.projectDraft.members,latest.members);
-    same(ctx.state.projectDraftBase.members,latest.members);
-    assert.equal(ctx.state.projectDraft.membersVersion,latest.membersVersion);
-    assert.equal(ctx.state.projectDraftBase.membersVersion,latest.membersVersion);
-    assert.match(panel.innerHTML,/name="member-2" value="5"/);
-    assert.equal(ctx.projectAdminDirty(),false,"refreshing the roster does not create unsaved changes");
-    // Subsequent refreshes still protect genuine local membership edits.
-    form.querySelectorAll('[data-member-row]')[0].querySelector('[data-m="role"]').value="viewer";
-    const conflict=ctx.refreshProjectJoinMembers(base.id);
-    reads[3].resolve({...latest,membersVersion:"after-local-edit"});await conflict;
-    assert.equal(ctx.state.projectDraft.members[0].role,"viewer");
-    assert.equal(ctx.state.projectDraft.membersVersion,latest.membersVersion,"local member changes retain their original token");
+    same(ctx.state.data.projects.find(p=>p.id===other.id),other,"different projects refresh independently");
     delete dom["#projectAdminForm"];ctx.api=api;
-  }
-
-  // A refresh that finishes after a role selection, and reviewing a different
-  // request, both preserve the selection for the remaining pending row.
-  {
-    const api=ctx.api;
-    ctx.state.authRequired=true;ctx.state.currentUser={id:1};ctx.platformAdmin=true;
-    ctx.state.projectAdminDetailId="agentflow";ctx.state.projectJoinRoles={};
-    const pending=[{id:81,projectId:"agentflow",userId:5,role:"member",status:"pending"},{id:82,projectId:"agentflow",userId:4,role:"member",status:"pending"}];
-    const box=el();dom["#projectAdminForm [data-pa-join-box]"]=box;
-    dom["#projectAdminForm"]=el();
-    let finish;
-    ctx.api=async(url)=>url==="/api/project-join-requests"?new Promise(resolve=>{finish=resolve}):{...pending[1],status:"rejected"};
-    const loading=ctx.loadProjectJoinRequests(true);
-    ctx.onProjectAdminInput({target:el({value:"viewer",dataset:{joinRole:""},matches:s=>s==="[data-join-role]",closest:()=>({dataset:{joinRow:"81"}})})});
-    finish(pending);await loading;
-    assert.match(box.innerHTML,/data-join-row="81"[^]*?<option value="viewer" selected>/,"in-flight refresh preserves chosen viewer role");
-    await ctx.reviewProjectJoin(82,false);
-    assert.match(box.innerHTML,/data-join-row="81"[^]*?<option value="viewer" selected>/,"processing another row preserves chosen viewer role");
-    assert.doesNotMatch(box.innerHTML,/data-join-row="82"/);
-    delete dom["#projectAdminForm"];delete dom["#projectAdminForm [data-pa-join-box]"];
-    ctx.api=api;
-  }
-
-  // The applicant observes approval in another session without reloading all
-  // app data. Historical approvals cannot resurrect a subsequently removed member.
-  {
-    const api=ctx.api;
-    ctx.platformAdmin=false;ctx.state.projectAdminDetailId=null;
-    const team={id:"join-team",name:"Team",ownerId:2,members:[]};
-    ctx.state.data.projects.push(team);
-    const pending={id:91,projectId:team.id,userId:1,role:"member",status:"pending"};
-    ctx.state.projectJoinRequests=[pending];
-    let members=[{userId:1,role:"viewer"}];const calls=[];
-    ctx.api=async url=>{calls.push(url);return url==="/api/project-join-requests"?[{...pending,status:"approved",role:"viewer"}]:{...team,members,membersVersion:"fresh"}};
-    await ctx.loadProjectJoinRequests(true);
-    const approved=ctx.state.data.projects.find(p=>p.id===team.id);
-    assert.equal(ctx.projectHasUser(approved,1),true,"approval refreshes the applicant's member cache");
-    assert.doesNotMatch(ctx.projectCardHTML(approved,{}),/data-project-join="|申请中/);
-    assert.ok(calls.includes("/api/projects/join-team"));
-    members=[];ctx.storeSavedProject({...team,members:[]});
-    await ctx.loadProjectJoinRequests(true);
-    const removed=ctx.state.data.projects.find(p=>p.id===team.id);
-    assert.equal(ctx.projectHasUser(removed,1),false);
-    assert.match(ctx.projectCardHTML(removed,{}),/data-project-join="join-team"/,"removed users can apply again");
-    ctx.state.data.projects=ctx.state.data.projects.filter(p=>p.id!==team.id);
-    ctx.api=api;ctx.state.authRequired=false;ctx.platformAdmin=undefined;
   }
   console.log("project admin layout passed");
 })().catch(err=>{console.error(err);process.exitCode=1;});

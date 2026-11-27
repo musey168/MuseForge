@@ -65,15 +65,8 @@ func (h *botInteractionHandlers) projectManager(c *gin.Context, projectID string
 	}
 	user, ok := h.requestUser(c.Request, true)
 	project, _ := h.repo.Project(projectID)
-	if ok && user != nil {
-		if project.OwnerID == user.ID {
-			return true
-		}
-		for _, m := range project.Members {
-			if m.UserID == user.ID && strings.EqualFold(strings.TrimSpace(m.Role), "maintainer") {
-				return true
-			}
-		}
+	if ok && user != nil && project.AccountOwns(user.ID) {
+		return true
 	}
 	c.JSON(403, gin.H{"error": "只有机器人创建者或项目管理员可以处理待核对记录"})
 	return false

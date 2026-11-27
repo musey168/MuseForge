@@ -36,7 +36,7 @@ func TestInsightIngressPermissionsAndValidation(t *testing.T) {
 	owner, _ := s.UserByLoginName("insight-owner")
 	member, _ := s.UserByLoginName("insight-member")
 	outsider, _ := s.UserByLoginName("insight-outsider")
-	if err := s.PutProject(domain.Project{ID: "ingest-project", Name: "Ingest", OwnerID: owner.ID, Members: []domain.ProjectMember{{UserID: member.ID, Role: "member"}}}); err != nil {
+	if err := s.PutProject(domain.Project{ID: "ingest-project", Name: "Ingest", OwnerID: owner.ID, }); err != nil {
 		t.Fatal(err)
 	}
 	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")

@@ -36,7 +36,7 @@ func TestPlatformServesItsSurfacesFromSQLiteFile(t *testing.T) {
 	if !ok {
 		t.Fatal("user was not stored")
 	}
-	if err := s.PutProject(domain.Project{ID: "atlas", Key: "ATL", Name: "Atlas", OwnerID: user.ID, Members: []domain.ProjectMember{{UserID: user.ID, Role: "maintainer"}}}); err != nil {
+	if err := s.PutProject(domain.Project{ID: "atlas", Key: "ATL", Name: "Atlas", OwnerID: user.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.PutIssue(domain.Issue{ID: "req-1", ProjectID: "atlas", Title: "把用量台接到 SQLite", Description: "写入即持久", Status: "todo", Priority: "high", AssigneeType: "member", AssigneeUserID: user.ID}); err != nil {

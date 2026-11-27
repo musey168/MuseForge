@@ -40,26 +40,27 @@ func TestEvolutionTrafficEndpointPreservesArmsAndBlocksCompletedTrial(t *testing
 	requestJSONAuthed[map[string]any](t, env.router, env.user, http.MethodPost, path+"/canary/traffic", map[string]any{"percent": 50}, http.StatusConflict)
 }
 
-func TestEvolutionTrafficEndpointRejectsViewerAndForeignProject(t *testing.T) {
+// The account that holds the project adjusts the traffic split; accounts
+// that do not hold it are refused.
+func TestEvolutionTrafficEndpointRejectsOutsiders(t *testing.T) {
 	env := newEvoTestEnv(t)
 	t.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
-	for _, user := range []domain.User{{StaffID: 3122, LoginName: "traffic-viewer"}, {StaffID: 3123, LoginName: "traffic-outsider"}} {
+	for _, user := range []domain.User{{StaffID: 3122, LoginName: "traffic-outsider-a"}, {StaffID: 3123, LoginName: "traffic-outsider-b"}} {
 		if err := env.store.PutUser(user); err != nil {
 			t.Fatal(err)
 		}
 	}
-	viewer, _ := env.store.UserByLoginName("traffic-viewer")
-	outsider, _ := env.store.UserByLoginName("traffic-outsider")
+	first, _ := env.store.UserByLoginName("traffic-outsider-a")
+	second, _ := env.store.UserByLoginName("traffic-outsider-b")
 	project, _ := env.store.Project("evo-p")
 	project.OwnerID = env.user.ID
-	project.Members = []domain.ProjectMember{{UserID: viewer.ID, Role: "viewer"}}
 	if err := env.store.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
 	p := env.seedPendingProposal(t, "traffic-permissions")
 	path := "/api/evolution/proposals/" + p.ID
 	requestJSONAuthed[domain.EvoProposal](t, env.router, env.user, http.MethodPost, path+"/approve", map[string]any{"mode": "canary", "percent": 50}, http.StatusOK)
-	for _, user := range []domain.User{viewer, outsider} {
+	for _, user := range []domain.User{first, second} {
 		requestJSONAuthed[map[string]any](t, env.router, user, http.MethodPost, path+"/canary/traffic", map[string]any{"percent": 25}, http.StatusForbidden)
 	}
 	stored, _ := env.store.EvoProposal(p.ID)

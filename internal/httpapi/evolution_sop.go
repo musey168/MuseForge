@@ -74,7 +74,7 @@ func (h *evolutionHandlers) putSOPPolicy(c *gin.Context) {
 	if req.ProjectID == "" {
 		req.ProjectID = strings.TrimSpace(c.Query("projectId"))
 	}
-	if !h.requireProjectReader(c, req.ProjectID) || !h.requireProjectWriter(c, req.ProjectID) {
+	if !h.requireProjectReader(c, req.ProjectID) || !h.requireAccountWrite(c, req.ProjectID) {
 		return
 	}
 	if workflowID == "" {
@@ -181,7 +181,7 @@ func (h *evolutionHandlers) optimizeSOP(c *gin.Context) {
 	if req.ProjectID == "" {
 		req.ProjectID = strings.TrimSpace(c.Query("projectId"))
 	}
-	if !h.requireProjectReader(c, req.ProjectID) || !h.requireProjectWriter(c, req.ProjectID) {
+	if !h.requireProjectReader(c, req.ProjectID) || !h.requireAccountWrite(c, req.ProjectID) {
 		return
 	}
 	current, loggedIn := h.requestUser(c.Request, true)
@@ -386,7 +386,7 @@ func (h *evolutionHandlers) resolveSOPActorUser(policy domain.EvoSOPPolicy, wf d
 		return domain.User{}, "", false
 	}
 	isAdmin := strings.TrimSpace(user.LoginName) != "" && h.repo.IsPlatformAdmin(strings.TrimSpace(user.LoginName))
-	if !isAdmin && !h.projectMemberWrites(policy.ProjectID, user.ID) {
+	if !isAdmin && !h.accountHoldsProject(policy.ProjectID, user.ID) {
 		return domain.User{}, "", false
 	}
 	reqModel := strings.TrimSpace(policy.Model)

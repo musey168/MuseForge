@@ -245,7 +245,7 @@ function roomResGroup(title, count, body) {
   return `<section class="room-res-group"><div class="room-res-head"><span>${escapeHTML(title)}</span><em>${count}</em></div>${body || '<div class="room-res-more">暂无</div>'}</section>`;
 }
 
-const ROOM_MEMBER_ROLE_LABELS = {owner: '群主', maintainer: '维护者', member: '成员', viewer: '只读'};
+const ROOM_MEMBER_ROLE_LABELS = {owner: '群主'};
 function roomMemberRoleLabel(role) {
   const key = String(role || '').trim().toLowerCase();
   return ROOM_MEMBER_ROLE_LABELS[key] || role || '成员';

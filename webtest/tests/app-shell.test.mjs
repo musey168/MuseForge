@@ -153,17 +153,17 @@ test('boot exchanges an authentication callback, cleans the URL, and loads the s
   assert.equal(app.document.querySelector('#pageTitle').textContent, '需求列表');
 });
 
-test('boot selects a project the signed-in user belongs to before an unrelated first project', async (t) => {
+test('boot selects a project the signed-in user owns before an unrelated first project', async (t) => {
   const shell = sampleBootstrap();
   shell.projects = [
-    { id: 'someone-else', name: 'Someone else', key: 'ELSE', ownerId: 1, members: [] },
-    { id: 'joined', name: 'Joined', key: 'JOIN', ownerId: 2, members: [{ userId: 7, role: 'member' }] },
+    { id: 'someone-else', name: 'Someone else', key: 'ELSE', ownerId: 1 },
+    { id: 'owned', name: 'Owned', key: 'OWN', ownerId: 7 },
   ];
   const app = await loadApp({ routes: [
-    { path: '/api/auth/current', body: { user: { id: 7, loginName: 'member', isGuest: false }, authRequired: false } },
+    { path: '/api/auth/current', body: { user: { id: 7, loginName: 'owner', isGuest: false }, authRequired: false } },
     { path: '/api/bootstrap', body: shell },
   ] });
   t.after(app.close);
   await settle(6);
-  assert.equal(app.evaluate('state.projectFilter'), 'joined');
+  assert.equal(app.evaluate('state.projectFilter'), 'owned');
 });

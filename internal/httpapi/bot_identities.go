@@ -114,18 +114,10 @@ func (h *botIdentityHandlers) bindingMeta(token string, user domain.User) (gin.H
 	return meta, nil
 }
 
-// botProjectMember mirrors botExecutionUser: owner, platform admin or a
-// non-viewer member.
+// botProjectMember mirrors botExecutionUser: the project owner or a platform
+// administrator.
 func botProjectMember(project domain.Project, user domain.User, admin bool) bool {
-	if admin || project.OwnerID == user.ID {
-		return true
-	}
-	for _, member := range project.Members {
-		if member.UserID == user.ID && !strings.EqualFold(strings.TrimSpace(member.Role), "viewer") {
-			return true
-		}
-	}
-	return false
+	return admin || project.AccountOwns(user.ID)
 }
 func botBindingSameOrigin(c *gin.Context) bool {
 	origin, err := url.Parse(c.GetHeader("Origin"))

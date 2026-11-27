@@ -92,21 +92,30 @@ func TestEvolutionFeedbackExplainsUnavailableTargets(t *testing.T) {
 	}
 }
 
-func TestEvolutionViewerFeedbackDoesNotGrantProposalPermission(t *testing.T) {
+// Feedback and proposals belong to the account that holds the project: an
+// account that does not hold it can do neither, and the holder may give
+// feedback.
+func TestEvolutionFeedbackAndProposalNeedTheProjectAccount(t *testing.T) {
 	env := newEvoTestEnv(t)
 	run := env.seedRun(t, "viewer-feedback", "succeeded", "succeeded", "")
 	project, _ := env.store.Project("evo-p")
 	project.OwnerID = env.user.ID + 1
-	project.Members = []domain.ProjectMember{{UserID: env.user.ID, Role: "viewer"}}
 	if err := env.store.PutProject(project); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
+	requestJSONAuthed[map[string]any](t, env.router, env.user, http.MethodPost, "/api/runs/"+run.ID+"/feedback", map[string]any{"detail": "产物缺少验收步骤"}, http.StatusForbidden)
+	requestJSONAuthed[map[string]any](t, env.router, env.user, http.MethodPost, "/api/evolution/proposals", map[string]any{"projectId": "evo-p"}, http.StatusForbidden)
+	// The account that holds the project may write.
+	project, _ = env.store.Project("evo-p")
+	project.OwnerID = env.user.ID
+	if err := env.store.PutProject(project); err != nil {
+		t.Fatal(err)
+	}
 	result := requestJSONAuthed[evoFeedbackResponse](t, env.router, env.user, http.MethodPost, "/api/runs/"+run.ID+"/feedback", map[string]any{"detail": "产物缺少验收步骤"}, http.StatusCreated)
 	if result.FindingID == "" {
-		t.Fatalf("viewer feedback should be visible: %+v", result)
+		t.Fatalf("the account that holds the project must give feedback: %+v", result)
 	}
-	requestJSONAuthed[map[string]any](t, env.router, env.user, http.MethodPost, "/api/evolution/proposals", map[string]any{"projectId": "evo-p", "findingId": result.FindingID}, http.StatusForbidden)
 }
 
 func TestEvolutionNewFeedbackPreservesCurrentProposalEvidence(t *testing.T) {

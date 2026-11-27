@@ -101,41 +101,16 @@ type apiTokenRow struct {
 func (apiTokenRow) TableName() string { return "api_tokens" }
 
 type projectRow struct {
-	BusinessDomainID string     `gorm:"column:business_domain_id;size:64;not null;default:'';index:idx_projects_business_domain"`
-	ID               string     `gorm:"column:id;primaryKey;size:64"`
-	ProjectKey       string     `gorm:"column:project_key;index:idx_projects_key;size:64"`
-	Name             string     `gorm:"column:name;size:255"`
-	OwnerUserID      *int64     `gorm:"column:owner_user_id;index:idx_projects_owner"`
-	Payload          []byte     `gorm:"column:payload;type:json"`
-	Created          *time.Time `gorm:"column:created_at"`
-	Updated          *time.Time `gorm:"column:updated_at"`
+	ID          string     `gorm:"column:id;primaryKey;size:64"`
+	ProjectKey  string     `gorm:"column:project_key;index:idx_projects_key;size:64"`
+	Name        string     `gorm:"column:name;size:255"`
+	OwnerUserID *int64     `gorm:"column:owner_user_id;index:idx_projects_owner"`
+	Payload     []byte     `gorm:"column:payload;type:json"`
+	Created     *time.Time `gorm:"column:created_at"`
+	Updated     *time.Time `gorm:"column:updated_at"`
 }
 
 func (projectRow) TableName() string { return "projects" }
-
-type projectMemberRow struct {
-	ProjectID string     `gorm:"column:project_id;primaryKey:idx_project_members_project;size:64"`
-	UserID    int64      `gorm:"column:user_id;primaryKey:idx_project_members_user"`
-	Role      string     `gorm:"column:role;size:32"`
-	Created   *time.Time `gorm:"column:created_at"`
-}
-
-func (projectMemberRow) TableName() string { return "project_members" }
-
-type projectJoinRequestRow struct {
-	ID         int64      `gorm:"column:id;primaryKey;autoIncrement"`
-	ProjectID  string     `gorm:"column:project_id;size:64;not null;index:idx_project_join_requests_project"`
-	UserID     int64      `gorm:"column:user_id;not null;index:idx_project_join_requests_user"`
-	Role       string     `gorm:"column:role;size:32;not null"`
-	Reason     string     `gorm:"column:reason;type:text"`
-	Status     string     `gorm:"column:status;size:16;not null"`
-	ReviewerID *int64     `gorm:"column:reviewer_user_id"`
-	Created    *time.Time `gorm:"column:created_at"`
-	Updated    *time.Time `gorm:"column:updated_at"`
-	Reviewed   *time.Time `gorm:"column:reviewed_at"`
-}
-
-func (projectJoinRequestRow) TableName() string { return "project_join_requests" }
 
 type repositoryRow struct {
 	ID        string     `gorm:"column:id;primaryKey;size:64"`
@@ -786,7 +761,7 @@ func allModels() []any {
 	return []any{domain.BotUserBinding{}, domain.BotBindingChallenge{}, domain.BotConnection{}, domain.BotConversation{}, domain.BotInteraction{}, notificationBotRow{}, botCredentialRow{}, botNativeSessionRow{}, botPendingDraftRow{}, botChatOriginRow{}, botClarifySessionRow{}, domain.NotificationDelivery{},
 		userRow{}, localAccountRow{}, userConfigRow{}, gitSSHKeyRow{}, gitHTTPCredentialRow{}, authIntegrationRow{}, platformCodeBuddyKeyRow{}, apiTokenRow{}, genericTemplateRow{},
 		insightSourceRow{}, insightExecutionRow{},
-		projectRow{}, projectMemberRow{}, projectJoinRequestRow{}, projectCredentialRow{}, repositoryRow{}, businessDomainRow{}, businessDomainAssignmentRow{},
+		projectRow{}, projectCredentialRow{}, repositoryRow{},
 		agentRow{}, ruleRow{}, skillRow{}, skillFileRow{}, mcpServerRow{}, mcpFileRow{}, executorRow{},
 		sandboxRow{},
 		workflowRow{}, syncConfigRow{}, scheduleJobRow{}, scheduleJobExecutionRow{}, scheduleJobExecutionStatRow{}, sharedScheduleVersionRow{},

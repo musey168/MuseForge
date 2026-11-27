@@ -2378,42 +2378,40 @@ assert.match(callout, /等待人工确认/);
 const bare = humanDecisionPanelHTML('run-1','summary',{status:'waiting_approval'},node,[node]);
 assert.match(bare, /判断依据/);
 assert.match(bare, /门禁未通过。请看产物和日志后决定。/);
-// Decision controls follow the server's run write guard (projectMemberWrites).
+// Decision controls follow the server's run write guard (the account that
+// holds the project).
 state.authRequired = true;
 state.currentUser = {id:7, isPlatformAdmin:false};
 state.data.projects = [
-  {id:'mine', ownerId:7, members:[]},
-  {id:'team', ownerId:1, members:[{userId:7, role:'member'}]},
-  {id:'watch', ownerId:1, members:[{userId:7, role:'Viewer '}]},
-  {id:'other', ownerId:1, members:[{userId:2, role:'member'}]},
-  {id:'open', ownerId:0, members:[]},
+  {id:'mine', ownerId:7},
+  {id:'team', ownerId:1},
+  {id:'other', ownerId:1},
+  {id:'open', ownerId:0},
 ];
-state.data.issues = [{id:'iss-watch', projectId:'watch'}, {id:'iss-team', projectId:'team'}];
+state.data.issues = [{id:'iss-team', projectId:'team'}];
 const runIn = (projectId, issueId) => ({id:'run-x', status:'waiting', executionContext:{projectId, issueId}});
 const decide = run => humanDecisionPanelHTML('run-x','summary',nr,node,[node],run);
 for (const [label, run] of [
   ['owner', runIn('mine')],
-  ['member', runIn('team')],
-  ['project without owner or members', runIn('open')],
+  ['project without owner', runIn('open')],
   ['project this client cannot see', runIn('hidden')],
   ['run without a project', runIn('')],
-  ['requirement project fallback', runIn('', 'iss-team')],
 ]) {
   assert.equal(canDecideRun(run), true, label);
   assert.match(decide(run), /确认通过，继续下游/, label);
 }
-assert.equal(canDecideRun(runIn('watch')), false);
-assert.match(decide(runIn('watch')), /你是该项目的只读成员/);
-assert.doesNotMatch(decide(runIn('watch')), /确认通过/);
-assert.equal(canDecideRun(runIn('', 'iss-watch')), false, 'requirement project fallback applies to viewers');
+assert.equal(canDecideRun(runIn('team')), false);
+assert.match(decide(runIn('team')), /你不是该项目的负责人/);
+assert.doesNotMatch(decide(runIn('team')), /确认通过/);
+assert.equal(canDecideRun(runIn('', 'iss-team')), false, 'requirement project fallback applies to outsiders');
 assert.equal(canDecideRun(runIn('other')), false);
-assert.match(decide(runIn('other')), /你不是该项目的成员/);
+assert.match(decide(runIn('other')), /你不是该项目的负责人/);
 state.currentUser = {id:7, isPlatformAdmin:true};
-assert.equal(canDecideRun(runIn('watch')), true, 'platform admin');
+assert.equal(canDecideRun(runIn('team')), true, 'platform admin');
 state.currentUser = {id:0, isGuest:true};
 assert.match(decide(runIn('open')), /登录后才能审批/);
 state.authRequired = false;
-assert.equal(canDecideRun(runIn('watch')), true, 'auth disabled');
+assert.equal(canDecideRun(runIn('team')), true, 'auth disabled');
 `
 	out, err := exec.Command(node, "-e", script).CombinedOutput()
 	if err != nil {

@@ -235,11 +235,11 @@ func (h issuesHandlers) issues(c *gin.Context) {
 			v.TapdID = existing.TapdID
 		}
 		if found {
-			if !h.requireProjectWriter(c, v.ProjectID, existing.ProjectID) {
+			if !h.requireAccountWrite(c, v.ProjectID, existing.ProjectID) {
 				return
 			}
 			v = mergeIssueEdit(v, existing)
-		} else if !h.requireProjectWriter(c, v.ProjectID) {
+		} else if !h.requireAccountWrite(c, v.ProjectID) {
 			return
 		}
 		if len(files) > 0 && (v.ID != "" || (req.SyncTarget != "" && !strings.EqualFold(req.SyncTarget, "local"))) {
@@ -480,7 +480,7 @@ func (h issuesHandlers) issue(c *gin.Context) {
 		http.NotFound(c.Writer, c.Request)
 		return
 	}
-	if c.Request.Method != http.MethodGet && !h.requireProjectWriter(c, issue.ProjectID) {
+	if c.Request.Method != http.MethodGet && !h.requireAccountWrite(c, issue.ProjectID) {
 		return
 	}
 	if c.FullPath() == "/api/issues/:id" && c.Request.Method == http.MethodDelete {

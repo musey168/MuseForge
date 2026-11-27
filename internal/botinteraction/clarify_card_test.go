@@ -44,7 +44,7 @@ func groupChatFixture(t *testing.T) (*repo.Store, *Service, domain.NotificationB
 	for id, name := range map[int64]string{42: "owner", 43: "member", 44: "maint", 45: "viewer", 46: "outsider"} {
 		store.PutUser(domain.User{ID: id, LoginName: name, ChineseName: "用户" + name})
 	}
-	store.PutProject(domain.Project{ID: "p", Key: "LOOP", OwnerID: 42, Members: []domain.ProjectMember{{UserID: 43, Role: "member"}, {UserID: 44, Role: "maintainer"}, {UserID: 45, Role: "viewer"}}})
+	store.PutProject(domain.Project{ID: "p", Key: "LOOP", OwnerID: 42, })
 	bot := domain.NotificationBot{ID: "cfg-group", Channel: domain.BotChannelFeishu, BotID: "cli_g", ProjectID: "p", OwnerID: 42, Enabled: true, InteractionEnabled: true, TenantKey: "tk", TenantState: domain.BotTenantLocked}
 	if _, err := store.SaveNotificationBotChecked(bot, "secret", nil); err != nil {
 		t.Fatal(err)
