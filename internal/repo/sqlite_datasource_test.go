@@ -151,7 +151,7 @@ func TestSQLiteRestartPreservesRequirementsProjectsCredentialsAndUsage(t *testin
 	}
 	execution := domain.InsightExecution{
 		ID: "exec-1", Type: "workflow", ExternalExecutionID: "ext-1",
-		Workflow: domain.InsightWorkflow{ID: "wf-1", Name: "用量上报"},
+		Workflow:       domain.InsightWorkflow{ID: "wf-1", Name: "用量上报"},
 		ExternalUserID: "external-user", Status: "success",
 		StartedAt: time.Now().UTC().Add(-time.Minute), FinishedAt: time.Now().UTC(),
 		Usage: []domain.InsightUsage{{Provider: "omp", Model: "muse-1", InputTokens: 120, OutputTokens: 34, CostStatus: "unknown"}},

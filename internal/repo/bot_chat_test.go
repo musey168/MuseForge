@@ -231,7 +231,7 @@ func testClarifySessions(t *testing.T, s *Store) {
 }
 
 func TestClarifySaveAllowedRoles(t *testing.T) {
-	project := domain.Project{OwnerID: 1, }
+	project := domain.Project{OwnerID: 1}
 	issue := domain.Issue{AssigneeUserID: 4}
 	sess := domain.BotClarifySession{StarterUserID: 5}
 	for id, want := range map[int64]bool{1: true, 2: true, 3: false, 4: true, 5: true, 0: false} {

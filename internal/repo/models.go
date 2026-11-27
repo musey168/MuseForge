@@ -1,7 +1,6 @@
 package repo
 
 import (
-	"agentflow/internal/domain"
 	"time"
 )
 
@@ -733,26 +732,12 @@ func (trackerImportRunRow) TableName() string { return "tracker_import_runs" }
 
 // allModels lists every table for the sqlite test schema (AutoMigrate).
 func allModels() []any {
-	return []any{domain.BotUserBinding{}, domain.BotBindingChallenge{}, domain.BotConnection{}, domain.BotConversation{}, domain.BotInteraction{}, notificationBotRow{}, botCredentialRow{}, botNativeSessionRow{}, botPendingDraftRow{}, botChatOriginRow{}, botClarifySessionRow{}, domain.NotificationDelivery{},
-		userRow{}, localAccountRow{}, userConfigRow{}, gitSSHKeyRow{}, gitHTTPCredentialRow{}, authIntegrationRow{}, genericTemplateRow{},
+	return []any{userRow{}, localAccountRow{}, userConfigRow{}, gitSSHKeyRow{}, gitHTTPCredentialRow{}, authIntegrationRow{},
 		insightSourceRow{}, insightExecutionRow{},
 		projectRow{}, projectCredentialRow{}, repositoryRow{},
-		agentRow{}, ruleRow{}, skillRow{}, skillFileRow{}, mcpServerRow{}, mcpFileRow{}, executorRow{},
-		sandboxRow{},
-		workflowRow{}, syncConfigRow{}, scheduleJobRow{}, scheduleJobExecutionRow{}, scheduleJobExecutionStatRow{}, sharedScheduleVersionRow{},
-		issueRow{}, issueCommentRow{}, issueImageRow{}, taskRow{},
-		runAdmissionLockRow{}, runRow{}, runNodeRow{}, runEventRow{}, runTelemetryRow{}, runLogRow{}, runArtifactRow{}, runArtifactBlobRow{}, runArtifactBlobChunk{}, runEvalRow{},
-		runPreviewRow{}, previewSessionRow{}, previewBlobRow{}, WorkspaceCheckpoint{}, workspaceCheckpointChunk{},
-		mrDeliveryStateRow{}, definitionRevisionRow{},
-		runnerRow{}, runnerTaskRow{}, runnerTaskEventRow{}, userRunnerPrefRow{}, userProjectRunnerPrefRow{}, platformRunnerSettingsRow{},
-		engineInstanceRow{},
-		knowledgeSettingsRow{},
-		knowledgeSubmissionRow{},
-		knowledgeConnectorRow{},
-		knowledgeConnectorUsageRow{},
-		knowledgeDocumentUsageRow{},
-		knowledgeUsageEventRow{},
-		evoPolicyRow{}, evoFindingRow{}, evoProposalRow{}, evoAssetGateRow{}, evoQueueRow{}, evoReplayRow{}, assetVersionRow{}, runAssetPinRow{}, evoSignalRow{}, evoSampleRow{}, evoSOPPolicyRow{},
+		syncConfigRow{},
+		issueRow{}, issueCommentRow{}, issueImageRow{},
+		runnerRow{}, userRunnerPrefRow{}, userProjectRunnerPrefRow{}, platformRunnerSettingsRow{},
 		trackerImportRunRow{},
 	}
 }

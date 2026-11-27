@@ -310,4 +310,3 @@ func TestCloneParseSortAndJSONHelpers(t *testing.T) {
 		t.Fatal("marshal failure fallback")
 	}
 }
-

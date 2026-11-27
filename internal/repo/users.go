@@ -256,20 +256,20 @@ func userHasConfig(user domain.User) bool {
 }
 
 type UserCredentialUpdate struct {
-	ExecutorDefaults            *domain.ExecutorDefaults `json:"assistantDefaults"`
-	CodeBuddyAPIKey              string                    `json:"codeBuddyApiKey"`
-	CodeBuddyAPIKeyClear         bool                      `json:"codeBuddyApiKeyClear"`
-	CodeBuddyBaseURL             *string                   `json:"codeBuddyBaseUrl"`
-	CodeBuddyInternetEnvironment *string                   `json:"codeBuddyInternetEnvironment"`
-	CodeBuddyModels              *[]domain.CLIModel        `json:"codeBuddyModels"`
-	CodexAPIKey                  string                    `json:"codexApiKey"`
-	CodexAPIKeyClear             bool                      `json:"codexApiKeyClear"`
-	CodexBaseURL                 *string                   `json:"codexBaseUrl"`
-	CodexModels                  *[]domain.CLIModel        `json:"codexModels"`
-	ClaudeCodeAPIKey             string                    `json:"claudeCodeApiKey"`
-	ClaudeCodeAPIKeyClear        bool                      `json:"claudeCodeApiKeyClear"`
-	ClaudeCodeBaseURL            *string                   `json:"claudeCodeBaseUrl"`
-	ClaudeCodeModels             *[]domain.CLIModel        `json:"claudeCodeModels"`
+	ExecutorDefaults             *domain.ExecutorDefaults `json:"assistantDefaults"`
+	CodeBuddyAPIKey              string                   `json:"codeBuddyApiKey"`
+	CodeBuddyAPIKeyClear         bool                     `json:"codeBuddyApiKeyClear"`
+	CodeBuddyBaseURL             *string                  `json:"codeBuddyBaseUrl"`
+	CodeBuddyInternetEnvironment *string                  `json:"codeBuddyInternetEnvironment"`
+	CodeBuddyModels              *[]domain.CLIModel       `json:"codeBuddyModels"`
+	CodexAPIKey                  string                   `json:"codexApiKey"`
+	CodexAPIKeyClear             bool                     `json:"codexApiKeyClear"`
+	CodexBaseURL                 *string                  `json:"codexBaseUrl"`
+	CodexModels                  *[]domain.CLIModel       `json:"codexModels"`
+	ClaudeCodeAPIKey             string                   `json:"claudeCodeApiKey"`
+	ClaudeCodeAPIKeyClear        bool                     `json:"claudeCodeApiKeyClear"`
+	ClaudeCodeBaseURL            *string                  `json:"claudeCodeBaseUrl"`
+	ClaudeCodeModels             *[]domain.CLIModel       `json:"claudeCodeModels"`
 	// AgentCLICredentials updates the agent CLIs by kind; absent fields keep
 	// the stored value. CodeBuddy, Codex and Claude Code stay on their own columns.
 	AgentCLICredentials map[string]AgentCLICredentialUpdate `json:"agentCliCredentials"`
