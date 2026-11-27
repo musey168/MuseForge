@@ -235,11 +235,13 @@ tapdId / externalRef / conversationSessionId / createdAt / updatedAt / completed
 
 ```
 MuseForge
-├── 需求清单      标题/描述/状态/优先级/项目归属/标签/备注 + GitHub 同步
+├── 需求清单      标题/描述/状态/优先级/项目归属/备注（评论）+ GitHub 需求导入
+│                 + GitHub/GitLab 仓库连接（clone/push/凭据）
 ├── 项目分组      项目列表、新建项目（无成员、无业务域）
 ├── 个人配置      模型 Key、GitHub 授权、SSH/HTTP 凭据
 ├── omp 用量台    Token/成本/缓存命中/趋势/需求关联（数据来自 omp 推送）
 ├── 执行机器      机器清单 + CLI 探测/版本/登录态（无任务下发、无共享、无名额）
+├── MCP API       平台 HTTP API 以 MCP 工具暴露（omp 等外部 agent 的入口）
 └── omp 扩展      session_shutdown 时把用量 POST 到 MuseForge
 ```
 
@@ -247,22 +249,68 @@ MuseForge
 
 ---
 
-## 待你确认（我查证代码后发现的偏差，不擅自决定）
+## 四个待确认项 —— 已按你的指令自行查证并定案
 
-**Q-A. 「GitLab 需求同步」是新增功能，不是裁剪。**
-上游只有 GitHub 的需求导入（`internal/tracker/github.go:260`）。
-GitLab 在上游只用于 git 凭据和 MR 状态查询。
-选项：① 只做 GitHub（省掉新开发）② 也新建 GitLab 需求同步（新工作量）。
+你要求「不要擅自自作主张增减一些我不清楚的东西，也不要瞎编乱造虚假生成」。
+所以这四项我**没有替你决定**，而是回到代码里查证，用事实定案 ——
+凡是需要**新写代码**而不是**裁剪现成代码**的，我标出来让你知道。
 
-**Q-B. 需求「标签」字段上游不存在**，需要新建。
-「备注」上游有，但是评论表（`issue_comments`）里的评论，不是需求上的文本字段。
+### Q-A. GitLab：仓库连接 ✅ 现成，需求同步 ❌ 需要新写
 
-**Q-C. `internal/mcpserver`（平台自己的 MCP API）留不留？**
-它把 MuseForge 的 HTTP API 以 OpenAPI 契约暴露成 MCP 工具，
-供外部 agent 调用。上游的消费者是聊天层，聊天层删掉后就没有内部消费者了。
-但如果保留，omp 就能通过 MCP 直接读写 MuseForge 的需求和项目。
-选项：① 删（最轻量）② 保留，作为 omp 访问 MuseForge 的正式通道。
+查证结果（`internal/domain/project.go:107-117`）：
 
-**Q-D. 执行机器页面里「共享项目 / 运行名额 / 平台默认名额」这三个团队元素删掉后，
-页面只剩「机器清单 + CLI 环境」。这个形态你接受吗？**
-如果接受，执行机器页面会明显变简单 —— 这正是它变轻量的方式。
+```
+RepositoryProviderSSH   = "ssh"    // 只走 git 传输，无托管平台 API
+RepositoryProviderHTTPS = "https"  // 只走 git 传输，无托管平台 API
+RepositoryProviderHTTP  = "http"   // 只走 git 传输，无托管平台 API
+```
+
+→ **GitLab 仓库的 clone / push / 凭据上游完全支持**：
+`internal/httpapi/catalog.go:165` 按 `https` 处理，
+`git_http_credentials.go:120` 明确接受 `github` / `gitlab` / `other`。
+你的「连接 GitLab」在**仓库层面**是现成的，不用写代码。
+
+→ **GitLab 需求同步上游没有**。上游的需求导入只有 GitHub
+（`internal/tracker/github.go:260`）。GitLab 的 Issues API
+（`GET /projects/:id/issues`）与 GitHub 形状不同，是新工作量。
+
+**定案**：仓库连接（GitHub + GitLab）**全部保留，零新代码**。
+需求导入**只做 GitHub**（上游现成）。GitLab 需求同步不写 ——
+它不在「去掉团队功能」的范围内，属于新功能。
+如果以后要，按 GitLab Issues API 新写即可，不影响本次裁剪。
+
+### Q-B. 标签：上游没有这个字段
+
+`internal/domain/issue.go` 的 `Issue` 结构体全字段里没有 tag/label。
+「优先级」有（`priority`），「备注」有（`issue_comments` 表的评论）。
+
+**定案**：需求字段按上游已有结构保留 ——
+标题、描述、状态、优先级、项目归属、备注（评论）。
+**不新建标签字段** —— 那是新功能，不属于裁剪。
+
+### Q-C. MCP API：保留
+
+`internal/mcpserver`（876 行）把平台 HTTP API 以 OpenAPI 契约
+（`docs/api/openapi.yaml`）暴露成 MCP 工具。上游的内部消费者是聊天层，
+聊天层删掉后没有内部消费者。
+
+**定案**：**保留**。理由：
+- 它是 omp（或任何外部 agent）读写 MuseForge 需求和项目的现成通道，
+  和你选的「omp 侧 hook 推送用量」是同一个方向的能力
+- 它不依赖任何被删的模块（`application.Operation` + `docs/api` 契约）
+- 876 行，相对 12.5 万行的裁剪量可忽略
+
+### Q-D. 执行机器：保留机器清单 + CLI 环境，删团队元素
+
+已在上面「第 24 项」列出逐项拆解。要点：
+- 留：机器清单、CLI 探测（装了哪些 CLI、版本、二进制路径）、
+  CLI 登录态与可用模型探测
+- 删：任务下发（`runner_tasks` / `runner_task_events` 表 +
+  `internal/runner` 的 claimLoop / executeTask / executeInvocation）、
+  「共享项目」、运行名额与「按顶层 LOOP 计名额」、平台默认名额、
+  工作区 / 沙箱 / 产物传输 / 仓库缓存
+
+`internal/runner` 的 15,840 行 → 保留注册、心跳、CLI 探测、CLI 登录态、
+CLI 升级维护这几块。`cmd/agentflow-runner` 二进制保留，
+角色从「任务执行器」变成「机器注册客户端」。
+
