@@ -36,7 +36,7 @@ func writableRunnerProject(project domain.Project, projectID string, userID int6
 	return project.ID == projectID && project.ArchivedAt == nil && project.AccountOwns(userID)
 }
 
-// canAssignProjectRun checks current membership and sharing on the admission
+// canAssignProjectRun checks current ownership and sharing on the admission
 // transaction's own connection. A nil runner represents the platform.
 func (r *RunnersRepo) canAssignProjectRun(tx *gorm.DB, ec domain.TelemetryContext, runner *domain.Runner) (bool, error) {
 	project, err := r.projects.projectWithOwnerInTx(tx, ec.ProjectID)
@@ -153,7 +153,7 @@ func (r *RunnersRepo) SetRunnerSharedProjects(id string, userID int64, projectID
 	})
 }
 
-// ProjectDefaultRunner rechecks both memberships and the grant on each resolution
+// ProjectDefaultRunner rechecks both ownership and the grant on each resolution
 // so a stale preference cannot allocate a new run on a revoked machine.
 func (r *RunnersRepo) ProjectDefaultRunner(userID int64, projectID string) domain.Runner {
 	runner, _ := r.projectRunnerPreference(userID, projectID)
