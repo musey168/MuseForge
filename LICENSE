@@ -1,3 +1,14 @@
+MuseForge — 个人项目工作台
+Copyright (C) 2026 Muse (musey168). All rights reserved.
+
+MuseForge is a personal single-user derivative of LoopForge, the open source
+project released by Tencent. It removes the team collaboration features and
+adds none. The upstream MIT license of LoopForge governs this derivative:
+the original copyright notice below is retained as the MIT license requires.
+
+MuseForge 的个人裁剪部分版权归 Muse (musey168) 所有；
+上游 LoopForge 的原始版权声明按 MIT 许可证要求保留。
+
 Tencent is pleased to support the open source community by making LoopForge available.
 
 Copyright (C) 2026 Tencent. All rights reserved.

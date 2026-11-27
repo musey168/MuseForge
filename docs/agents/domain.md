@@ -26,7 +26,9 @@ If any of these files don't exist, **proceed silently**. Don't flag their absenc
 
 When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `GLOSSARY.md`. Don't drift to synonyms the glossary explicitly avoids.
 
-LoopForge's own vocabulary is load-bearing and defined in the upstream repo's `AGENTS.md` and `docs/`. Notably: a **LOOP** is the reusable delivery workflow (Agent / script / human-gate / sub-LOOP nodes); a **run** is one execution of a LOOP or conversation workspace; a **role** is a reusable agent definition (prompt, executor, model, rules, skills, MCP tools); a **sandbox** is the isolated execution environment (Docker or native). Prefer these terms over generic synonyms like "workflow" (which upstream uses for a different concept: `Workflow` rows in `CatalogRepo`).
+LoopForge's own vocabulary is load-bearing and defined in this repo's `AGENTS.md` and `docs/`. Notably: a **LOOP** is the reusable delivery workflow (Agent / script / human-gate / sub-LOOP nodes); a **run** is one execution of a LOOP or conversation workspace; a **role** is a reusable agent definition (prompt, executor, model, rules, skills, MCP tools); a **sandbox** is the isolated execution environment (Docker or native). Prefer these terms over generic synonyms like "workflow" (which upstream uses for a different concept: `Workflow` rows in `CatalogRepo`).
+
+Note that these upstream terms describe capabilities the personal build removes. `GLOSSARY.md` gives the terms MuseForge actually uses; where the two disagree, `GLOSSARY.md` wins.
 
 If the concept you need isn't in the glossary yet, that's a signal: either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
 

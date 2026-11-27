@@ -1,6 +1,15 @@
-> **MuseForge** — 个人精简版，源自 [Tencent/LoopForge](https://github.com/Tencent/LoopForge)。
-> 目标：去掉团队协作面（成员账号、项目成员与加入申请、共享任务市场、企业 IM 机器人、业务域报表、SSO/网关身份），只保留单人可长期使用的全部能力（对话工作台、LOOP 流程设计器、角色、审批关口、沙箱与执行器、成本统计、调度任务、知识库、MCP/HTTP API）。
-> 分支约定：`main` 持续跟随上游源码，`dev` 用于开发，`stable` 发布稳定版本。本 README 以下内容为上游原文。
+> **MuseForge** — 个人项目工作台。
+>
+> 源自 [Tencent/LoopForge](https://github.com/Tencent/LoopForge)，是一个**单人精简版**：
+> 去掉团队协作面（成员账号、项目成员与加入申请、共享任务市场、企业 IM 机器人、
+> 业务域报表、SSO/网关身份），只保留一个人长期用得上的能力
+> （需求清单、项目分组、凭据配置、执行机器的 CLI 环境、omp 用量台、MCP/HTTP API）。
+>
+> 本仓库是**独立仓库**，不再跟随上游，也不自动同步上游更新。
+> 分支约定：`dev` 用于开发，`stable` 发布稳定版本。
+> 上游 MIT 许可证与原始版权声明保留在 [LICENSE](./LICENSE)。
+>
+> 本 README 以下内容为上游原文，尚未按个人版重写。
 
 <p align="center">
   <picture>
