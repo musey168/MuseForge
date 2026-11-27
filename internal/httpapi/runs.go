@@ -24,7 +24,12 @@ type runsHandlers struct {
 	runnerControls *runnerControlHub
 	evalJobs       *runEvalHub
 	terminals      runtime.TerminalPool
-	assistant      *assistantHandlers
+}
+
+// validateUserKnowledgeRefs checks that the knowledge connectors a run
+// references belong to the user who starts it.
+func (h *runsHandlers) validateUserKnowledgeRefs(uid int64, refs []domain.KnowledgeRef) error {
+	return validateUserKnowledgeRefsWithDeps(h.deps, uid, refs)
 }
 
 func (h *runsHandlers) analytics(c *gin.Context) {
@@ -124,22 +129,12 @@ func (h *runsHandlers) runs(c *gin.Context) {
 		if workflow, ok := h.repo.Workflow(strings.TrimSpace(req.WorkflowID)); ok && !workflow.Shared && !workflow.Generic {
 			workflowProject = workflow.ProjectID
 		}
-		scope := scheduledAssetsFrom(r.Context())
-		scopedWorkflow := scope.Version.ID != "" && scope.ProjectID == req.ProjectID && scope.Version.HasAsset("sop", strings.TrimSpace(req.WorkflowID))
-		if scopedWorkflow {
-			if err := h.repo.ValidateSharedScheduleAssets(scope.Version); err != nil {
-				respond(c, err)
-				return
-			}
-			workflowProject = ""
-		}
 		if !h.requireProjectWriter(c, req.ProjectID, workflowProject) {
 			return
 		}
 		executionContext := domain.TelemetryContext{ProjectID: req.ProjectID, ResponsibleUserID: project.OwnerID}
 		if current, ok := h.requestUser(r, true); ok {
 			executionContext.ResponsibleUserID = current.ID
-			executionContext.WorkspaceRunID = dispatchConversationWorkspace(h.deps, r, current.ID, req.ProjectID)
 		}
 		if executionContext.ResponsibleUserID == 0 {
 			c.JSON(http.StatusConflict, map[string]string{"error": "手动运行需要登录用户或已配置 Owner 的项目"})
@@ -166,9 +161,6 @@ func (h *runsHandlers) runs(c *gin.Context) {
 			repositories = []domain.RepositoryContext{repositoryRunContext(repoDef)}
 		}
 		executionContext.KnowledgeRefs = runKnowledgeRefs
-		if scopedWorkflow {
-			executionContext.SharedScheduleID, executionContext.SharedScheduleVersion = scope.Version.ID, scope.Version.Version
-		}
 		v, err := h.engine.StartWithRepositories(r.Context(), req.WorkflowID, req.Input, repositories, executionContext)
 		if err != nil {
 			if errors.Is(err, repo.ErrWorkspaceInUse) {

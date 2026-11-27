@@ -41,16 +41,14 @@ export async function openSettingsPage(page,view){
   await entry.click();
 }
 
-// The home page embeds the chat app in an iframe; its composer is the entry point.
-export const chat=page=>page.frameLocator('iframe[src*="/chatbot/"]');
-export const composer=page=>chat(page).locator('.composer-column textarea');
+// The home page is the requirement list. The new-requirement composer lives in
+// a modal on that page.
 export async function openHome(page){
   const {expect}=await import('@playwright/test');
-  await page.goto('/#/collaboration');
-  await expect(composer(page)).toBeEditable();
-  // The saved draft is restored once the signed-in user loads; typing earlier is overwritten.
+  await page.goto('/#/issues');
+  await expect(page.locator('#issuesView')).toBeVisible();
   await page.waitForLoadState('networkidle');
-  return composer(page);
+  return page.locator('#chatInput');
 }
 
 // The first-run suite also tests the pinned release, which opens the
@@ -88,7 +86,7 @@ export async function signInUnconfigured(page){
   test.skip(!process.env.LOOPFORGE_UNCONFIGURED_USER,'Provide an account without model or Git credentials');
   if(unconfiguredCookies.length){
     await page.context().addCookies(unconfiguredCookies);
-    await page.goto('/#/collaboration');
+    await page.goto('/#/issues');
   }else{
     const secret=process.env.LOOPFORGE_UNCONFIGURED_PASSWORD||fs.readFileSync(process.env.LOOPFORGE_UNCONFIGURED_PASSWORD_FILE,'utf8').trim();
     await page.goto('/login.html');

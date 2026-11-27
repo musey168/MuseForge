@@ -139,14 +139,6 @@ function scheduleExecMetricsHTML(overview){
     +cell('info','priority-bolt','平均耗时',c.avgMs?scheduleExecDurationLabel(c.avgMs):'—',c.avgMs&&p.avgMs?scheduleExecDeltaHTML(Math.round(c.avgMs),Math.round(p.avgMs),{lowerIsBetter:true}):'<small class="sched-exec-delta" data-trend="flat">已结束的执行</small>')
     +cell('accent','layers','Token 总消耗',c.metered?scheduleExecTokenLabel(c.tokens):'—',`<small class="sched-exec-delta" data-trend="flat">${c.metered} 次已上报 · 最近 7 天</small>`);
 }
-// Same link shape as issueConversationURL: the Studio frame opens chatSession.
-function scheduleExecConversationURL(e){
-  const url=new URL('/',location.origin);
-  if(e.projectId)url.searchParams.set('projectId',e.projectId);
-  url.searchParams.set('chatSession',e.sessionId);
-  url.hash='/collaboration';
-  return url.href;
-}
 function scheduleExecSummaryLine(e){
   const error=String(e.error||'').trim();
   if(error)return `<p class="sched-exec-error${e.status==='waiting'?' is-warn':''}">${escapeHTML(error)}</p>`;

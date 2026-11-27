@@ -288,7 +288,7 @@ test('clicking a history cell opens a short summary and restores focus when clos
 
 test('SOP detection settings save one project switch and the selected model', async t => {
   const app = await loadApp({ routes: [...routes,
-    { method: 'GET', path: '/api/assistant/models', body: {
+    { method: 'GET', path: '/api/model-catalog', body: {
       engines: [{ id: 'codebuddy', name: 'CodeBuddy', personal: true }],
       models: [{ id: 'codebuddy:claude-sonnet-5', name: 'Sonnet' }, { id: 'codebuddy:deepseek-v4', name: 'DeepSeek' }]
     } },

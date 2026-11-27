@@ -237,23 +237,18 @@ function renderReqContext(){
   renderReqDelivery();
 }
 function reqFooterNote(){
-  return reqUsesSOP()?'建单后可在详情里触发 LOOP，也可以先去对话里把需求聊清楚':'不绑定 LOOP，定时任务也不会自动认领；以后想跑 LOOP 可在详情里选择';
+  return reqUsesSOP()?'建单后可在详情里触发 LOOP':'不绑定 LOOP，定时任务也不会自动认领；以后想跑 LOOP 可在详情里选择';
 }
 function renderReqFooter(){
   const creating=!!state.reqCreating;
   const reason=reqDescription()||reqImages.length?'':'先写一句需求';
   $('#chatInput').readOnly=creating;
   $$('#reqImages button').forEach(button=>{button.disabled=creating});
-  const create=$('#reqCreate'),chat=$('#reqCreateChat');
+  const create=$('#reqCreate');
   if(create){
     create.disabled=creating||!!reason;
     create.title=reason;
     create.innerHTML=creating==='issue'?'<span class="req-spin" aria-hidden="true"></span>正在创建…':'创建需求';
-  }
-  if(chat){
-    chat.disabled=creating||!!reason;
-    chat.title=reason||'建单后打开 AI 工作台，新对话里已 @ 这个需求';
-    chat.innerHTML=creating==='chat'?'<span class="req-spin" aria-hidden="true"></span>正在创建…':`${reqIcon('chat')}创建并去对话澄清`;
   }
   const note=$('#reqComposerHint');
   if(note)note.textContent=reqFooterNote();
@@ -444,11 +439,9 @@ async function pushIssueToTAPDFromDetail(issueId){
     if(state.drawerOpen)openIssueDetail(updated.id);
   }catch(e){toast(e.message,'err')}
 }
-// createIssueFromChat 直接建单，不再在弹窗里澄清。mode 为 'chat' 时建单后打开
-// AI 工作台的新对话，并 @ 这个需求，在对话里把需求聊清楚。
-async function createIssueFromChat(target,mode){
+// createIssueFromChat 直接建单，不再在弹窗里澄清。
+async function createIssueFromChat(target){
   target=target||state.reqTarget||'local';
-  const toChat=mode==='chat';
   if(target!=='local'&&target!=='tapd')return toast('请选择平台或 TAPD');
   const draft=collectRequirementDraft();
   if(!draft.description&&!reqImages.length){$('#chatInput')?.focus();return toast('先写一句需求')}
@@ -457,7 +450,7 @@ async function createIssueFromChat(target,mode){
   const useSOP=reqUsesSOP();
   const workflowId=selectedReqWorkflowId();
   if(useSOP&&!workflowId)return toast('请选择 LOOP，或改为不使用 LOOP');
-  state.reqCreating=toChat?'chat':'issue';
+  state.reqCreating='issue';
   renderReqFooter();
   const project=currentProject();
   try{
@@ -495,9 +488,8 @@ async function createIssueFromChat(target,mode){
     renderIssues();
     if(syncError)toast('已在平台建单，TAPD 同步失败：'+syncError,'err');
     else if(target==='tapd')toast(`已创建需求并同步 TAPD ${issue.externalRef?.externalId||''}`,'ok');
-    else toast(toChat?'已创建需求，在对话里继续澄清':(useSOP?'已在平台创建需求，可在详情里触发 LOOP':'已创建需求（不使用 LOOP）'),'ok');
-    if(toChat)openIssueInChat(issue,{intent:'clarify'});
-    else openIssueDetail(issue.id);
+    else toast(useSOP?'已在平台创建需求，可在详情里触发 LOOP':'已创建需求（不使用 LOOP）','ok');
+    openIssueDetail(issue.id);
   }catch(err){toast(err.message,'err')}
   finally{state.reqCreating='';renderReqFooter()}
 }

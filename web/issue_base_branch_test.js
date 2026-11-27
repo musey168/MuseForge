@@ -36,7 +36,7 @@ for (const id of [
 elements["#reqRepository"].dataset.ids = '["r1"]';
 elements["#reqWorkflow"].value = "sop";
 elements["#importTAPDWorkflow"].value = "sop";
-const storage = new Map(), requests = [], notices = [], opened = [], chats = [];
+const storage = new Map(), requests = [], notices = [], opened = [];
 const ctx = {
   state: {
     projectFilter: "p", currentUser: {id: 1},
@@ -138,16 +138,6 @@ assert.equal(elements["#chatInput"].value, "继续开发已有分支");
   assert.equal(created.body.baseBranch, "feature/continue");
   assert.equal(created.body.clarification, undefined, "creating no longer carries a clarification");
   assert.deepEqual(opened.at(-1), ["created", ""], "plain creation opens the issue detail without dispatching");
-  assert.equal(chats.length, 0);
-
-  const before = requests.length;
-  elements["#chatInput"].value = "要和 AI 聊清楚的需求";
-  await ctx.createIssueFromChat(undefined, "chat");
-  assert.equal(requests.length, before + 1, "creating for the chat only creates the issue, it does not dispatch");
-  assert.equal(requests.at(-1).url, "/api/issues");
-  assert.deepEqual(chats, [["created", "clarify"]], "creating for the chat opens the issue in the chat with clarify intent");
-  assert.equal(opened.length, 1, "creating for the chat does not open the issue detail");
-  assert.equal(ctx.state.reqCreating, "");
 
   elements["#chatInput"].value = "   ";
   const blank = requests.length;

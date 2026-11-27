@@ -87,7 +87,7 @@ type ScheduleJob struct {
 	// References are project assets selected for an AI scheduled task. The
 	// executor resolves them at run time so edits to the referenced assets are
 	// reflected on the next run.
-	References     []AssistantReference `json:"references,omitempty"`
+	References     []AssetReference `json:"references,omitempty"`
 	AssistantModel string               `json:"assistantModel,omitempty"`
 	// TimeoutMinutes bounds one AI execution, including tool calls and LOOP waits.
 	// Zero uses the default for jobs saved before this field existed.

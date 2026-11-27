@@ -655,7 +655,7 @@ func (h *runnersHandlers) runnerControlConnect(c *gin.Context) {
 	conn := h.runnerControls.register(runner, ws, c.GetHeader(domain.RunnerSSHHostKeyProbeHeader) == "1",
 		c.GetHeader(domain.RunnerDockerSandboxLimitsHeader) == "1", c.GetHeader(domain.RunnerPrivilegedSandboxHeader) == "1")
 	defer h.runnerControls.unregister(conn)
-	connCtx, cancel := context.WithCancel(c.Request.Context())
+	_, cancel := context.WithCancel(c.Request.Context())
 	defer cancel()
 	var toolCancels sync.Map // request ID -> context.CancelFunc
 	go conn.writeLoop()
@@ -674,42 +674,6 @@ func (h *runnersHandlers) runnerControlConnect(c *gin.Context) {
 			if stop, ok := toolCancels.Load(input.RequestID); ok {
 				stop.(context.CancelFunc)()
 			}
-			continue
-		}
-		if input.Type == "agent_tool.request" && input.ToolRequest != nil {
-			toolCtx, stop := context.WithCancel(connCtx)
-			if _, duplicate := toolCancels.LoadOrStore(input.RequestID, stop); duplicate {
-				stop()
-				continue
-			}
-			go func(input runnerControlMessage) {
-				defer toolCancels.Delete(input.RequestID)
-				defer stop()
-				result := domain.RunnerToolResponse{}
-				session, ok := agentToolSessions.get(input.ToolRequest.Token)
-				if !ok || session.ExecutionRunnerID != runner.ID {
-					result.Error = "invalid conversation gateway"
-				} else {
-					var request agentToolRPCRequest
-					if err := json.Unmarshal(input.ToolRequest.Body, &request); err != nil {
-						result.Error = "invalid tool request"
-					} else {
-						ctx := withAgentToolToken(toolCtx, input.ToolRequest.Token)
-						if !input.ToolRequest.SupportsCancel {
-							ctx = context.WithValue(ctx, legacyRunnerToolRequestKey{}, true)
-						}
-						response := (&agentToolGateway{deps: h.deps}).handleRPC(ctx, session, request)
-						if response != nil {
-							result.Body, _ = json.Marshal(response)
-						}
-					}
-				}
-				select {
-				case conn.send <- runnerControlMessage{Type: "agent_tool.response", RequestID: input.RequestID, ToolResponse: &result}:
-				case <-toolCtx.Done():
-				case <-conn.done:
-				}
-			}(input)
 			continue
 		}
 		if input.Type == "workspace.response" && input.WorkspaceResponse != nil {

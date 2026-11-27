@@ -22,13 +22,13 @@ func TestAssistantDefaultsFollowCredentialChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	user, _ := store.UserByLoginName("assistant-defaults-owner")
-	update := func(change UserCredentialUpdate) domain.AssistantDefaults {
+	update := func(change UserCredentialUpdate) domain.ExecutorDefaults {
 		t.Helper()
 		if _, err := store.UpdateUserCredentials(user.ID, change); err != nil {
 			t.Fatal(err)
 		}
 		saved, _ := store.User(user.ID)
-		return saved.AssistantDefaults
+		return saved.ExecutorDefaults
 	}
 	if got := update(UserCredentialUpdate{CodexAPIKey: "fixture-key"}); got.Executor != "codex" {
 		t.Fatalf("the first configured CLI should be the default: %+v", got)
@@ -36,14 +36,14 @@ func TestAssistantDefaultsFollowCredentialChanges(t *testing.T) {
 	if got := update(UserCredentialUpdate{CodeBuddyAPIKey: "fixture-key"}); got.Executor != "codex" {
 		t.Fatalf("adding another credential changed the default: %+v", got)
 	}
-	chosen := domain.AssistantDefaults{Executor: "codebuddy", Model: "deepseek-v4.1-flash", Effort: "high", Approval: "assisted"}
-	if got := update(UserCredentialUpdate{AssistantDefaults: &chosen}); got != chosen {
+	chosen := domain.ExecutorDefaults{Executor: "codebuddy", Model: "deepseek-v4.1-flash", Effort: "high"}
+	if got := update(UserCredentialUpdate{ExecutorDefaults: &chosen}); got != chosen {
 		t.Fatalf("explicit defaults were lost: %+v", got)
 	}
-	if got := update(UserCredentialUpdate{CodeBuddyAPIKeyClear: true}); got.Executor != "codex" || got.Model != "" || got.Effort != "" || got.Approval != "assisted" {
+	if got := update(UserCredentialUpdate{CodeBuddyAPIKeyClear: true}); got.Executor != "codex" || got.Model != "" || got.Effort != "" {
 		t.Fatalf("deleting the chosen CLI should select another available CLI: %+v", got)
 	}
-	if _, err := store.UpdateUserCredentials(user.ID, UserCredentialUpdate{AssistantDefaults: &chosen}); !errors.Is(err, ErrAssistantDefaultExecutorUnavailable) {
+	if _, err := store.UpdateUserCredentials(user.ID, UserCredentialUpdate{ExecutorDefaults: &chosen}); !errors.Is(err, ErrAssistantDefaultExecutorUnavailable) {
 		t.Fatalf("unconfigured CLI accepted: %v", err)
 	}
 }

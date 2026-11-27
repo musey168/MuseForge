@@ -244,7 +244,7 @@
     });
     return host.modelPickerReady;
   }
-  async function fetchCatalog(path = '/api/assistant/models') {
+  async function fetchCatalog(path = '/api/model-catalog') {
     const resp = await fetch(path, {headers: {Accept: 'application/json'}, credentials: 'same-origin'});
     if (!resp.ok) throw new Error(`模型列表加载失败（${resp.status}）`);
     return resp.json();
@@ -252,7 +252,7 @@
   // Share the in-flight request and retain the last catalog on a refresh failure.
   function load(options) {
     const refresh = !!(options && options.refresh);
-    const path = refresh ? '/api/assistant/models?refresh=1' : '/api/assistant/models';
+    const path = refresh ? '/api/model-catalog?refresh=1' : '/api/model-catalog';
     if (!loading || refresh) {
       loading = fetchCatalog(path).then(data => {
         if (Array.isArray(data?.models)) {

@@ -29,8 +29,8 @@ func TestWorkspacePreparationAPISeparatesReadersAndWriters(t *testing.T) {
 	}
 	root := t.TempDir()
 	en := engine.New(a.repo, runtime.NewManager(root))
-	a.deps.engine = en
-	h := &runsHandlers{deps: a.deps}
+	a.engine = en
+	h := &runsHandlers{deps: a}
 	run, _ := a.repo.RunState("shared-run")
 	run.Status = "succeeded"
 	run.WorkflowSnapshot.SandboxProfileID = "test-native"
@@ -77,7 +77,7 @@ func TestWorkspacePreparationAPISeparatesReadersAndWriters(t *testing.T) {
 func TestWorkspacePreparationLeaseContentionIsRetryable(t *testing.T) {
 	a, user := workbenchFixture(t)
 	a.engine = engine.New(a.repo, runtime.NewManager(t.TempDir()))
-	h := &runsHandlers{deps: a.deps}
+	h := &runsHandlers{deps: a}
 	run := domain.Run{ID: "handoff-ide-busy", Status: "waiting", PauseRequested: true, ExecutionContext: domain.TelemetryContext{ProjectID: "workbench"}, Nodes: map[string]*domain.NodeRun{}}
 	if err := a.repo.PutRun(run); err != nil {
 		t.Fatal(err)

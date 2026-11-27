@@ -672,7 +672,6 @@ function showRunnerModels(runner,runtime){
             method:'PUT',body:JSON.stringify({provider,models})
           });
           state.runners=(state.runners||[]).map(item=>item.id===runner.id?{...updated,canUseInProject:item.canUseInProject}:item);
-          $('#chatNextFrame')?.contentWindow?.postMessage({type:'agentflow-environments-changed'},location.origin);
         }else{
           await saveCredential(kind.key,{models});
         }

@@ -67,16 +67,8 @@ func (h *runnersHandlers) runnerRuntimeTest(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), runnerRuntimeTestTimeout)
 	defer cancel()
-	if err := h.assistant.testRunnerCLI(ctx, runner.ID, provider, runnerLogin, user); err != nil {
-		status, message := assistantGenerationFailure(ctx, err)
-		if status == http.StatusGatewayTimeout {
-			message = "CLI 测试超时，请检查执行机器和模型服务的连接"
-		} else if strings.Contains(err.Error(), "执行机器未安装 CLI") {
-			message = "执行机器未安装该 CLI"
-		} else if assistantFailureGeneric(classifyAssistantFailure(ctx, err).Code) {
-			message = "CLI 测试失败，请检查执行机器上的 CLI、认证和模型服务配置"
-		}
-		c.JSON(status, gin.H{"error": message})
+	if err := testRunnerCLI(ctx, h.runnerControls, runner, provider, runnerLogin, user); err != nil {
+		c.JSON(runnerCLITestFailure(ctx, err), gin.H{"error": runnerCLITestMessage(ctx, err)})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})

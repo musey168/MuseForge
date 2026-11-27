@@ -98,9 +98,9 @@ func (r *CatalogRepo) PublishSharedSchedule(jobID, projectID string, v domain.Sh
 			return err
 		}
 		v.Assets = assets
-		v.References = make([]domain.AssistantReference, 0, len(assets))
+		v.References = make([]domain.AssetReference, 0, len(assets))
 		for _, asset := range assets {
-			ref, shared, ok := catalog.sharedScheduleReference(domain.AssistantReference{Type: asset.Type, ID: asset.ID})
+			ref, shared, ok := catalog.sharedScheduleReference(domain.AssetReference{Type: asset.Type, ID: asset.ID})
 			if !ok || !shared || ref.ProjectID != asset.ProjectID {
 				return fmt.Errorf("%w：%s/%s 的权限或归属已变更", ErrSharedScheduleReferences, asset.Type, asset.ID)
 			}

@@ -50,7 +50,6 @@ const openIssues = list(await get(`/api/issues?projectId=${encodeURIComponent(cf
 await sweep('issue (close)', openIssues, issue => post(`/api/issues/${issue.id}/close`, {}, { expect: [200, 404, 409] }));
 
 await sweepCollection('schedule job', '/api/schedule-jobs');
-await sweepCollection('assistant task', '/api/assistant/tasks');
 await sweepCollection('workflow', '/api/workflows');
 await sweepCollection('agent', '/api/agents', item => ours(item) && !item.shared);
 await sweepCollection('rule', '/api/rules', item => ours(item) && !item.shared);

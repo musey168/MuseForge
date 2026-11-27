@@ -1,4 +1,4 @@
-.PHONY: run test test-mysql clean-mysql build build-chatbot build-gate-mcp coverage coverage-go coverage-chatbot coverage-web coverage-e2e
+.PHONY: run test test-mysql clean-mysql build build-gate-mcp coverage coverage-go coverage-web coverage-e2e
 
 GOCACHE ?= /tmp/agentflow-gocache
 # Use the local toolchain; go.mod requires go >= 1.26.11.
@@ -9,18 +9,14 @@ run:
 test:
 	GOCACHE=$(GOCACHE) go test -p=16 ./... -count=1 -timeout=4m
 
-# coverage runs the same gates as CI. Needs web/native-chat
-# (make build-chatbot). COVERAGE_P lowers Go package parallelism on small hosts.
+# coverage runs the same gates as CI. COVERAGE_P lowers Go package parallelism
+# on small hosts.
 COVERAGE_P ?= 4
 
-coverage: coverage-go coverage-chatbot coverage-web
+coverage: coverage-go coverage-web
 
 coverage-go:
 	GOCACHE=$(GOCACHE) GO_TEST_P=$(COVERAGE_P) bash scripts/coverage-go.sh --min 85
-
-coverage-chatbot:
-	[ -d chatbot/node_modules/vitest ] || npm --prefix chatbot ci --include=dev --no-audit --no-fund
-	npm --prefix chatbot run coverage
 
 coverage-web:
 	[ -d webtest/node_modules/c8 ] || npm --prefix webtest ci --include=dev --no-audit --no-fund
@@ -54,15 +50,12 @@ test-mysql:
 clean-mysql:
 	-@docker rm -f $(MYSQL_CONTAINER) >/dev/null 2>&1 || true
 
-build: build-chatbot
+build:
 	mkdir -p bin
 	GOCACHE=$(GOCACHE) go build -o bin/agentflow ./cmd/agentflow
 	GOCACHE=$(GOCACHE) go build -o bin/agentflow-mcp ./cmd/agentflow-mcp
 	GOCACHE=$(GOCACHE) go build -o bin/agentflow-runner ./cmd/agentflow-runner
 	$(MAKE) build-gate-mcp
-
-build-chatbot:
-	bash scripts/build-chatbot.sh
 
 build-gate-mcp:
 	mkdir -p bin

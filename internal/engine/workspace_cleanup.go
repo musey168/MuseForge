@@ -320,17 +320,6 @@ func (e *Engine) liveSandboxRunIDs() []string {
 	for _, id := range ids {
 		seen[id] = true
 	}
-	// A not-yet-reclaimed managed workspace, including one with a failed save,
-	// stays protected from the lower-level orphan directory/container sweeps.
-	for _, session := range e.repo.ListSharedAssistantSessions() {
-		if seen[session.RunID] {
-			continue
-		}
-		if run, ok := e.repo.RunState(session.RunID); ok && run.WorkspaceCleanedAt.IsZero() {
-			ids = append(ids, run.ID)
-			seen[run.ID] = true
-		}
-	}
 	for _, id := range e.repo.CheckpointWorkspaceRunIDs() {
 		if !seen[id] {
 			if run, ok := e.repo.RunState(id); ok && run.WorkspaceCleanedAt.IsZero() {
@@ -407,7 +396,7 @@ func (e *Engine) DeleteRun(runID string) error {
 		return err
 	}
 	defer func() { _ = e.repo.FinishWorkspaceUse(runID, token, time.Now().UTC(), nil, "") }()
-	if e.WorkspaceActive != nil && e.WorkspaceActive(run) || e.conversationGenerationRunning(run) {
+	if e.WorkspaceActive != nil && e.WorkspaceActive(run) {
 		return fmt.Errorf("工作区仍在使用，请先停止")
 	}
 	if err := e.repo.ClaimWorkspaceDeletion(runID, token, run.Revision, time.Now().UTC()); err != nil {

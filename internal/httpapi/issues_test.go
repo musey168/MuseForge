@@ -768,18 +768,6 @@ func TestSecurityHeadersAndSameOriginCORS(t *testing.T) {
 		t.Fatalf("/next/ is not a framed workbench: %v", next.Header())
 	}
 
-	for _, path := range []string{"/chatbot/", "/chatbot/preview.html"} {
-		preview := httptest.NewRecorder()
-		h.ServeHTTP(preview, httptest.NewRequest(http.MethodGet, "http://agentflow.example"+path, nil))
-		policy := preview.Header().Get("Content-Security-Policy")
-		if path == "/chatbot/preview.html" {
-			if !strings.Contains(policy, "sandbox allow-scripts;") || strings.Contains(policy, "allow-same-origin") || !strings.Contains(policy, "connect-src 'none'") || !strings.Contains(policy, "script-src 'unsafe-inline'") {
-				t.Fatalf("HTML preview must execute scripts in an isolated origin: %s", policy)
-			}
-		} else if !strings.Contains(policy, "script-src 'self';") {
-			t.Fatalf("chat application must retain its strict script policy: %s", policy)
-		}
-	}
 
 	foreign := httptest.NewRequest(http.MethodOptions, "http://agentflow.example/api/issues", nil)
 	foreign.Header.Set("Origin", "https://evil.example")

@@ -154,19 +154,6 @@ func TestCatalogIssueRunAndSpaceValidationHTTP(t *testing.T) {
 		{http.MethodPost, "/api/runs/missing/workspace/release", nil, 404},
 		{http.MethodPost, "/api/runs/missing/workspace/restore", nil, 404},
 		{http.MethodGet, "/api/runs/missing/workspace/preparation", nil, 404},
-		{http.MethodGet, "/api/spaces", nil, 400},
-		{http.MethodPost, "/api/spaces", map[string]any{}, 400},
-		{http.MethodGet, "/api/spaces/missing", nil, 404},
-		{http.MethodPatch, "/api/spaces/missing", map[string]any{}, 404},
-		{http.MethodPost, "/api/spaces/missing/requirement", map[string]any{}, 404},
-		{http.MethodGet, "/api/spaces/missing/members", nil, 404},
-		{http.MethodGet, "/api/spaces/missing/threads", nil, 404},
-		{http.MethodGet, "/api/spaces/missing/artifacts", nil, 404},
-		{http.MethodGet, "/api/spaces/missing/lanes", nil, 404},
-		{http.MethodGet, "/api/spaces/missing/usage", nil, 404},
-		{http.MethodGet, "/api/rooms", nil, 400},
-		{http.MethodPost, "/api/rooms", map[string]any{}, 400},
-		{http.MethodGet, "/api/rooms/missing", nil, 404},
 	}
 	for i, tc := range cases {
 		rec := cvBRequest(t, f, tc.method, tc.path, tc.body, true)

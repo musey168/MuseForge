@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -233,29 +232,6 @@ func TestDispatchCustomBaseBranchSkipsScheduledIntegration(t *testing.T) {
 	}
 }
 
-func TestIssueRepositoryChangeInvalidatesClarifySession(t *testing.T) {
-	st, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(st.Close)
-	for _, id := range []string{"original-repo", "new-repo"} {
-		if err := st.PutRepository(domain.Repository{ID: id, ProjectID: "platform", Name: id, DefaultBranch: "master"}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	issue := domain.Issue{ID: "repo-switch", ProjectID: "platform", Title: "更换分析仓库", RepositoryID: "original-repo", BaseBranch: "feature/continue",
-		Clarification: domain.ClarificationAssessment{SessionID: "original-repo-session", SessionUserID: 42, Summary: "保留回答"}}
-	if err := st.PutIssue(issue); err != nil {
-		t.Fatal(err)
-	}
-	h := New(st, engine.New(st, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
-	updated := requestJSON[domain.Issue](t, h, http.MethodPut, "/api/issues", map[string]any{"id": issue.ID, "repositoryId": "new-repo"}, http.StatusOK)
-	if updated.BaseBranch != issue.BaseBranch || updated.Clarification.SessionID != "" || updated.Clarification.SessionUserID != 0 || updated.Clarification.Summary != "保留回答" {
-		t.Fatalf("repository changes must invalidate the old code session: %+v", updated)
-	}
-}
-
 func TestImportTAPDRejectsInvalidLinksBeforeMCP(t *testing.T) {
 	st, err := repo.OpenTest()
 	if err != nil {
@@ -425,21 +401,3 @@ func TestIssueSaveEchoingLegacySharedBranchNormalizes(t *testing.T) {
 	requestJSON[map[string]string](t, h, http.MethodPut, "/api/issues", map[string]any{"id": feature.ID, "baseBranch": "master"}, http.StatusBadRequest)
 }
 
-func TestAssistantIssueDraftRewritesGenericMainBranch(t *testing.T) {
-	draft := assistantDraft{Tool: "issues_save", Body: json.RawMessage(`{"projectId":"platform","title":"新需求","repositoryIds":["a","b"],"baseBranch":"master","repositoryBranches":{"a":"main","b":"feature/keep"}}`)}
-	if err := validateAssistantDraft(&draft, "platform"); err != nil {
-		t.Fatal(err)
-	}
-	var body map[string]any
-	if err := json.Unmarshal(draft.Body, &body); err != nil {
-		t.Fatal(err)
-	}
-	branches, _ := body["repositoryBranches"].(map[string]any)
-	if body["baseBranch"] != "" || len(branches) != 1 || branches["b"] != "feature/keep" {
-		t.Fatalf("generic main branch names must mean auto-create from configured main: %s", draft.Body)
-	}
-	other := assistantDraft{Tool: "issues_save", Body: json.RawMessage(`{"projectId":"platform","title":"继续","baseBranch":"feature/x"}`)}
-	if err := validateAssistantDraft(&other, "platform"); err != nil || !strings.Contains(string(other.Body), "feature/x") {
-		t.Fatalf("feature branches must be untouched: %s %v", other.Body, err)
-	}
-}

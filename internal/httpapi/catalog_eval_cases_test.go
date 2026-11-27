@@ -387,68 +387,6 @@ func TestNotificationManagementErrorBranches(t *testing.T) {
 	}
 }
 
-func TestRoomDecisionValidation(t *testing.T) {
-	f := cvBNewHTTPFixture(t)
-	room := domain.ChatRoom{ID: "cvb-r2-decision-room", ProjectID: "platform", Name: "Decisions"}
-	if err := f.s.PutRoom(room); err != nil {
-		t.Fatal(err)
-	}
-	check := func(path string, body any, want int) {
-		rec := cvBRequest(t, f, http.MethodPost, path, body, true)
-		if rec.Code != want {
-			t.Errorf("POST %s = %d want %d: %s", path, rec.Code, want, rec.Body.String())
-		}
-	}
-	check("/api/rooms/missing/decisions", map[string]any{}, http.StatusNotFound)
-	check("/api/rooms/"+room.ID+"/decisions", map[string]any{}, http.StatusBadRequest)
-	check("/api/rooms/"+room.ID+"/decisions",
-		map[string]any{"runId": "not-dispatched", "nodeId": "n", "action": "approve"}, http.StatusForbidden)
-
-	missingRun := "cvb-r2-decision-missing-run"
-	if err := f.s.PutMessage(domain.ChatMessage{ID: "dispatch-missing", RoomID: room.ID, Kind: domain.ChatKindDispatch, RunID: missingRun}); err != nil {
-		t.Fatal(err)
-	}
-	check("/api/rooms/"+room.ID+"/decisions",
-		map[string]any{"runId": missingRun, "nodeId": "n", "action": "approve"}, http.StatusNotFound)
-
-	notWaiting := domain.Run{ID: "cvb-r2-decision-done", Status: "running", WorkflowSnapshot: domain.WorkflowDefinition{
-		Nodes: []domain.WorkflowNode{{ID: "n", Name: "Node"}},
-	}, Nodes: map[string]*domain.NodeRun{"n": {Status: "succeeded"}}}
-	if err := f.s.PutRun(notWaiting); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.s.PutMessage(domain.ChatMessage{ID: "dispatch-done", RoomID: room.ID, Kind: domain.ChatKindDispatch, RunID: notWaiting.ID}); err != nil {
-		t.Fatal(err)
-	}
-	check("/api/rooms/"+room.ID+"/decisions",
-		map[string]any{"runId": notWaiting.ID, "nodeId": "n", "action": "approve"}, http.StatusConflict)
-
-	noReject := domain.Run{ID: "cvb-r2-decision-no-reject", Status: "waiting", WorkflowSnapshot: domain.WorkflowDefinition{
-		Nodes: []domain.WorkflowNode{{ID: "n", Name: "Node"}},
-	}, Nodes: map[string]*domain.NodeRun{"n": {Status: "waiting_approval"}}}
-	if err := f.s.PutRun(noReject); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.s.PutMessage(domain.ChatMessage{ID: "dispatch-no-reject", RoomID: room.ID, Kind: domain.ChatKindDispatch, RunID: noReject.ID}); err != nil {
-		t.Fatal(err)
-	}
-	check("/api/rooms/"+room.ID+"/decisions",
-		map[string]any{"runId": noReject.ID, "nodeId": "n", "action": "reject"}, http.StatusBadRequest)
-
-	rejectable := domain.Run{ID: "cvb-r2-decision-reject", Status: "waiting", WorkflowSnapshot: domain.WorkflowDefinition{
-		Nodes: []domain.WorkflowNode{{ID: "work", Name: "Work"}, {ID: "approve", Name: "Approve", Type: "approval", RejectTo: "work"}},
-	}, Nodes: map[string]*domain.NodeRun{"work": {Status: "succeeded"}, "approve": {Status: "waiting_approval"}}}
-	if err := f.s.PutRun(rejectable); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.s.PutMessage(domain.ChatMessage{ID: "dispatch-reject", RoomID: room.ID,
-		Kind: domain.ChatKindDispatch, RunID: rejectable.ID}); err != nil {
-		t.Fatal(err)
-	}
-	check("/api/rooms/"+room.ID+"/decisions",
-		map[string]any{"runId": rejectable.ID, "nodeId": "approve", "action": "reject", "reason": "redo"}, http.StatusOK)
-}
-
 func TestCatalogMCPAndGenericHelperBranches(t *testing.T) {
 	f := cvBNewHTTPFixture(t)
 	h := &catalogHandlers{deps: &deps{repo: f.s}}
@@ -589,29 +527,6 @@ func TestDispatchWorkflowSelectionErrors(t *testing.T) {
 	projectFallback := makeIssue("cvb-r2-dispatch-project-flow")
 	if _, err := dispatchIssue(d, dispatchRequest{IssueID: projectFallback.ID}); err == nil {
 		t.Fatal("project workflow with invalid repository dispatched")
-	}
-}
-
-func TestRoomDecisionApproveSuccess(t *testing.T) {
-	f := cvBNewHTTPFixture(t)
-	room := domain.ChatRoom{ID: "cvb-r2-approve-room", ProjectID: "platform", Name: "Approval"}
-	if err := f.s.PutRoom(room); err != nil {
-		t.Fatal(err)
-	}
-	run := domain.Run{ID: "cvb-r2-approve-run", Status: "waiting", WorkflowSnapshot: domain.WorkflowDefinition{
-		ID: "flow", Name: "Flow", Nodes: []domain.WorkflowNode{{ID: "approve", Name: "Approve", Type: "approval"}},
-	}, Nodes: map[string]*domain.NodeRun{"approve": {Status: "waiting_approval", Attempt: 1}}}
-	if err := f.s.PutRun(run); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.s.PutMessage(domain.ChatMessage{ID: "cvb-r2-approve-dispatch", RoomID: room.ID,
-		Kind: domain.ChatKindDispatch, RunID: run.ID, IssueID: "issue", IssueTitle: "Issue"}); err != nil {
-		t.Fatal(err)
-	}
-	rec := cvBRequest(t, f, http.MethodPost, "/api/rooms/"+room.ID+"/decisions",
-		map[string]any{"runId": run.ID, "nodeId": "approve", "action": "approve", "reason": "looks good"}, true)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("approve = %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

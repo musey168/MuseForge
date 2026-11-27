@@ -22,7 +22,7 @@ func readHarnessUI(t *testing.T) string {
 	return string(raw)
 }
 
-// nativeWebFiles lists the web/ native page sources; chatbot/ and the built native-chat bundle follow their own spec.
+// nativeWebFiles lists the web/ native page sources.
 func nativeWebFiles(t *testing.T) []string {
 	t.Helper()
 	var files []string
@@ -32,7 +32,7 @@ func nativeWebFiles(t *testing.T) []string {
 		}
 		if d.IsDir() {
 			switch path {
-			case "chatbot", "native-chat", "node_modules":
+			case "node_modules":
 				return filepath.SkipDir
 			}
 			return nil

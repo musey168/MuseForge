@@ -32,11 +32,10 @@ type issueListPage struct {
 	HasMore bool                `json:"hasMore"`
 }
 
-// issuesHandlers 依赖 tasks（列表/详情触发任务状态同步）与 stream（发起 clarify）。
+// issuesHandlers 依赖 tasks（列表/详情触发任务状态同步）。
 type issuesHandlers struct {
 	*deps
-	tasks  *tasksHandlers
-	stream *streamHandlers
+	tasks *tasksHandlers
 }
 
 func (h issuesHandlers) importTAPD(c *gin.Context) {
@@ -462,9 +461,6 @@ var issueRoutes = map[string]issueRoute{
 	"/api/issues/:id/comments":            {handle: issuesHandlers.addIssueComment, methods: []string{http.MethodPost}},
 	"/api/issues/:id/runs":                {handle: issuesHandlers.issueRuns, methods: []string{http.MethodGet}},
 	"/api/issues/:id/clarification":       {handle: issuesHandlers.submitIssueClarification, methods: []string{http.MethodPost}},
-	"/api/issues/:id/chat-clarify":        {handle: issuesHandlers.chatClarifyIssue, methods: []string{http.MethodGet, http.MethodPost}},
-	"/api/issues/:id/clarify-models":      {handle: issuesHandlers.clarifyModels, methods: []string{http.MethodGet}},
-	"/api/issues/:id/chat-clarify/cancel": {handle: issuesHandlers.cancelChatClarifyIssue, methods: []string{http.MethodPost}},
 	"/api/issues/:id/reopen":              {handle: issuesHandlers.reopenIssue, methods: []string{http.MethodPost}},
 	"/api/issues/:id/close":               {handle: issuesHandlers.closeIssue, methods: []string{http.MethodPost}},
 	"/api/issues/:id/resync-tapd":         {handle: issuesHandlers.resyncTAPDIssue, methods: []string{http.MethodPost}},
@@ -494,29 +490,6 @@ func (h issuesHandlers) issue(c *gin.Context) {
 	route.handle(h, c, issue)
 }
 
-// Use the account that will execute the clarification. This catalog is only
-// available to callers allowed to start the clarification.
-func (h issuesHandlers) clarifyModels(c *gin.Context, issue domain.Issue) {
-	if !h.requireProjectWriter(c, issue.ProjectID) {
-		return
-	}
-	user, err := h.repo.ResponsibleUser(issue)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	ctx := c.Request.Context()
-	catalog := personalCodeBuddyCatalog(ctx, user)
-	catalog.Engines = assistantEngineOptions(user, false)
-	if user.AssistantDefaults != (domain.AssistantDefaults{}) {
-		catalog.Preferences = &user.AssistantDefaults
-	}
-	models, _ := assistantEngineModels(ctx, user, nil)
-	catalog.Models = append(selectableCodeBuddyModels(catalog.Models), models...)
-	c.Header("Cache-Control", "private, no-store")
-	c.JSON(http.StatusOK, catalog)
-}
-
 func actorLabel(user *auth.User) (string, int64) {
 	if user == nil {
 		return "", 0
@@ -534,8 +507,7 @@ func actorLabel(user *auth.User) (string, int64) {
 }
 
 // recordIssueOperation appends one audit entry. Actor is always the platform
-// account whose permissions were used; a call made for a chat turn also
-// records the IM sender that asked for it (see botChatActor).
+// account whose permissions were used.
 func (h issuesHandlers) recordIssueOperation(c *gin.Context, issue *domain.Issue, action, detail string) {
 	if issue == nil {
 		return
@@ -543,9 +515,6 @@ func (h issuesHandlers) recordIssueOperation(c *gin.Context, issue *domain.Issue
 	user, _ := h.requestUser(c.Request, true)
 	actor, id := actorLabel(user)
 	op := domain.IssueOperation{Actor: actor, ActorUserID: id, Action: action, Detail: detail}
-	if chat, ok := botChatActorFrom(c.Request.Context()); ok {
-		op.ActorChannel, op.ActorSender, op.ActorSenderName = chat.Channel, chat.SenderID, chat.SenderName
-	}
 	issue.AppendOperation(op)
 }
 

@@ -1,13 +1,9 @@
 package httpapi
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
 	"fmt"
 	"maps"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -255,33 +251,3 @@ func TestDispatchRepositoryBranches(t *testing.T) {
 	}
 }
 
-func TestComposerClarifyRepositoryBranches(t *testing.T) {
-	seen := make(chan domain.Issue, 1)
-	setClarifyExecForTest(func(_ context.Context, issue domain.Issue, _ chatClarifyRequest, _ func(string, any)) (any, string, map[string]any, error) {
-		seen <- issue
-		return map[string]any{"ready": false, "summary": "请补充验收标准"}, "", nil, nil
-	})
-	t.Cleanup(func() { setClarifyExecForTest(nil) })
-	st, h := clarifyTestServer(t)
-	ids := putIssueBranchRepositories(t, st)
-	payload := map[string]any{"projectId": "platform", "repositoryIds": ids[:2], "message": "继续前后端开发",
-		"repositoryBranches": map[string]string{ids[0]: " feature/api ", ids[1]: "feature/web"}}
-	body, _ := json.Marshal(payload)
-	request := httptest.NewRequest(http.MethodPost, "/api/chat-clarify", bytes.NewReader(body))
-	request.Header.Set("Content-Type", "application/json")
-	response := httptest.NewRecorder()
-	h.ServeHTTP(response, request)
-	if response.Code != http.StatusOK {
-		t.Fatalf("clarification status=%d: %s", response.Code, response.Body.String())
-	}
-	select {
-	case issue := <-seen:
-		if issue.WorkBranchForRepository(ids[0]) != "feature/api" || issue.WorkBranchForRepository(ids[1]) != "feature/web" {
-			t.Fatalf("clarification lost per-repository branches: %+v", issue)
-		}
-	default:
-		t.Fatal("clarification did not execute")
-	}
-	payload["repositoryBranches"] = map[string]string{ids[1]: "feature/web~1"}
-	requestJSON[map[string]any](t, h, http.MethodPost, "/api/chat-clarify", payload, http.StatusBadRequest)
-}

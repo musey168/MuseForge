@@ -4,7 +4,6 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/subtle"
-	"flag"
 	"io"
 	"io/fs"
 	"log"
@@ -90,8 +89,6 @@ type Server struct {
 	tasks           *tasksHandlers    // tasks.go
 	runs            *runsHandlers     // runs.go
 	previews        *previewsHandlers // run_preview.go
-	browser         *browserHandlers  // browser.go
-	stream          *streamHandlers   // stream.go
 	runners         *runnersHandlers  // runners.go
 	schedule        *scheduleHandlers // schedule.go（align.go 并入）
 	tokens          *tokenHandlers    // auth_tokens.go
@@ -123,14 +120,11 @@ func (b *Background) gate() <-chan struct{} {
 // Cancelling ctx stops claiming; running work is only cancelled by Stop.
 func NewWithNotificationsAndBackground(ctx context.Context, s *repo.Store, e *engine.Engine, syncSvc *tracker.Service, basicUser, basicPass string, notifications *notification.Service, opts BackgroundOptions) (*gin.Engine, *Background) {
 	bg := &Background{recoveryGate: opts.RecoveryGate, sopDetectionContext: ctx}
-	router := newWithNotifications(s, e, syncSvc, basicUser, basicPass, notifications, bg, func(h *assistantHandlers, runs *runsHandlers) {
-		h.startSessionJanitor(ctx)
-		h.startAttachmentSweeper(ctx)
-	})
+	router := newWithNotifications(s, e, syncSvc, basicUser, basicPass, notifications, bg, nil)
 	return router, bg
 }
 
-func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Service, basicUser, basicPass string, notifications *notification.Service, bg *Background, startBackground func(*assistantHandlers, *runsHandlers)) *gin.Engine {
+func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Service, basicUser, basicPass string, notifications *notification.Service, bg *Background, startBackground func(*runsHandlers)) *gin.Engine {
 	knowledgeSvc := knowledge.NewService(s, randomID)
 	knowledgeExec := knowledge.NewExecutor(knowledgeSvc)
 	d := &deps{repo: s, engine: e, sync: syncSvc, authClient: auth.NewClientFromEnv(), knowledgeSvc: knowledgeSvc, knowledgeExec: knowledgeExec, passwordAttempts: newPasswordLimiter()}
@@ -143,13 +137,6 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 		d.configureSync(s.SyncConfig())
 	}
 	tasks := &tasksHandlers{deps: d}
-	stream := &streamHandlers{deps: d, clarifyCancels: map[string]context.CancelFunc{}, clarifyRepoLock: map[string]*stdsync.Mutex{}}
-	stream.jobs = newClarifyHub(stream)
-	stream.predecessor = bg.gate()
-	stream.clarifyRun = stream.executeClarify
-	if flag.Lookup("test.v") != nil {
-		stream.clarifyRun = testClarifyExec
-	}
 	runnerControls := newRunnerControlHub()
 	runnerControls.sshHostLookup = s.PlatformSSHKnownHosts
 	runnerControls.successor = relayRunnerWorkspaceToSuccessor(e)
@@ -161,6 +148,11 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 			return runnerControls.requestWorkspace(ctx, e.RunExecutionRunner(run), request)
 		}
 		e.ConfigureKnowledge(knowledgeExec)
+		// The platform asks a model to pick a sandbox profile and to name the
+		// work branch before a LOOP starts.
+		sop := &sopHelper{deps: d}
+		e.SelectSOPSandbox = sop.selectSOPSandbox
+		e.GenerateSOPWorkBranch = sop.generateSOPWorkBranch
 	}
 	api := &Server{
 		deps:            d,
@@ -180,12 +172,10 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 		mcp:             &mcpHandlers{deps: d},
 		market:          &marketHandlers{deps: d},
 		skillhub:        &skillhubHandlers{deps: d, client: newSkillhubClientFromEnv()},
-		issues:          &issuesHandlers{deps: d, tasks: tasks, stream: stream},
+		issues:          &issuesHandlers{deps: d, tasks: tasks},
 		tasks:           tasks,
 		runs:            &runsHandlers{deps: d, runnerControls: runnerControls, evalJobs: newRunEvalHub()},
 		previews:        &previewsHandlers{deps: d},
-		browser:         &browserHandlers{deps: d, runnerControls: runnerControls},
-		stream:          stream,
 		runners:         &runnersHandlers{deps: d, runnerWaiters: newRunnerWaiterRegistry(), runnerControls: runnerControls, runnerBindCodes: map[string]runnerBindCode{}},
 		schedule:        &scheduleHandlers{deps: d},
 		tokens:          &tokenHandlers{deps: d},
@@ -215,14 +205,12 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 	if bg != nil && bg.sopDetectionContext != nil {
 		go api.evolution.monitorSOPDetection(bg.sopDetectionContext, bg.gate())
 	}
-	runAfterGate(bg.gate(), stream.recoverClarifyJobs)
 	g := gin.New()
 	g.HandleMethodNotAllowed = true
 	// master(net/http) 对带尾斜杠的 /api 子树路径按各自 handler 语义返回
 	// 405/404；gin 默认会 301 重定向到无斜杠路径，行为不同，关闭之。
 	g.RedirectTrailingSlash = false
 	g.Use(api.previews.previewHost())
-	g.Use(api.browser.devServerHost())
 	// gin 只有在显式注册 NoMethod 后才会对"路径匹配但方法不符"返回 405，
 	// 否则落入 404；这里同时把 405 响应统一成 JSON 形态。
 	g.NoMethod(func(c *gin.Context) {
@@ -330,27 +318,11 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 	})
 
 	api.botIdentities = &botIdentityHandlers{deps: d, publicURL: api.notifications.service.PublicAddress}
-	asst := &assistantHandlers{deps: d, runnerControls: runnerControls, sourceRoot: assistantSourceRoot(), notifications: api.notifications, identities: api.botIdentities, attachmentSweepWake: make(chan struct{}, 1), clarify: stream}
-	e.SelectSOPSandbox = asst.selectSOPSandbox
-	e.GenerateSOPWorkBranch = asst.generateSOPWorkBranch
 	if schedulerEnabled() {
 		d.schedule.StartAfter(bg.gate())
 		if bg != nil {
 			bg.scheduler = d.schedule
 		}
-	}
-	api.runs.assistant = asst
-	api.runners.assistant = asst
-	api.schedule.assistant = asst
-	api.notifications.service.GenerateReport = asst.generateSOPReport
-	if api.notifications.service.Interactions != nil {
-		api.notifications.service.Interactions.Generate = asst.generateBotReply
-		api.notifications.service.Interactions.Action = asst.handleBotCardAction
-		api.notifications.service.Interactions.NativeLogs = cleanBotNativeLogs
-	}
-	if flag.Lookup("test.v") == nil && notification.BotWorkersEnabled() {
-		// Timers of chat clarifications (next round, pause, rerun).
-		runAfterGate(bg.gate(), asst.startBotClarifyLoop)
 	}
 	api.botInteractions = &botInteractionHandlers{deps: d, notifications: api.notifications}
 	g.GET("/api/notification-bots/:id/interactions", api.botInteractions.records)
@@ -364,52 +336,11 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 	g.POST("/api/bot-bindings/status", api.botIdentities.binding)
 	g.GET("/api/bot-bindings", api.botIdentities.list)
 	g.DELETE("/api/bot-bindings/:id", api.botIdentities.remove)
-	g.GET("/api/bot-drafts/:id", asst.botDraft)
-	g.POST("/api/bot-drafts/:id/confirm", asst.botDraft)
-	g.POST("/api/bot-drafts/:id/cancel", asst.botDraft)
-	g.POST("/api/assistant/chat", asst.chat)
-	g.POST("/api/assistant/generations", asst.startGeneration)
-	g.GET("/api/assistant/sessions/:id/generation", asst.generation)
-	g.GET("/api/assistant/sessions/:id/generations/:generationId/diagnostics", asst.generationDiagnostics)
-	g.POST("/api/assistant/sessions/:id/generation/cancel", asst.generation)
-	g.POST("/api/assistant/sessions/:id/generation/steer", asst.steerGeneration)
-	g.POST("/api/assistant/sessions/:id/proposals", asst.decideProposal)
-	g.GET("/api/assistant/preferences", asst.preferences)
-	g.PUT("/api/assistant/preferences", asst.preferences)
-	g.POST("/api/assistant/approval-review/probe", asst.probeApprovalReviewModels)
-	g.GET("/api/assistant/models", asst.models)
-	g.POST("/api/assistant/cli-install", asst.installCLI)
-	g.GET("/api/assistant/cli-install", asst.cliInstallStatus)
-	g.POST("/api/assistant/attachments", asst.uploadAttachment)
-	g.GET("/api/assistant/attachments/:id", asst.downloadAttachment)
-	g.GET("/api/assistant/references", asst.workbenchReferences)
-	g.GET("/api/runs/:id/conversation", asst.runConversation)
 	g.GET("/api/runs/:id/control", api.runs.runControl)
-	g.POST("/api/assistant/sessions/:id/edit", asst.editSession)
-	g.GET("/api/issues/:id/conversations", asst.issueConversations)
-	g.PUT("/api/assistant/sessions/:id/issue", asst.sessionIssue)
-	g.GET("/api/assistant/sessions", asst.listSessions)
-	g.POST("/api/assistant/sessions/:id/archive", asst.archiveSession)
-	g.POST("/api/assistant/sessions/:id/read", asst.markSessionRead)
-	g.POST("/api/assistant/sessions/:id/fork", asst.forkSession)
-	g.GET("/api/assistant/sessions/:id", asst.session)
-	g.PUT("/api/assistant/sessions/:id/knowledge", asst.sessionKnowledge)
-	g.PUT("/api/assistant/sessions/:id/title", asst.renameSession)
-	g.PUT("/api/assistant/sessions/:id/sandbox", asst.sessionSandbox)
-	g.PUT("/api/assistant/sessions/:id/project-credentials", asst.sessionProjectCredentials)
-	g.PUT("/api/assistant/sessions/:id/mode", asst.sessionMode)
-	g.GET("/api/assistant/sessions/:id/native-approvals", asst.nativeApprovals)
-	g.POST("/api/assistant/sessions/:id/native-approvals/:approvalId", asst.nativeApprovals)
-	g.PUT("/api/assistant/sessions/:id", asst.session)
-	g.DELETE("/api/assistant/sessions/:id", asst.session)
-	g.GET("/api/assistant/tasks", asst.listTasks)
-	g.PUT("/api/assistant/tasks", asst.putTask)
-	g.DELETE("/api/assistant/tasks/:id", asst.deleteTask)
-	g.POST("/api/assistant/tasks/:id/run", asst.runTaskNow)
-	prefetchAssistantModels()
 
 	// --- catalog ---
 	g.GET("/api/capabilities", api.capabilities)
+	g.GET("/api/model-catalog", api.modelCatalog)
 	g.GET("/api/executor-models", api.catalog.executorModels)
 	g.GET("/api/openapi.yaml", api.openAPI)
 	g.GET("/api/bootstrap", api.bootstrap)
@@ -450,56 +381,12 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 	g.Any("/api/issues/:id/comments", api.issues.issue)
 	g.Any("/api/issues/:id/runs", api.issues.issue)
 	g.Any("/api/issues/:id/clarification", api.issues.issue)
-	g.Any("/api/issues/:id/chat-clarify", api.issues.issue)
-	g.GET("/api/issues/:id/clarify-models", api.issues.issue)
-	g.Any("/api/issues/:id/chat-clarify/cancel", api.issues.issue)
 	g.Any("/api/issues/:id/reopen", api.issues.issue)
 	g.Any("/api/issues/:id/close", api.issues.issue)
 	g.Any("/api/issues/:id/resync-tapd", api.issues.issue)
 	g.Any("/api/issues/:id/requirement", api.issues.issue)
 	g.Any("/api/issues/:id/sops", api.issues.issue)
 	g.Any("/api/issues/:id/dispatch", api.issues.issue)
-	rooms := &roomsHandlers{deps: d}
-	g.GET("/api/rooms", rooms.rooms)
-	g.POST("/api/rooms", rooms.rooms)
-	g.GET("/api/rooms/:id", rooms.room)
-	g.PATCH("/api/rooms/:id", rooms.room)
-	g.GET("/api/rooms/:id/messages", rooms.messages)
-	g.POST("/api/rooms/:id/messages", rooms.messages)
-	g.POST("/api/rooms/:id/issues", rooms.createIssue)
-	g.POST("/api/rooms/:id/decisions", rooms.decide)
-	spaces := &spacesHandlers{deps: d, rooms: rooms}
-	g.GET("/api/spaces", spaces.spaces)
-	g.POST("/api/spaces", spaces.spaces)
-	g.GET("/api/spaces/:id", spaces.space)
-	g.PATCH("/api/spaces/:id", spaces.space)
-	g.POST("/api/spaces/:id/requirement", spaces.requirement)
-	g.GET("/api/spaces/:id/messages", spaces.messages)
-	g.POST("/api/spaces/:id/messages", spaces.messages)
-	g.GET("/api/spaces/:id/members", spaces.members)
-	g.POST("/api/spaces/:id/members", spaces.members)
-	g.DELETE("/api/spaces/:id/members", spaces.members)
-	g.GET("/api/spaces/:id/threads", spaces.threads)
-	g.POST("/api/spaces/:id/threads", spaces.threads)
-	g.GET("/api/spaces/:id/artifacts", spaces.artifacts)
-	g.POST("/api/spaces/:id/artifacts", spaces.artifacts)
-	g.GET("/api/spaces/:id/artifacts/:artifactId", spaces.artifact)
-	g.PUT("/api/spaces/:id/artifacts/:artifactId", spaces.artifact)
-	g.DELETE("/api/spaces/:id/artifacts/:artifactId", spaces.artifact)
-	g.GET("/api/spaces/:id/artifacts/:artifactId/raw", spaces.artifactRaw)
-	g.GET("/api/spaces/:id/artifacts/:artifactId/revisions", spaces.artifactRevisions)
-	g.GET("/api/spaces/:id/artifacts/:artifactId/revisions/:version", spaces.artifactRevisions)
-	g.GET("/api/spaces/:id/catalog", spaces.catalog)
-	g.GET("/api/spaces/:id/attachments/:attachmentId", spaces.attachment)
-	g.GET("/api/spaces/:id/lanes", spaces.laneList)
-	g.GET("/api/spaces/:id/lanes/:runId", spaces.lane)
-	g.POST("/api/spaces/:id/sops", spaces.startSOPs)
-	g.POST("/api/spaces/:id/decisions", rooms.decide)
-	g.POST("/api/spaces/:id/flows", spaces.saveFlow)
-	g.GET("/api/spaces/:id/usage", spaces.usage)
-	g.POST("/api/chat-clarify", api.stream.chatClarify)
-	g.GET("/api/chat-clarify", api.stream.attachChatClarify)
-	g.POST("/api/chat-clarify/cancel", api.stream.chatClarifyCancel)
 	g.GET("/api/tasks", api.tasks.tasks)
 	g.GET("/api/tasks/:id", api.tasks.task)
 	g.GET("/api/agents", api.catalog.agents)
@@ -622,8 +509,6 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 	g.POST("/api/runs/:id/workspace/use", api.runs.workspaceActivity)
 	g.PUT("/api/runs/:id/workspace/file", api.runs.workspaceWrite)
 	g.POST("/api/runs/:id/workspace/terminal", api.runs.workspaceTerminal)
-	g.POST("/api/runs/:id/browser", api.browser.browser)
-	g.GET("/api/runs/:id/browser/stream", api.browser.stream)
 	g.GET("/api/runs/:id/workspace", api.runs.runWorkspace)
 	g.GET("/api/runs/:id/workspace/tree", api.runs.runWorkspace)
 	g.GET("/api/runs/:id/workspace/file", api.runs.runWorkspace)
@@ -653,7 +538,6 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 	g.POST("/api/runs/:id/preview/session", api.previews.runPreviewSession)
 	g.DELETE("/api/runs/:id/preview/session/:sid", api.previews.deletePreviewSession)
 	g.DELETE("/api/runs/:id/preview", api.previews.deletePreview)
-	g.GET("/api/runs/:id/stream", api.stream.streamRun)
 
 	// --- sync & schedule ---
 	g.GET("/api/sync/config", api.syncAPI.syncConfig)
@@ -742,19 +626,11 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 	g.GET("/deploy/agentflow-gate-mcp", serveGateMCPBinary)
 	mcpHandler := mcpserver.New(mcpserver.LocalInvoker{Handler: g}).HTTPHandler()
 	g.Any("/mcp", func(c *gin.Context) {
-		ctx := withConversationSession(c.Request.Context(), c.GetHeader(chatSessionHeader))
-		mcpHandler.ServeHTTP(c.Writer, c.Request.WithContext(ctx))
+		mcpHandler.ServeHTTP(c.Writer, c.Request)
 	})
 	g.POST("/internal/workspace-checkpoint", func(c *gin.Context) { e.HandleWorkspaceCheckpoint(c.Writer, c.Request) })
 	g.POST(runnerWorkspaceRelayPath, handleRunnerWorkspaceRelay(e, runnerControls))
-	g.POST("/internal/agent-tools/:token/mcp", api.handleAgentToolMCP)
-	g.DELETE("/internal/agent-tools/:token/mcp", api.handleAgentToolMCP)
-	asst.api = g
 	d.api = g
-	if d.schedule != nil {
-		d.schedule.SetAssistantPrep(asst.prepareScheduleJob)
-		d.schedule.SetAssistantSessionPrep(asst.runScheduleJobPromptResult)
-	}
 	static, _ := fs.Sub(webassets.Files, ".")
 	g.NoRoute(func(c *gin.Context) {
 		// master(net/http ServeMux 前缀挂载) 时代每个实体同时注册了
@@ -772,7 +648,7 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 		studioFileServer(static).ServeHTTP(c.Writer, c.Request)
 	})
 	if startBackground != nil {
-		startBackground(asst, api.runs)
+		startBackground(api.runs)
 	}
 	return g
 }
@@ -860,13 +736,6 @@ func (s *Server) bootstrap(c *gin.Context) {
 	if current, ok := s.requestUser(c.Request, true); ok {
 		currentUserID = current.ID
 	}
-	var assistantDefaults domain.AssistantDefaults
-	for _, user := range users {
-		if user.ID == currentUserID {
-			assistantDefaults = user.AssistantDefaults
-			break
-		}
-	}
 	mcpServers = domain.PublicMCPServers(withMarketIcons(visibleMCPServersForUser(mcpServers, currentUserID)))
 	sharedModels := s.repo.SharedCodeBuddyModels()
 	sponsoredModel := ""
@@ -886,7 +755,6 @@ func (s *Server) bootstrap(c *gin.Context) {
 		// (sponsoredModel is the default).
 		"sponsoredModel":    sponsoredModel,
 		"sponsoredModels":   sharedModels,
-		"assistantDefaults": assistantDefaults,
 		"gongfengHost":      config.GongfengHost(),
 	})
 }

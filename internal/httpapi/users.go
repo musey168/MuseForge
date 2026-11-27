@@ -1,8 +1,8 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"errors"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -63,11 +63,10 @@ func (h *usersHandlers) user(c *gin.Context) {
 			return
 		}
 	}
-	if defaults := body.AssistantDefaults; defaults != nil {
+	if defaults := body.ExecutorDefaults; defaults != nil {
 		defaults.Executor = strings.TrimSpace(defaults.Executor)
 		defaults.Model = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(defaults.Model), defaults.Executor+":"))
 		defaults.Effort = strings.TrimSpace(defaults.Effort)
-		defaults.Approval = strings.TrimSpace(defaults.Approval)
 		if defaults.Model != "" && (!assistantValidEngineModel(defaults.Model) || defaults.Model == assistantDefaultModel ||
 			defaults.Executor == assistantEngineCodeBuddy && codeBuddyIsDefaultModel(defaults.Model)) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请选择具体的默认模型"})
@@ -83,12 +82,6 @@ func (h *usersHandlers) user(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
-		}
-		switch defaults.Approval {
-		case "", AssistantApprovalConfirm, AssistantApprovalAssisted, AssistantApprovalAuto:
-		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请选择有效的操作确认方式"})
-			return
 		}
 	}
 	saved, err := h.repo.UpdateUserCredentials(id, body)

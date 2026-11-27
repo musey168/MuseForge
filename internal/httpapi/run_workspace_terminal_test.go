@@ -18,7 +18,7 @@ import (
 func TestWorkspaceTerminalRequiresProjectMembership(t *testing.T) {
 	a, owner, peer, out, _ := sharedWorkbenchFixture(t)
 	root := t.TempDir()
-	h := &runsHandlers{deps: a.deps}
+	h := &runsHandlers{deps: a}
 	h.engine = engine.New(h.repo, runtime.NewManager(root))
 	r, _ := h.repo.RunState("shared-run")
 	r.PauseRequested = true

@@ -1,11 +1,8 @@
 package httpapi
 
 import (
-	"context"
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,7 +11,6 @@ import (
 
 	"agentflow/internal/domain"
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 )
 
 func TestKnowledgeHTTPBranches(t *testing.T) {
@@ -239,169 +235,3 @@ func TestInsightsValidationAndHTTP(t *testing.T) {
 	}
 }
 
-func TestBrowserHandlerAccessBranches(t *testing.T) {
-	st := cvAStore(t)
-	_ = st.PutUser(domain.User{LoginName: "owner"})
-	owner, _ := st.UserByLoginName("owner")
-	_ = st.PutUser(domain.User{LoginName: "viewer"})
-	viewer, _ := st.UserByLoginName("viewer")
-	project := domain.Project{ID: "browser-p", Name: "P", OwnerID: owner.ID, Members: []domain.ProjectMember{{UserID: viewer.ID, Role: "viewer"}}}
-	_ = st.PutProject(project)
-	run := domain.Run{ID: "browser-run", ExecutionContext: domain.TelemetryContext{ProjectID: project.ID}}
-	_ = st.PutRun(run)
-	h := &browserHandlers{deps: &deps{repo: st}}
-	c, rec := cvAContext(t, http.MethodPost, "/api/runs/missing/browser", `{}`, &owner)
-	c.Params = ginParams("missing", "")
-	h.browser(c)
-	if rec.Code != 404 {
-		t.Fatalf("missing run=%d", rec.Code)
-	}
-	c, rec = cvAContext(t, http.MethodPost, "/api/runs/browser-run/browser", `{}`, nil)
-	c.Params = ginParams(run.ID, "")
-	h.browser(c)
-	if rec.Code != 401 {
-		t.Fatalf("anonymous browser=%d", rec.Code)
-	}
-	c, rec = cvAContext(t, http.MethodPost, "/api/runs/browser-run/browser", `{"operation":"navigate"}`, &viewer)
-	c.Params = ginParams(run.ID, "")
-	h.browser(c)
-	if rec.Code != 403 {
-		t.Fatalf("viewer browser=%d", rec.Code)
-	}
-	if h.canControl(httptest.NewRequest("GET", "/", nil), run, viewer.ID) || !h.canControl(httptest.NewRequest("GET", "/", nil), run, owner.ID) {
-		t.Fatal("browser control policy")
-	}
-	if !strings.Contains(string(browserReason("why")), "why") {
-		t.Fatal("browser reason")
-	}
-	h.touchWorkspace(run.ID)
-	h.touchWorkspace(run.ID)
-	_ = context.Background()
-}
-
-func TestBrowserStreamPublishReadAndDeniedExecute(t *testing.T) {
-	streams := make(chan *browserStream, 1)
-	done := make(chan struct{})
-	router := gin.New()
-	router.GET("/ws", func(c *gin.Context) {
-		ws, err := browserStreamUpgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
-			return
-		}
-		defer ws.Close()
-		s := &browserStream{ws: ws}
-		streams <- s
-		<-done
-	})
-	server := httptest.NewServer(router)
-	defer server.Close()
-	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http")+"/ws", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ws.Close()
-	defer close(done)
-	s := <-streams
-	frame := base64.StdEncoding.EncodeToString([]byte{0xff, 0xd8, 0xff})
-	payload, _ := json.Marshal(domain.BrowserState{Available: true, URL: "https://example.test", Seq: 1, Frame: frame})
-	available, err := s.publish(payload)
-	if err != nil || !available {
-		t.Fatalf("publish=%v %v", available, err)
-	}
-	kind, raw, err := ws.ReadMessage()
-	if err != nil || kind != websocket.TextMessage || !strings.Contains(string(raw), `"type":"state"`) {
-		t.Fatalf("state message kind=%d raw=%s err=%v", kind, raw, err)
-	}
-	kind, raw, err = ws.ReadMessage()
-	if err != nil || kind != websocket.BinaryMessage || len(raw) != 3 {
-		t.Fatalf("frame kind=%d bytes=%d err=%v", kind, len(raw), err)
-	}
-	if available, err = s.publish(json.RawMessage(`not-json`)); err != nil || available {
-		t.Fatalf("invalid publish=%v %v", available, err)
-	}
-	if err := s.send(browserStreamMessage{Type: "error", Error: "denied"}); err != nil {
-		t.Fatal(err)
-	}
-	_, raw, _ = ws.ReadMessage()
-	if !strings.Contains(string(raw), "denied") {
-		t.Fatalf("send=%s", raw)
-	}
-	commands := make(chan domain.BrowserRequest, 2)
-	commands <- domain.BrowserRequest{Operation: "navigate"}
-	close(commands)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go s.execute(ctx, cancel, commands, false)
-	_, raw, _ = ws.ReadMessage()
-	if !strings.Contains(string(raw), "无权") {
-		t.Fatalf("denied execute=%s", raw)
-	}
-}
-
-func TestBrowserStreamReadRefreshAndCanceledLoops(t *testing.T) {
-	streams := make(chan *browserStream, 1)
-	commands := make(chan domain.BrowserRequest, 4)
-	done := make(chan struct{})
-	router := gin.New()
-	router.GET("/read", func(c *gin.Context) {
-		ws, err := browserStreamUpgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
-			return
-		}
-		s := &browserStream{ws: ws}
-		streams <- s
-		ctx, cancel := context.WithCancel(context.Background())
-		go s.read(cancel, commands)
-		<-ctx.Done()
-		_ = ws.Close()
-		close(done)
-	})
-	server := httptest.NewServer(router)
-	defer server.Close()
-	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http")+"/read", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := <-streams
-	if err := ws.WriteMessage(websocket.BinaryMessage, []byte("ignored")); err != nil {
-		t.Fatal(err)
-	}
-	if err := ws.WriteMessage(websocket.TextMessage, []byte("{bad")); err != nil {
-		t.Fatal(err)
-	}
-	if err := ws.WriteJSON(domain.BrowserRequest{Operation: "frame"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := ws.WriteJSON(domain.BrowserRequest{Operation: "navigate", URL: "https://example.test"}); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case command := <-commands:
-		if command.Operation != "navigate" {
-			t.Fatalf("command=%+v", command)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("stream command timeout")
-	}
-	_ = ws.Close()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("reader did not stop")
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	s.frames(ctx, func() {})
-	s.ping(ctx, func() {})
-
-	st := cvAStore(t)
-	run := domain.Run{ID: "cva-refresh-run", Status: "running"}
-	_ = st.PutRun(run)
-	s.h = &browserHandlers{deps: &deps{repo: st}}
-	s.runID = run.ID
-	s.run = domain.Run{ID: run.ID, Status: "old"}
-	if refreshed := s.currentRun(true); refreshed.Status != "running" {
-		t.Fatalf("refreshed=%+v", refreshed)
-	}
-}

@@ -17,7 +17,7 @@ import (
 // instructions. The model needs neither repository access nor Git credentials.
 type SOPWorkBranchRequest struct {
 	Execution   domain.TelemetryContext  `json:"-"`
-	Executor    domain.AssistantDefaults `json:"-"`
+	Executor    domain.ExecutorDefaults `json:"-"`
 	Repository  string                   `json:"repository"`
 	Task        string                   `json:"task"`
 	IssueNumber int                      `json:"issueNumber,omitempty"`
@@ -62,7 +62,7 @@ func (e *Engine) assignSOPWorkBranches(ctx context.Context, ec domain.TelemetryC
 			}
 			branch, err = e.generateSOPWorkBranch(ctx, SOPWorkBranchRequest{
 				Execution: e.sopWorkBranchExecution(ec, candidates, executor.Kind),
-				Executor:  domain.AssistantDefaults{Executor: executor.Kind, Model: naming.Model}, Repository: definition.Name,
+				Executor:  domain.ExecutorDefaults{Executor: executor.Kind, Model: naming.Model}, Repository: definition.Name,
 				Task: task, IssueNumber: ec.IssueNumber, Prompt: naming.Prompt,
 			}, func(ctx context.Context, branch string) error {
 				if err := validateSOPWorkBranch(branch, *repository, definition); err != nil {

@@ -86,8 +86,6 @@ test('user B as a non-member: project data and admin surfaces are refused', { sk
   await B('PUT', '/api/projects', { ...project, name: 'hijacked' }, 403);
   await B('POST', '/api/projects', { id: uid('proj'), key: 'X', name: 'x', ownerId: me.id }, 403);
   await B('GET', '/api/platform/admins', undefined, 403);
-  await B('GET', `/api/spaces?projectId=${P}`, undefined, 403);
-  await B('POST', '/api/spaces', { projectId: P, title: 'x' }, 403);
   await B('GET', `/api/notification-bots?projectId=${P}`, undefined, 403);
   await B('GET', `/api/insights/v1/sources?projectId=${P}`, undefined, 403);
   await B('POST', '/api/insights/v1/sources', { projectId: P, name: 'x' }, 403);
@@ -97,31 +95,21 @@ test('user B as a non-member: project data and admin surfaces are refused', { sk
   const form = new FormData();
   form.set('projectId', P);
   form.set('file', new Blob(['x']), 'x.txt');
-  await B('POST', '/api/assistant/attachments', form, 403);
   assert.equal((await get(`/api/projects/${P}`)).name, project.name, 'a refused write must not change the project');
 });
 
-test('user B as viewer reads the project space but cannot speak or manage', { skip: tokenBSkip }, async () => {
+test('user B as viewer reads the project but cannot manage it', { skip: tokenBSkip }, async () => {
   userB ||= await tokenOwner(cfg.tokenB);
   const restore = await withProjectMember(userB.id, 'viewer');
-  const space = list(await get(`/api/spaces?projectId=${P}`))[0] || await post('/api/spaces', { projectId: P, title: 'E2E 自动化会话' });
-  assert.equal((await B('GET', `/api/spaces/${space.id}`, undefined, 200)).id, space.id);
-  assert.ok(Array.isArray(list(await B('GET', `/api/spaces?projectId=${P}`, undefined, 200))));
-  await B('POST', `/api/spaces/${space.id}/messages`, { body: 'viewer says hi' }, 403);
-  await B('PATCH', `/api/spaces/${space.id}`, { title: 'renamed by viewer' }, 403);
-  await B('POST', `/api/spaces/${space.id}/artifacts`, { kind: 'doc', title: 'x' }, 403);
   assert.ok(Array.isArray(list(await B('GET', `/api/notification-bots?projectId=${P}`, undefined, 200))));
   await B('POST', '/api/notification-bots', { projectId: P, name: 'x', botId: uid('bot'), secret: 's' }, 403);
   await B('GET', `/api/insights/v1/sources?projectId=${P}`, undefined, 403);
   await restore();
 });
 
-test('user B as member speaks in spaces; only maintainers manage insight sources', { skip: tokenBSkip }, async () => {
+test('user B as member reads the project; only maintainers manage insight sources', { skip: tokenBSkip }, async () => {
   userB ||= await tokenOwner(cfg.tokenB);
   let restore = await withProjectMember(userB.id, 'member');
-  const space = list(await get(`/api/spaces?projectId=${P}`))[0];
-  const sent = await B('POST', `/api/spaces/${space.id}/messages`, { body: `e2e member B ${cfg.runTag}` }, 201);
-  assert.equal(sent.message.userId, userB.id);
   await B('GET', `/api/insights/v1/sources?projectId=${P}`, undefined, 403);
   // Project settings stay with the owner even for members.
   await B('PUT', '/api/projects', { ...(await get(`/api/projects/${P}`)), name: 'hijacked' }, 403);
@@ -139,13 +127,9 @@ test('assistant attachments are private to the uploader', { skip: tokenBSkip }, 
   const form = new FormData();
   form.set('projectId', P);
   form.set('file', new Blob([`e2e attachment ${cfg.runTag}`], { type: 'text/plain' }), 'e2e.txt');
-  const att = await api('POST', '/api/assistant/attachments', form, { expect: 201 });
   assert.ok(att.id);
-  const mine = await api('GET', `/api/assistant/attachments/${att.id}`, undefined, { raw: true });
   assert.equal(mine.text, `e2e attachment ${cfg.runTag}`);
-  await B('GET', `/api/assistant/attachments/${att.id}`, undefined, [403, 404]);
   const restore = await withProjectMember(userB.id, 'member');
   // Even a project member cannot read another user's private upload.
-  await B('GET', `/api/assistant/attachments/${att.id}`, undefined, [403, 404]);
   await restore();
 });

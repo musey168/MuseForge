@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -127,7 +126,7 @@ func TestCloseAndFilterIssues(t *testing.T) {
 }
 
 func TestCloseIssueRejectsActiveWork(t *testing.T) {
-	for _, status := range []string{"running", "waiting", "queued", "analyzing", "failed", "cancelled", "succeeded"} {
+	for _, status := range []string{"running", "waiting", "queued", "failed", "cancelled", "succeeded"} {
 		t.Run(status, func(t *testing.T) {
 			st, err := repo.OpenTest()
 			if err != nil {
@@ -135,20 +134,10 @@ func TestCloseIssueRejectsActiveWork(t *testing.T) {
 			}
 			defer st.Close()
 			issue := domain.Issue{ID: "close-boundary", ProjectID: "platform", Title: "closure boundary", Status: "backlog"}
-			if status == "analyzing" {
-				issue.Clarification.Status = "analyzing"
-				// Startup recovery resumes the interrupted round; keep it
-				// running so the issue stays busy for the whole check.
-				setClarifyExecForTest(func(ctx context.Context, _ domain.Issue, _ chatClarifyRequest, _ func(string, any)) (any, string, map[string]any, error) {
-					<-ctx.Done()
-					return nil, "", nil, ctx.Err()
-				})
-				t.Cleanup(func() { setClarifyExecForTest(nil) })
-			}
 			if err := st.PutIssue(issue); err != nil {
 				t.Fatal(err)
 			}
-			if status != "analyzing" {
+			{
 				task := domain.Task{ID: "close-task", IssueID: issue.ID, Status: status}
 				if status != "queued" {
 					task.RunID = "close-run"
@@ -161,7 +150,7 @@ func TestCloseIssueRejectsActiveWork(t *testing.T) {
 				}
 			}
 			h := New(st, engine.New(st, runtime.NewManager(filepath.Join(t.TempDir(), "ws"))), tracker.NewService(), "", "")
-			busy := status == "running" || status == "waiting" || status == "queued" || status == "analyzing"
+			busy := status == "running" || status == "waiting" || status == "queued"
 			detail := requestJSON[struct {
 				Issue issueDeletionView `json:"issue"`
 			}](t, h, http.MethodGet, "/api/issues/close-boundary", nil, http.StatusOK)

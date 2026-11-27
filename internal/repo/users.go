@@ -42,7 +42,7 @@ type userWithConfig struct {
 	ClaudeCodeBaseURL            *string    `gorm:"column:claude_code_base_url"`
 	ClaudeCodeModels             *string    `gorm:"column:claude_code_models"`
 	AgentCLICredentials          *string    `gorm:"column:agent_cli_credentials"`
-	AssistantDefaults            *string    `gorm:"column:assistant_defaults"`
+	ExecutorDefaults             *string    `gorm:"column:assistant_defaults"`
 	Created                      *time.Time `gorm:"column:created_at"`
 	Updated                      *time.Time `gorm:"column:updated_at"`
 }
@@ -100,8 +100,8 @@ func (r userWithConfig) toDomain() domain.User {
 	if r.AgentCLICredentials != nil {
 		_ = json.Unmarshal([]byte(*r.AgentCLICredentials), &u.AgentCLICredentials)
 	}
-	if r.AssistantDefaults != nil {
-		_ = json.Unmarshal([]byte(*r.AssistantDefaults), &u.AssistantDefaults)
+	if r.ExecutorDefaults != nil {
+		_ = json.Unmarshal([]byte(*r.ExecutorDefaults), &u.ExecutorDefaults)
 	}
 	if r.Created != nil {
 		u.CreatedAt = *r.Created
@@ -264,7 +264,7 @@ func userHasConfig(user domain.User) bool {
 }
 
 type UserCredentialUpdate struct {
-	AssistantDefaults            *domain.AssistantDefaults `json:"assistantDefaults"`
+	ExecutorDefaults            *domain.ExecutorDefaults `json:"assistantDefaults"`
 	CodeBuddyAPIKey              string                    `json:"codeBuddyApiKey"`
 	CodeBuddyAPIKeyClear         bool                      `json:"codeBuddyApiKeyClear"`
 	CodeBuddyBaseURL             *string                   `json:"codeBuddyBaseUrl"`
@@ -322,9 +322,9 @@ func (r *UsersRepo) updateUserCredentials(id int64, update UserCredentialUpdate)
 	if !ok {
 		return domain.User{}, errors.New("user not found")
 	}
-	previousDefaults := user.AssistantDefaults
-	if user.AssistantDefaults.Executor == "" {
-		user.AssistantDefaults.Executor = firstAssistantExecutor(user)
+	previousDefaults := user.ExecutorDefaults
+	if user.ExecutorDefaults.Executor == "" {
+		user.ExecutorDefaults.Executor = firstExecutorWithCredential(user)
 	}
 	if update.CodeBuddyAPIKeyClear {
 		user.CodeBuddyAPIKey = ""
@@ -378,22 +378,22 @@ func (r *UsersRepo) updateUserCredentials(id int64, update UserCredentialUpdate)
 	if err := applyAgentCLICredentialUpdates(&user, update.AgentCLICredentials); err != nil {
 		return domain.User{}, err
 	}
-	if update.AssistantDefaults != nil {
-		if !user.HasExecutorCredential(update.AssistantDefaults.Executor) {
+	if update.ExecutorDefaults != nil {
+		if !user.HasExecutorCredential(update.ExecutorDefaults.Executor) {
 			return domain.User{}, ErrAssistantDefaultExecutorUnavailable
 		}
-		user.AssistantDefaults = *update.AssistantDefaults
-	} else if !user.HasExecutorCredential(user.AssistantDefaults.Executor) {
-		user.AssistantDefaults.Executor = firstAssistantExecutor(user)
-		user.AssistantDefaults.Model = ""
-		user.AssistantDefaults.Effort = ""
+		user.ExecutorDefaults = *update.ExecutorDefaults
+	} else if !user.HasExecutorCredential(user.ExecutorDefaults.Executor) {
+		user.ExecutorDefaults.Executor = firstExecutorWithCredential(user)
+		user.ExecutorDefaults.Model = ""
+		user.ExecutorDefaults.Effort = ""
 	}
 	user.UpdatedAt = time.Now().UTC()
 	if err := r.writeUserConfig(user); err != nil {
 		return domain.User{}, err
 	}
-	if user.AssistantDefaults != previousDefaults {
-		value, err := json.Marshal(user.AssistantDefaults)
+	if user.ExecutorDefaults != previousDefaults {
+		value, err := json.Marshal(user.ExecutorDefaults)
 		if err != nil {
 			return domain.User{}, err
 		}

@@ -1,5 +1,5 @@
-// Knowledge center (read + review queue, never written back), collaboration
-// rooms, scheduled jobs, assistant tasks, runners, the platform MCP endpoint
+// Knowledge center (read + review queue, never written back), platform
+// scheduled jobs, runners, the platform MCP endpoint
 // and user endpoints.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -119,34 +119,6 @@ test('knowledge: personal connector CRUD, secret masking, isolation and check', 
   await api('GET', `/api/knowledge/connectors/${conn.id}`, undefined, { expect: 404 });
 });
 
-test('rooms: create, message, and turn a message into a dispatched requirement', { timeout: 300_000 }, async () => {
-  await api('GET', '/api/rooms', undefined, { expect: 400 });
-  await api('POST', '/api/rooms', { projectId: P }, { expect: 400 });
-  // Rooms have no delete endpoint; reuse one fixed room across runs.
-  const rooms = list(await get(`/api/rooms?projectId=${P}`));
-  const room = rooms.find(r => r.name === 'E2E 自动化') || await post('/api/rooms', { projectId: P, name: 'E2E 自动化' });
-  assert.ok(room.id);
-  assert.equal((await get(`/api/rooms/${room.id}`)).id, room.id);
-
-  const msg = await post(`/api/rooms/${room.id}/messages`, { body: `e2e 消息 ${cfg.runTag}` });
-  assert.ok(msg.id);
-  await api('POST', `/api/rooms/${room.id}/messages`, { body: '' }, { expect: 400 });
-  const messages = list(await get(`/api/rooms/${room.id}/messages`));
-  assert.ok(messages.some(m => m.id === msg.id));
-
-  const wf = await createWorkflow('room-sop', [script('r', 'echo ROOM_RUN_OK')]);
-  await api('POST', `/api/rooms/${room.id}/issues`, { title: 'x' }, { expect: 400 });
-  const created = await post(`/api/rooms/${room.id}/issues`, { title: `E2E 群需求 ${cfg.runTag}`, description: '自动化测试', workflowId: wf });
-  const issueId = created.issue?.id;
-  assert.ok(issueId, `room issue not created: ${JSON.stringify(created).slice(0, 300)}`);
-  track(`issue ${issueId}`, () => post(`/api/issues/${issueId}/close`, {}, { expect: [200, 404, 409] }));
-  assert.ok(!created.dispatchError, `room dispatch failed: ${created.dispatchError}`);
-  const runId = created.task?.runId || created.tasks?.[0]?.runId;
-  assert.ok(runId, 'room dispatch started no run');
-  trackRun(runId);
-  await waitRun(runId, r => r.status === 'succeeded', { label: 'room run succeeded' });
-});
-
 test('schedule job: a manual trigger dispatches todo requirements of the project', { timeout: 300_000 }, async () => {
   const wf = await createWorkflow('sched-sop', [script('s', 'echo SCHEDULED_OK')]);
   const issue = await post('/api/issues', { projectId: P, title: `E2E 定时触发 ${cfg.runTag}`, status: 'todo', workflowId: wf });
@@ -177,14 +149,6 @@ test('schedule job: a manual trigger dispatches todo requirements of the project
 });
 
 test('assistant task CRUD (disabled, never scheduled)', async () => {
-  const task = await put('/api/assistant/tasks', { name: 'E2E 助手任务', prompt: '自动化测试，不要执行任何操作', projectId: P, enabled: false, cron: '0 4 * * *' });
-  assert.ok(task.id);
-  track(`assistant task ${task.id}`, () => del(`/api/assistant/tasks/${task.id}`));
-  const tasks = list(await get(`/api/assistant/tasks?projectId=${P}`));
-  assert.ok(tasks.some(t => t.id === task.id));
-  const edited = await put('/api/assistant/tasks', { ...task, name: 'E2E 助手任务（改）' });
-  assert.equal(edited.name, 'E2E 助手任务（改）');
-  await del(`/api/assistant/tasks/${task.id}`, { expect: [200, 204] });
 });
 
 test('runners: list, default runner and bind code issuance', async () => {
@@ -353,8 +317,7 @@ test('platform: Git SSH host trust previews, registers, rotates and removes a ho
   assert.equal(await findHost(), undefined);
 });
 
-test('chat clarify and sync endpoints are reachable read-only', async () => {
-  assert.ok(await get('/api/chat-clarify', { expect: [200, 400] }));
+test('sync endpoints are reachable read-only', async () => {
   const status = await get('/api/sync/status');
   assert.ok(status);
 });

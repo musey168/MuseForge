@@ -111,14 +111,3 @@ func TestProjectDeleteArchivesAndRestores(t *testing.T) {
 	requestJSONAuthed[domain.Project](t, h, admin, http.MethodDelete, "/api/projects/okr-system", nil, 200)
 }
 
-func TestAssistantTurnContextNamesTheChatProject(t *testing.T) {
-	inProject := assistantTurnContext(assistantRequest{ProjectID: "skillhub"})
-	for _, want := range []string{"本对话属于项目 skillhub", "不要说没有选中项目", "不归属当前项目", "projects_delete", "提供完整仓库地址", "repositories_save"} {
-		if !strings.Contains(inProject, want) {
-			t.Errorf("project chat context missing %q", want)
-		}
-	}
-	if global := assistantTurnContext(assistantRequest{}); !strings.Contains(global, "没有绑定项目") || strings.Contains(global, "本对话属于项目") {
-		t.Errorf("global chat context = %q", global)
-	}
-}

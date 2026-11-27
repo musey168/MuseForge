@@ -25,12 +25,12 @@ func TestSOPWorkBranchNamingAcrossRepositories(t *testing.T) {
 	const key = "branch-model-fixture-key"
 	user, err := store.UpdateUserCredentials(1, repo.UserCredentialUpdate{
 		CodeBuddyAPIKey: key, CodexAPIKey: "branch-personal-cli-fixture-key",
-		AssistantDefaults: &domain.AssistantDefaults{Executor: "codex", Model: "personal-model"},
+		ExecutorDefaults: &domain.ExecutorDefaults{Executor: "codex", Model: "personal-model"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if user.AssistantDefaults.Executor != "codex" {
+	if user.ExecutorDefaults.Executor != "codex" {
 		t.Fatal("test requires a different personal default CLI")
 	}
 	root := t.TempDir()
@@ -149,10 +149,10 @@ func TestSOPWorkBranchNamingRequiresSelectedModelOnSharedCodeBuddyKey(t *testing
 	// Model access is checked before invoking a CLI.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	h := &assistantHandlers{deps: &deps{repo: store}}
+	h := &sopHelper{deps: &deps{repo: store}}
 	_, err = h.generateSOPWorkBranch(ctx, engine.SOPWorkBranchRequest{
 		Execution: domain.TelemetryContext{ResponsibleUserID: 1, ProjectID: "platform"},
-		Executor:  domain.AssistantDefaults{Executor: "codebuddy", Model: "hy4std"},
+		Executor:  domain.ExecutorDefaults{Executor: "codebuddy", Model: "hy4std"},
 	})
 	if err == nil || !strings.Contains(err.Error(), "所选模型未在平台共享 CodeBuddy Key 中启用") {
 		t.Fatalf("expected rejection of the selected model, got %v", err)

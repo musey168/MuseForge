@@ -33,7 +33,7 @@ const CREDENTIAL_GROUPS=[
   {id:'model',name:'执行器配置'},
 ];
 // A CodeBuddy key only works on the edition that issued it; the CLI treats unknown values as 国际站.
-// Keep in sync with chatbot/src/credentials.js and domain.NormalizeCodeBuddyInternetEnvironment.
+// Keep in sync with domain.NormalizeCodeBuddyInternetEnvironment.
 const CODEBUDDY_ENVIRONMENTS=[
   {value:'',label:'国际站',site:'codebuddy.ai',keyUrl:'https://www.codebuddy.ai/profile/keys'},
   {value:'internal',label:'国内站',site:'copilot.tencent.com',keyUrl:'https://copilot.tencent.com/profile/'},
@@ -1079,11 +1079,9 @@ function storeCredentialUser(saved){
   if(index>=0)users[index]=saved;else users.push(saved);
 }
 function notifyCredentialsChanged(){
-  $('#chatNextFrame')?.contentWindow?.postMessage({type:'agentflow-credentials-changed'},location.origin);
   $('#aiOrchestratorFrame')?.contentWindow?.postMessage({type:'agentflow-credentials-changed'},location.origin);
   if(typeof window!=='undefined'){
     window.AgentFlowAssistantModels?.load?.({refresh:true})?.then(()=>{
-      if(typeof renderAssistantSettings==='function'&&typeof document!=='undefined'&&document.querySelector('#assistantView.active'))renderAssistantSettings();
     }).catch(()=>{});
   }
 }

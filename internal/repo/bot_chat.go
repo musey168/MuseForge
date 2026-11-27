@@ -36,7 +36,7 @@ func (row botChatOriginRow) origin() domain.BotChatOrigin {
 // first origin of a run wins (a later approval elsewhere does not move its
 // notifications); a requirement row is refreshed so the latest one of the
 // conversation is found.
-func (r *AssistantRepo) RecordBotChatOrigin(o domain.BotChatOrigin) error {
+func (r *BotInteractionsRepo) RecordBotChatOrigin(o domain.BotChatOrigin) error {
 	if o.ConfigID == "" || o.ConversationID == "" || (o.RunID == "" && o.IssueID == "") {
 		return nil
 	}
@@ -56,7 +56,7 @@ func BotIssueOriginID(conversationID, issueID string) string {
 }
 
 // BotRunOrigin returns the chat a run was started from.
-func (r *AssistantRepo) BotRunOrigin(runID string) (domain.BotChatOrigin, bool) {
+func (r *BotInteractionsRepo) BotRunOrigin(runID string) (domain.BotChatOrigin, bool) {
 	return botRunOrigin(r.DB, runID)
 }
 
@@ -89,7 +89,7 @@ func botStartOrigin(db *gorm.DB, run domain.Run) (domain.BotChatOrigin, bool) {
 
 // LatestBotChatIssue is the requirement most recently created or started
 // from a conversation.
-func (r *AssistantRepo) LatestBotChatIssue(conversationID string) (string, bool) {
+func (r *BotInteractionsRepo) LatestBotChatIssue(conversationID string) (string, bool) {
 	var row botChatOriginRow
 	if err := r.DB.Where("conversation_id = ? AND issue_id <> ''", conversationID).Order("created_at desc").Limit(1).Find(&row).Error; err != nil || row.ID == "" {
 		return "", false
@@ -157,7 +157,7 @@ var botClarifyActiveStatuses = []string{domain.BotClarifyAnalyzing, domain.BotCl
 // CreateBotClarifySession opens a session unless the conversation or the
 // requirement already has an active one, which is returned with
 // ErrBotClarifyActive.
-func (r *AssistantRepo) CreateBotClarifySession(s domain.BotClarifySession) (domain.BotClarifySession, error) {
+func (r *BotInteractionsRepo) CreateBotClarifySession(s domain.BotClarifySession) (domain.BotClarifySession, error) {
 	out := s
 	err := r.DB.Transaction(func(tx *gorm.DB) error {
 		var existing botClarifySessionRow
@@ -180,7 +180,7 @@ func (r *AssistantRepo) CreateBotClarifySession(s domain.BotClarifySession) (dom
 }
 
 // BotClarifySession reads one session.
-func (r *AssistantRepo) BotClarifySession(id string) (domain.BotClarifySession, error) {
+func (r *BotInteractionsRepo) BotClarifySession(id string) (domain.BotClarifySession, error) {
 	var row botClarifySessionRow
 	if err := r.DB.First(&row, "id = ?", id).Error; err != nil {
 		return domain.BotClarifySession{}, err
@@ -189,7 +189,7 @@ func (r *AssistantRepo) BotClarifySession(id string) (domain.BotClarifySession, 
 }
 
 // ActiveBotClarifySession is the session in progress in a conversation.
-func (r *AssistantRepo) ActiveBotClarifySession(conversationID string) (domain.BotClarifySession, bool) {
+func (r *BotInteractionsRepo) ActiveBotClarifySession(conversationID string) (domain.BotClarifySession, bool) {
 	var row botClarifySessionRow
 	if err := r.DB.Where("conversation_id = ? AND status IN ?", conversationID, botClarifyActiveStatuses).Order("created_at desc").Limit(1).Find(&row).Error; err != nil || row.ID == "" {
 		return domain.BotClarifySession{}, false
@@ -199,7 +199,7 @@ func (r *AssistantRepo) ActiveBotClarifySession(conversationID string) (domain.B
 
 // ActiveBotClarifyIssue reports whether a requirement is being clarified in
 // a chat.
-func (r *AssistantRepo) ActiveBotClarifyIssue(issueID string) bool {
+func (r *BotInteractionsRepo) ActiveBotClarifyIssue(issueID string) bool {
 	var n int64
 	r.DB.Model(&botClarifySessionRow{}).Where("issue_id = ? AND status IN ?", issueID, botClarifyActiveStatuses).Count(&n)
 	return n > 0
@@ -209,7 +209,7 @@ func (r *AssistantRepo) ActiveBotClarifyIssue(issueID string) bool {
 // back if nobody changed it meanwhile (optimistic version check, retried).
 // fn may return ErrBotClarifyUnchanged to skip the write; any other error
 // is returned as is with the current session.
-func (r *AssistantRepo) UpdateBotClarifySession(id string, fn func(*domain.BotClarifySession) error) (domain.BotClarifySession, error) {
+func (r *BotInteractionsRepo) UpdateBotClarifySession(id string, fn func(*domain.BotClarifySession) error) (domain.BotClarifySession, error) {
 	for attempt := 0; attempt < 8; attempt++ {
 		current, err := r.BotClarifySession(id)
 		if err != nil {
@@ -244,7 +244,7 @@ func (r *AssistantRepo) UpdateBotClarifySession(id string, fn func(*domain.BotCl
 
 // OpenBotClarifySessions lists sessions that are analyzing or collecting
 // answers, for the timers (next round, pause, interrupted analysis).
-func (r *AssistantRepo) OpenBotClarifySessions(limit int) ([]domain.BotClarifySession, error) {
+func (r *BotInteractionsRepo) OpenBotClarifySessions(limit int) ([]domain.BotClarifySession, error) {
 	var rows []botClarifySessionRow
 	if err := r.DB.Where("status IN ?", []string{domain.BotClarifyAnalyzing, domain.BotClarifyAsking}).Order("updated_at").Limit(limit).Find(&rows).Error; err != nil {
 		return nil, err
@@ -259,7 +259,7 @@ func (r *AssistantRepo) OpenBotClarifySessions(limit int) ([]domain.BotClarifySe
 // BotInteractionByPlatformMessage finds the message a Bot sent with the
 // given platform message ID (used to recognise quotes of clarification
 // cards).
-func (r *AssistantRepo) BotInteractionByPlatformMessage(botID, platformMessageID string) (domain.BotInteraction, bool) {
+func (r *BotInteractionsRepo) BotInteractionByPlatformMessage(botID, platformMessageID string) (domain.BotInteraction, bool) {
 	var item domain.BotInteraction
 	if platformMessageID == "" {
 		return item, false

@@ -70,11 +70,7 @@ func (h *scheduleHandlers) visibleScheduleJobs(r *http.Request, jobs []domain.Sc
 		if h.scheduleJobAllowed(r, job, false) {
 			if job.SharedTaskID != "" {
 				if version, err := h.repo.SharedScheduleVersion(job.SharedTaskID, job.SharedTaskVersion); err == nil {
-					job.References = domain.CloneAssistantReferences(version.References)
-				}
-			} else if h.assistant != nil && len(job.References) > 0 {
-				if refs, err := h.assistant.scheduledMessageReferences(job.ProjectID, job.References); err == nil {
-					job.References = refs
+					job.References = domain.CloneAssetReferences(version.References)
 				}
 			}
 			job.LastSessionGone = false
@@ -82,16 +78,6 @@ func (h *scheduleHandlers) visibleScheduleJobs(r *http.Request, jobs []domain.Sc
 				sessionIDs = append(sessionIDs, job.LastSessionID)
 			}
 			out = append(out, job)
-		}
-	}
-	if len(sessionIDs) > 0 {
-		exists := h.repo.ExistingAssistantSessionIDs(sessionIDs)
-		for i := range out {
-			if out[i].LastSessionID != "" && out[i].LastStatus != "running" {
-				if alive, checked := exists[out[i].LastSessionID]; checked && !alive {
-					out[i].LastSessionGone = true
-				}
-			}
 		}
 	}
 	return out
@@ -237,7 +223,7 @@ func (h *scheduleHandlers) bindSharedSchedule(c *gin.Context, job *domain.Schedu
 	job.OwnerUserID = project.OwnerID
 	job.ParameterValues = values
 	job.AssistantPrompt = ""
-	job.References = domain.CloneAssistantReferences(v.References)
+	job.References = domain.CloneAssetReferences(v.References)
 	if job.Name == "" {
 		job.Name = v.Name
 	}

@@ -54,7 +54,7 @@ type userConfigRow struct {
 	ClaudeCodeBaseURL            *string    `gorm:"column:claude_code_base_url;type:text"`
 	ClaudeCodeModels             *string    `gorm:"column:claude_code_models;type:text"`
 	AgentCLICredentials          *string    `gorm:"column:agent_cli_credentials;type:text"`
-	AssistantDefaults            *string    `gorm:"column:assistant_defaults;type:text"`
+	ExecutorDefaults             *string    `gorm:"column:assistant_defaults;type:text"`
 	Created                      *time.Time `gorm:"column:created_at"`
 	Updated                      *time.Time `gorm:"column:updated_at"`
 }
@@ -622,53 +622,6 @@ type platformRunnerSettingsRow struct {
 
 func (platformRunnerSettingsRow) TableName() string { return "platform_runner_settings" }
 
-// assistantPreferenceRow: a missing row means switches are off, messages queue
-// and the agent picks conversation workspace sandboxes itself.
-type assistantPreferenceRow struct {
-	UserID              int64      `gorm:"column:user_id;primaryKey;autoIncrement:false"`
-	ProactiveRoles      bool       `gorm:"column:proactive_roles;not null;default:false"`
-	ProactiveSOPs       bool       `gorm:"column:proactive_sops;not null;default:false"`
-	SteerOnSend         bool       `gorm:"column:steer_on_send;not null;default:false"`
-	WorkspaceDriver     string     `gorm:"column:workspace_driver;type:varchar(16);not null;default:''"`
-	Instructions        string     `gorm:"column:instructions;type:text"`
-	ApprovalReviewMode  string     `gorm:"column:approval_review_mode;size:32;not null;default:''"`
-	ApprovalReviewModel string     `gorm:"column:approval_review_model;size:160;not null;default:''"`
-	ApprovalReviewAPI   *string    `gorm:"column:approval_review_api_json;type:text"`
-	UpdatedAt           *time.Time `gorm:"column:updated_at"`
-}
-
-func (assistantPreferenceRow) TableName() string { return "assistant_preferences" }
-
-type assistantSessionRow struct {
-	ID        string     `gorm:"column:id;primaryKey;size:64"`
-	UserID    int64      `gorm:"column:user_id;index:idx_assistant_sessions_user_updated"`
-	ProjectID string     `gorm:"column:project_id;size:64"`
-	Title     string     `gorm:"column:title;size:128"`
-	Model     string     `gorm:"column:model;size:128"`
-	Source    string     `gorm:"column:source;size:32;index:idx_assistant_sessions_source"`
-	TaskID    string     `gorm:"column:task_id;size:64"`
-	Payload   []byte     `gorm:"column:payload;type:json"`
-	Created   *time.Time `gorm:"column:created_at"`
-	Updated   *time.Time `gorm:"column:updated_at;index:idx_assistant_sessions_user_updated,priority:2"`
-}
-
-func (assistantSessionRow) TableName() string { return "assistant_sessions" }
-
-type assistantTaskRow struct {
-	ID          string     `gorm:"column:id;primaryKey;size:64"`
-	UserID      int64      `gorm:"column:user_id;index:idx_assistant_tasks_user"`
-	ProjectID   string     `gorm:"column:project_id;size:64"`
-	Name        string     `gorm:"column:name;size:255"`
-	Enabled     int        `gorm:"column:enabled;index:idx_assistant_tasks_due"`
-	IntervalSec int        `gorm:"column:interval_sec"`
-	LastRunAt   *time.Time `gorm:"column:last_run_at;index:idx_assistant_tasks_due,priority:2"`
-	Payload     []byte     `gorm:"column:payload;type:json"`
-	Created     *time.Time `gorm:"column:created_at"`
-	Updated     *time.Time `gorm:"column:updated_at"`
-}
-
-func (assistantTaskRow) TableName() string { return "assistant_tasks" }
-
 type engineInstanceRow struct {
 	InstanceID    string    `gorm:"column:instance_id;primaryKey;size:255"`
 	Role          string    `gorm:"column:role;size:32"`
@@ -688,84 +641,6 @@ type genericTemplateRow struct {
 }
 
 func (genericTemplateRow) TableName() string { return "generic_templates" }
-
-type chatRoomRow struct {
-	ID        string     `gorm:"column:id;primaryKey;size:64"`
-	ProjectID string     `gorm:"column:project_id;index:idx_chat_rooms_project;size:64"`
-	Name      string     `gorm:"column:name;size:128"`
-	CreatedBy int64      `gorm:"column:created_by"`
-	Payload   []byte     `gorm:"column:payload;type:json"`
-	Created   *time.Time `gorm:"column:created_at"`
-	Updated   *time.Time `gorm:"column:updated_at"`
-}
-
-func (chatRoomRow) TableName() string { return "chat_rooms" }
-
-type chatMessageRow struct {
-	ID      string `gorm:"column:id;primaryKey;size:64"`
-	RoomID  string `gorm:"column:room_id;index:idx_chat_messages_room;size:64"`
-	UserID  int64  `gorm:"column:user_id"`
-	Kind    string `gorm:"column:kind;size:32"`
-	IssueID string `gorm:"column:issue_id;size:64"`
-	// ThreadID is empty for the main timeline.
-	ThreadID string     `gorm:"column:thread_id;size:64;index:idx_chat_messages_thread"`
-	Payload  []byte     `gorm:"column:payload;type:json"`
-	Created  *time.Time `gorm:"column:created_at;index:idx_chat_messages_room,priority:2"`
-}
-
-func (chatMessageRow) TableName() string { return "chat_messages" }
-
-type requirementSpaceRow struct {
-	ID        string     `gorm:"column:id;primaryKey;size:64"`
-	ProjectID string     `gorm:"column:project_id;index:idx_requirement_spaces_project;size:64"`
-	IssueID   string     `gorm:"column:issue_id;index:idx_requirement_spaces_issue;size:64"`
-	Payload   []byte     `gorm:"column:payload;type:json"`
-	Created   *time.Time `gorm:"column:created_at"`
-	Updated   *time.Time `gorm:"column:updated_at"`
-}
-
-func (requirementSpaceRow) TableName() string { return "requirement_spaces" }
-
-type spaceMemberRow struct {
-	SpaceID string     `gorm:"column:space_id;primaryKey;size:64"`
-	UserID  int64      `gorm:"column:user_id;primaryKey;autoIncrement:false"`
-	Payload []byte     `gorm:"column:payload;type:json"`
-	Created *time.Time `gorm:"column:created_at"`
-}
-
-func (spaceMemberRow) TableName() string { return "space_members" }
-
-type spaceArtifactRow struct {
-	ID      string     `gorm:"column:id;primaryKey;size:64"`
-	SpaceID string     `gorm:"column:space_id;index:idx_space_artifacts_space;size:64"`
-	Kind    string     `gorm:"column:kind;size:32"`
-	Version int        `gorm:"column:version"`
-	Payload []byte     `gorm:"column:payload;type:json"`
-	Created *time.Time `gorm:"column:created_at"`
-	Updated *time.Time `gorm:"column:updated_at"`
-}
-
-func (spaceArtifactRow) TableName() string { return "space_artifacts" }
-
-type spaceArtifactRevisionRow struct {
-	ArtifactID string     `gorm:"column:artifact_id;primaryKey;size:64"`
-	Version    int        `gorm:"column:version;primaryKey;autoIncrement:false"`
-	SpaceID    string     `gorm:"column:space_id;size:64"`
-	Payload    []byte     `gorm:"column:payload;type:json"`
-	Created    *time.Time `gorm:"column:created_at"`
-}
-
-func (spaceArtifactRevisionRow) TableName() string { return "space_artifact_revisions" }
-
-type spaceThreadRow struct {
-	ID      string     `gorm:"column:id;primaryKey;size:64"`
-	SpaceID string     `gorm:"column:space_id;index:idx_space_threads_space;size:64"`
-	RunID   string     `gorm:"column:run_id;size:64"`
-	Payload []byte     `gorm:"column:payload;type:json"`
-	Created *time.Time `gorm:"column:created_at"`
-}
-
-func (spaceThreadRow) TableName() string { return "space_threads" }
 
 // knowledgeConnectorRow stores one user-owned read-only knowledge connector.
 // Sealed upstream credentials stay in SecretEnc and never leak in API responses.
@@ -903,9 +778,6 @@ func allModels() []any {
 		runPreviewRow{}, previewSessionRow{}, previewBlobRow{}, WorkspaceCheckpoint{}, workspaceCheckpointChunk{},
 		mrDeliveryStateRow{}, definitionRevisionRow{},
 		runnerRow{}, runnerTaskRow{}, runnerTaskEventRow{}, userRunnerPrefRow{}, userProjectRunnerPrefRow{}, platformRunnerSettingsRow{},
-		assistantSessionRow{}, assistantTaskRow{}, assistantGenerationRow{}, assistantSessionReadRow{}, assistantPreferenceRow{}, assistantDiagnosticsRow{},
-		chatRoomRow{}, chatMessageRow{},
-		requirementSpaceRow{}, spaceMemberRow{}, spaceArtifactRow{}, spaceArtifactRevisionRow{}, spaceThreadRow{},
 		engineInstanceRow{},
 		knowledgeSettingsRow{},
 		knowledgeSubmissionRow{},

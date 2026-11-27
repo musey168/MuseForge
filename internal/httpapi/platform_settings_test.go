@@ -59,7 +59,7 @@ func platformSettingsFixture(t *testing.T) (*repo.Store, platformSettingsClient,
 	t.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
 	t.Setenv("AGENTFLOW_SCHEDULER_ENABLED", "false")
 	t.Setenv("AGENTFLOW_ALLOW_SIGNUP", "false")
-	t.Setenv(assistantSponsorLoginEnv, "")
+	t.Setenv(repo.CodeBuddySponsorLoginEnv, "")
 	s, err := repo.OpenTest()
 	if err != nil {
 		t.Fatal(err)

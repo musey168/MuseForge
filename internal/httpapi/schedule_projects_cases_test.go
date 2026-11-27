@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 
 	"agentflow/internal/domain"
@@ -59,12 +58,6 @@ func TestProjectUpdateAndStreamCancelBranches(t *testing.T) {
 		rec := cvBRequest(t, f, http.MethodPut, "/api/projects", tc.body, true)
 		if rec.Code != tc.want {
 			t.Errorf("%d project = %d want %d: %s", i, rec.Code, tc.want, rec.Body.String())
-		}
-	}
-	for _, path := range []string{"/api/chat-clarify/cancel?jobId=missing", "/api/chat-clarify/cancel"} {
-		rec := cvBRequest(t, f, http.MethodPost, path, map[string]any{}, true)
-		if rec.Code != 200 || !strings.Contains(rec.Body.String(), "cancelled") {
-			t.Errorf("cancel %s = %d: %s", path, rec.Code, rec.Body.String())
 		}
 	}
 }

@@ -7,7 +7,9 @@ import (
 
 // User 表示系统注册或登录的员工实体，用于后续资源归属与权限隔离。
 type User struct {
-	AssistantDefaults          AssistantDefaults `json:"-"`
+	// ExecutorDefaults is the model this account runs its work with when no
+	// model is chosen explicitly.
+	ExecutorDefaults          ExecutorDefaults `json:"-"`
 	CodexAPIKey                string            `json:"codexApiKey,omitempty"`
 	CodexAPIKeyConfigured      bool              `json:"codexApiKeyConfigured,omitempty"`
 	CodexBaseURL               string            `json:"codexBaseUrl,omitempty"`

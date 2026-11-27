@@ -197,7 +197,7 @@ test('recommendations whose targetId names a node show the LOOP or role the serv
 test('a rejected start follows the evaluation that is already running', async (t) => {
   const app = await loadApp();
   t.after(app.close);
-  app.router.get('/api/assistant/models', {
+  app.router.get('/api/model-catalog', {
     engines: [{ id: 'codex', name: 'Codex', personal: true }],
     models: [{ id: 'codex:model-x', name: 'Model X', engine: 'codex' }],
   });

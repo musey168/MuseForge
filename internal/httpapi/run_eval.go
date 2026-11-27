@@ -518,7 +518,7 @@ func (h *runsHandlers) executeRunEval(ctx context.Context, rec domain.RunEvalRec
 	_ = h.repo.PutRunEval(rec)
 	system, prompt := runeval.BuildPrompt(rec.Policy, facts)
 	emitRunEvalStage(emit, "evaluating", "正在用 "+rec.Model+" 分析并评分")
-	raw, _, err := runAssistantCLI(ctx, assistantCLIRequest{Prompt: prompt, Model: rec.Model, SystemPrompt: system, UserID: user.ID, ReviewOnly: true}, user, nil)
+	raw, err := runModelCall(ctx, modelCallRequest{Prompt: prompt, Model: rec.Model, SystemPrompt: system, UserID: user.ID}, user)
 	if err != nil {
 		return domain.RunEvalResult{}, err
 	}
