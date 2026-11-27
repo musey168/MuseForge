@@ -118,7 +118,7 @@ tapdId / externalRef / conversationSessionId / createdAt / updatedAt / completed
 | internal/domain | 12,766 | 保留但大幅瘦身 |
 | internal/knowledge | 11,620 | **删** |
 | internal/tracker | 3,742 | **部分删**：GitHub 需求同步保留，企微/TAPD/工蜂删 |
-| internal/mcpserver | 876 | **待定**（见下） |
+| internal/mcpserver | 876 | **保留**（见下） |
 
 **`internal/tracker` 不能整体删** —— GitHub 需求同步在里面：
 - `internal/tracker/github.go:260 pullGitHubIssues`：
@@ -135,13 +135,14 @@ tapdId / externalRef / conversationSessionId / createdAt / updatedAt / completed
   这些服务于 LOOP 的「发起 MR」节点）、`catalog.go` 里的 MCP 绑定
   （MCP 能力资产已删）、`delivery.go`、`mcp_client.go`
 
-**`internal/mcpserver` 待定**：它是把平台自己的 HTTP API 以 OpenAPI 契约
+**`internal/mcpserver` 保留**：它把平台自己的 HTTP API 以 OpenAPI 契约
 暴露成 MCP 工具（`internal/mcpserver/schema.go` 读 `docs/api/openapi.yaml`，
-`server.go` 用 `application.Operation` 调度）。它的使用者是
+`server.go` 用 `application.Operation` 调度）。上游的消费者是
 **聊天层的 agent 工具**（`assistant.go`、`agent_tool_mcp.go`）。
-聊天层删掉后它没有消费者 —— 但如果保留 MCP API，
-它就是 omp 或其他外部 agent 访问 MuseForge 的入口。
-**这一项我需要你定，见决策记录末尾的提问。**
+聊天层删掉后它没有内部消费者 —— 但保留 MCP API，
+它就是 omp 或其他外部 agent 访问 MuseForge 的入口，
+与「omp 侧 hook 推送用量」是同一方向的能力。
+**已定：保留。**
 
 ### T2 — 统计页接 omp 用的现成机制
 

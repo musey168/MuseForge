@@ -1,14 +1,14 @@
 # Issue tracker: GitHub
 
-Issues and specs for this repo live as GitHub issues on **`musey168/MuseForge`** (this user's fork of `Tencent/LoopForge`). Use the `gh` CLI for all operations.
+Issues and specs for this repo live as GitHub issues on **`musey168/MuseForge`**. Use the `gh` CLI for all operations.
 
-This is a fork. `gh` is pinned to the fork via `gh repo set-default musey168/MuseForge`, but re-verify before the first write of any session:
+This is a standalone repository (not a fork of anything). `gh` is pinned to it via `gh repo set-default musey168/MuseForge`, but re-verify before the first write of any session:
 
 ```bash
 gh repo view --json nameWithOwner   # must print musey168/MuseForge
 ```
 
-If it prints `Tencent/LoopForge`, run `gh repo set-default musey168/MuseForge` before creating anything. **Never file issues into `Tencent/LoopForge`** — that is the upstream project, not this repo.
+If it prints something else, run `gh repo set-default musey168/MuseForge` before creating anything. **Never file issues into `Tencent/LoopForge`** — that is the upstream project this was derived from, and it is not this repo.
 
 ## Conventions
 

@@ -11,7 +11,7 @@ Preserve the platform architecture; keep deployment-specific adapters isolated. 
 
 ### Issue tracker
 
-Issues live in GitHub issues on `musey168/MuseForge` (this fork, not `Tencent/LoopForge`); use the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub issues on `musey168/MuseForge` (this standalone repository, not `Tencent/LoopForge`); use the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
