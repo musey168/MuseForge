@@ -134,34 +134,6 @@ func (h *projectsHandlers) applyProjectPlaybook(project *domain.Project) error {
 	if project == nil {
 		return nil
 	}
-	if project.SOPPlaybooks != nil {
-		books := domain.NormalizeSOPPlaybooks(project.SOPPlaybooks)
-		for i := range books {
-			bindings, err := normalizeSOPBindings(h.repo, project.ID, books[i].Bindings)
-			if err != nil {
-				return err
-			}
-			books[i].Bindings = bindings
-		}
-		project.SOPPlaybooks = books
-		if book, ok := project.DefaultPlaybook(); ok && len(book.Bindings) > 0 {
-			project.WorkflowID = book.Bindings[0].WorkflowID
-		}
-		return nil
-	}
-	if project.SOPBindings == nil {
-		return nil
-	}
-	bindings, err := normalizeSOPBindings(h.repo, project.ID, project.SOPBindings)
-	if err != nil {
-		return err
-	}
-	if len(bindings) == 0 {
-		project.SOPBindings = nil
-		return nil
-	}
-	project.SOPBindings = bindings
-	project.WorkflowID = bindings[0].WorkflowID
 	return nil
 }
 
@@ -237,28 +209,6 @@ func (h *projectsHandlers) projectForArchive(c *gin.Context) (domain.Project, in
 }
 
 func (h *projectsHandlers) projectDeleteBlockers(projectID string) []string {
-	var out []string
-	runs, err := h.repo.RunSummariesFor(domain.AnalyticsFilter{ProjectIDs: []string{projectID}}, "")
-	if err != nil {
-		return []string{"运行记录无法读取"}
-	}
-	active := 0
-	for _, run := range h.repo.FilterRunsByProject(runs, projectID) {
-		if !domain.TerminalRunStatus(run.Status) {
-			active++
-		}
-	}
-	if active > 0 {
-		out = append(out, strconv.Itoa(active)+" 个未结束的运行")
-	}
-	var jobs []string
-	for _, job := range h.repo.ScheduleJobs() {
-		if job.Enabled && job.ProjectID == projectID {
-			jobs = append(jobs, "「"+job.Name+"」")
-		}
-	}
-	if len(jobs) > 0 {
-		out = append(out, "启用中的定时任务"+strings.Join(jobs, ""))
-	}
-	return out
+	// Nothing runs in the personal build, so nothing blocks a delete.
+	return nil
 }

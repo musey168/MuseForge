@@ -244,66 +244,6 @@ func runnerWriteValues(v domain.Runner) (map[string]any, error) {
 	}, nil
 }
 
-// SetRunnerRunLimit updates the owner-configured limit. PutRunner sets the
-// initial limit on insert, and re-registration preserves the stored value.
-// It takes only this machine's admission bucket so a limit change cannot
-// interleave with an admission decision on the same machine.
-func (r *RunnersRepo) SetRunnerRunLimit(id string, limit int) error {
-	if limit < 0 {
-		return fmt.Errorf("最多同时运行条数需为非负整数（0 表示不限制）")
-	}
-	var value any
-	if limit > 0 {
-		value = limit
-	}
-	return r.DB.Transaction(func(tx *gorm.DB) error {
-		if err := lockAdmissionGate(r.deps, tx, runnerAdmissionBucketKey(id)); err != nil {
-			return err
-		}
-		res := tx.Model(&runnerRow{}).Where("id = ?", id).Updates(map[string]any{"run_limit": value, "updated_at": time.Now().UTC()})
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			return ErrRunnerNotFound
-		}
-		return nil
-	}, r.admissionTxOptions()...)
-}
-
-const platformRunnerSettingsID int64 = 1
-
-func (r *RunnersRepo) PlatformRunnerRunLimit() int {
-	limit, err := platformRunnerRunLimit(r.DB)
-	if err != nil {
-		return domain.DefaultRunnerRunLimit
-	}
-	return limit
-}
-
-func platformRunnerRunLimit(tx *gorm.DB) (int, error) {
-	var row platformRunnerSettingsRow
-	err := tx.Select("run_limit").Take(&row, platformRunnerSettingsID).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return domain.DefaultRunnerRunLimit, nil
-	}
-	return row.RunLimit, err
-}
-
-func (r *RunnersRepo) SetPlatformRunnerRunLimit(limit int, actorUserID int64) error {
-	if limit < 0 {
-		return fmt.Errorf("最多同时运行条数需为非负整数（0 表示不限制）")
-	}
-	return r.DB.Transaction(func(tx *gorm.DB) error {
-		if err := lockAdmissionGate(r.deps, tx, PlatformAdmissionBucketKey); err != nil {
-			return err
-		}
-		return upsert(tx, "platform_runner_settings", map[string]any{
-			"id": platformRunnerSettingsID, "run_limit": limit, "updated_by": actorUserID, "updated_at": time.Now().UTC(),
-		})
-	}, r.admissionTxOptions()...)
-}
-
 func (r *RunnersRepo) Runner(id string) (domain.Runner, bool) {
 	return r.runnerRow(id)
 }
@@ -841,26 +781,6 @@ func (r *RunnersRepo) ExpireRunnerTasks(now time.Time) ([]domain.RunnerTask, err
 			Find(&rows).Error; err != nil {
 			return err
 		}
-		for _, row := range rows {
-			task := runnerTaskFromRow(row)
-			if task.Attempt < task.MaxAttempts {
-				task.Status = domain.RunnerTaskQueued
-			} else {
-				task.Status = domain.RunnerTaskFailed
-				task.Error = "lease expired"
-				completed := now
-				task.CompletedAt = &completed
-				scrubRunnerTaskCredentials(&task)
-			}
-			task.LeaseOwner = ""
-			task.LeaseUntil = nil
-			task.DesiredState = ""
-			task.UpdatedAt = now
-			if err := tx.Model(&runnerTaskRow{}).Where("id = ?", task.ID).Updates(runnerTaskRowValues(task)).Error; err != nil {
-				return err
-			}
-			recovered = append(recovered, task)
-		}
 		return nil
 	})
 	return recovered, err
@@ -927,26 +847,6 @@ func (r *RunnersRepo) DeregisterRunner(id string, now time.Time) error {
 		return fmt.Errorf("runner id is required")
 	}
 	return r.DB.Transaction(func(tx *gorm.DB) error {
-		if _, err := r.lockRunner(tx, id); err != nil {
-			return err
-		}
-		var rows []runnerTaskRow
-		if err := tx.Where("runner_id = ? AND status = ?", id, domain.RunnerTaskQueued).Find(&rows).Error; err != nil {
-			return err
-		}
-		for _, row := range rows {
-			task := runnerTaskFromRow(row)
-			task.Status = domain.RunnerTaskCanceled
-			task.LeaseOwner = ""
-			task.LeaseUntil = nil
-			scrubRunnerTaskCredentials(&task)
-			completed := now
-			task.CompletedAt = &completed
-			task.UpdatedAt = now
-			if err := tx.Model(&runnerTaskRow{}).Where("id = ?", task.ID).Updates(runnerTaskRowValues(task)).Error; err != nil {
-				return err
-			}
-		}
 		if err := tx.Where("default_runner_id = ?", id).Delete(&userRunnerPrefRow{}).Error; err != nil {
 			return err
 		}

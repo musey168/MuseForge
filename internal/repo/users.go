@@ -107,9 +107,6 @@ func (r userWithConfig) toDomain() domain.User {
 	if r.Updated != nil {
 		u.UpdatedAt = *r.Updated
 	}
-	if _, managed := managedGitHTTPCredential(u); managed {
-		u.GitHTTPCredentialsConfigured = true
-	}
 	return u
 }
 
@@ -315,9 +312,6 @@ func (r *UsersRepo) updateUserCredentials(id int64, update UserCredentialUpdate)
 		return domain.User{}, errors.New("user not found")
 	}
 	previousDefaults := user.ExecutorDefaults
-	if user.ExecutorDefaults.Executor == "" {
-		user.ExecutorDefaults.Executor = firstExecutorWithCredential(user)
-	}
 	if update.CodeBuddyAPIKeyClear {
 		user.CodeBuddyAPIKey = ""
 		user.CodeBuddyBaseURL = ""
@@ -371,14 +365,7 @@ func (r *UsersRepo) updateUserCredentials(id int64, update UserCredentialUpdate)
 		return domain.User{}, err
 	}
 	if update.ExecutorDefaults != nil {
-		if !user.HasExecutorCredential(update.ExecutorDefaults.Executor) {
-			return domain.User{}, ErrAssistantDefaultExecutorUnavailable
-		}
 		user.ExecutorDefaults = *update.ExecutorDefaults
-	} else if !user.HasExecutorCredential(user.ExecutorDefaults.Executor) {
-		user.ExecutorDefaults.Executor = firstExecutorWithCredential(user)
-		user.ExecutorDefaults.Model = ""
-		user.ExecutorDefaults.Effort = ""
 	}
 	user.UpdatedAt = time.Now().UTC()
 	if err := r.writeUserConfig(user); err != nil {
@@ -392,23 +379,6 @@ func (r *UsersRepo) updateUserCredentials(id int64, update UserCredentialUpdate)
 		if err := r.DB.Model(&userConfigRow{}).Where("user_id = ?", id).Update("assistant_defaults", string(value)).Error; err != nil {
 			return domain.User{}, err
 		}
-	}
-	return user, nil
-}
-
-// SaveGongfengOAuth stores an OAuth access token in the git credential slot
-// and keeps the refresh token so a later use can renew it.
-func (r *UsersRepo) SaveGongfengOAuth(id int64, accessToken, refreshToken string, expiresAt time.Time) (domain.User, error) {
-	user, ok := r.User(id)
-	if !ok {
-		return domain.User{}, errors.New("user not found")
-	}
-	user.GitToken = strings.TrimSpace(accessToken)
-	user.GongfengRefreshToken = strings.TrimSpace(refreshToken)
-	user.GongfengTokenExpiresAt = expiresAt.UTC()
-	user.UpdatedAt = time.Now().UTC()
-	if err := r.writeUserConfig(user); err != nil {
-		return domain.User{}, err
 	}
 	return user, nil
 }

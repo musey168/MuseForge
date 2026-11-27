@@ -1,7 +1,6 @@
 package repo
 
 import (
-	"agentflow/internal/domain"
 	"fmt"
 
 	"gorm.io/gorm"

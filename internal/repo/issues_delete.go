@@ -81,9 +81,6 @@ func (r *IssuesRepo) DeleteIssueAfterRunCleanup(id string, mode IssueDeletionMod
 		if len(ids) > 0 {
 			return fmt.Errorf("请先清理需求的历史运行记录")
 		}
-		if err := r.tasks.deleteIssueTasks(tx, id); err != nil {
-			return err
-		}
 		if err := tx.Where("issue_id = ?", id).Delete(&issueCommentRow{}).Error; err != nil {
 			return err
 		}

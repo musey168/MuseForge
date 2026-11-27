@@ -106,7 +106,6 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 	if basicUser != "" && basicPass != "" {
 		g.Use(basicAuth(basicUser, basicPass))
 	}
-	g.Use(d.runWriteGuard())
 
 	// --- auth & users ---
 	g.GET("/api/health", api.health)

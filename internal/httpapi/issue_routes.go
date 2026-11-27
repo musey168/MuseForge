@@ -37,20 +37,6 @@ func (h issuesHandlers) addIssueComment(c *gin.Context, issue domain.Issue) {
 	}
 }
 
-func (h issuesHandlers) reopenIssue(c *gin.Context, issue domain.Issue) {
-	reopened, err := h.repo.ReopenDeliveredIssue(issue.ID)
-	if err != nil {
-		c.JSON(409, map[string]string{"error": err.Error()})
-		return
-	}
-	saved, err := h.appendStoredOperation(c, reopened.ID, "reopen", "重新打开需求")
-	if err != nil {
-		respond(c, err)
-		return
-	}
-	h.writeIssueView(c, 200, saved)
-}
-
 func (h issuesHandlers) closeIssue(c *gin.Context, issue domain.Issue) {
 	alreadyClosed := issue.ManuallyClosed()
 	closed, err := h.repo.CloseIssue(issue.ID)
@@ -71,15 +57,6 @@ func (h issuesHandlers) closeIssue(c *gin.Context, issue domain.Issue) {
 		closed = saved
 	}
 	h.writeIssueView(c, 200, closed)
-}
-
-func (h issuesHandlers) issueRequirement(c *gin.Context, issue domain.Issue) {
-	snap, ok := h.repo.RequirementSnapshot(issue.ID)
-	if !ok {
-		c.JSON(http.StatusNotFound, map[string]string{"error": "issue not found"})
-		return
-	}
-	c.JSON(http.StatusOK, snap)
 }
 
 // deleteIssue removes a requirement and its notes. Nothing executes it, so

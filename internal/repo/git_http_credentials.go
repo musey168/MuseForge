@@ -5,13 +5,9 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
-	"agentflow/internal/config"
 	"agentflow/internal/domain"
-	"agentflow/internal/gitwork"
-	"agentflow/internal/gongfeng"
 
 	"gorm.io/gorm"
 )
@@ -39,43 +35,6 @@ func (row gitHTTPCredentialRow) secret() domain.GitHTTPCredentialSecret {
 	}
 }
 
-// managedGitHost is the HTTPS host of the internal adapter's Git server.
-func managedGitHost() string {
-	if host := config.GongfengHost(); host != "" {
-		normalized, _ := gitwork.HTTPSHostScope(host)
-		return normalized
-	}
-	host, _ := gitwork.HTTPSRemoteHost(gongfeng.ConfigFromEnv().APIBase)
-	return host
-}
-
-// managedGitHTTPCredential presents the internal adapter's OAuth or
-// "private:" token kept in user_configs as a read-only credential, without
-// refreshing it. A plain pasted token is a personal credential instead.
-func managedGitHTTPCredential(user domain.User) (domain.GitHTTPCredentialSecret, bool) {
-	raw := formatManagedGitCredential(user)
-	lower := strings.ToLower(raw)
-	if !strings.HasPrefix(lower, gitwork.OAuthHTTPUser+":") && !strings.HasPrefix(lower, gitwork.HTTPUser+":") {
-		return domain.GitHTTPCredentialSecret{}, false
-	}
-	host := managedGitHost()
-	username, token := gitwork.SplitToken(raw)
-	if host == "" || token == "" {
-		return domain.GitHTTPCredentialSecret{}, false
-	}
-	secret := domain.GitHTTPCredentialSecret{
-		GitHTTPCredential: domain.GitHTTPCredential{
-			ID: domain.ManagedGitHTTPCredentialID, Name: "内部托管凭据", Platform: domain.GitPlatformGitLab,
-			Host: host, Username: username, Managed: true,
-		},
-		Token: token,
-	}
-	if strings.TrimSpace(user.GongfengRefreshToken) != "" {
-		secret.ExpiresAt = user.GongfengTokenExpiresAt
-	}
-	return secret, true
-}
-
 // GitHTTPCredentials describes the user's HTTP(S) Git credentials, followed by
 // the managed internal credential unless a personal one covers its host.
 // Tokens are never read into the description.
@@ -92,11 +51,6 @@ func (r *UsersRepo) GitHTTPCredentials(userID int64) ([]domain.GitHTTPCredential
 		credential := row.secret().GitHTTPCredential
 		out = append(out, credential)
 		hosts[credential.Host] = true
-	}
-	if user, ok := r.User(userID); ok {
-		if managed, ok := managedGitHTTPCredential(user); ok && !hosts[managed.Host] {
-			out = append(out, managed.GitHTTPCredential)
-		}
 	}
 	return out, nil
 }
@@ -182,10 +136,7 @@ func (r *UsersRepo) GitHTTPCredentialForHost(ctx context.Context, userID int64, 
 	if row.ID != "" && secret.Host == host && secret.Token != "" {
 		return secret, true
 	}
-	if host != managedGitHost() {
-		return domain.GitHTTPCredentialSecret{}, false
-	}
-	return r.refreshedManagedGitHTTPCredential(ctx, userID)
+	return domain.GitHTTPCredentialSecret{}, false
 }
 
 // GitHTTPCredentialSecrets is used only by authenticated execution dispatch.
@@ -208,25 +159,11 @@ func (r *UsersRepo) GitHTTPCredentialSecrets(ctx context.Context, userID int64) 
 
 // GitHTTPCredentialByID resolves one listed credential for verification.
 func (r *UsersRepo) GitHTTPCredentialByID(ctx context.Context, userID int64, id string) (domain.GitHTTPCredentialSecret, bool) {
-	if id == domain.ManagedGitHTTPCredentialID {
-		return r.refreshedManagedGitHTTPCredential(ctx, userID)
-	}
 	var row gitHTTPCredentialRow
 	if err := r.DB.Where("user_id = ? AND id = ?", userID, id).Limit(1).Find(&row).Error; err != nil || row.ID == "" {
 		return domain.GitHTTPCredentialSecret{}, false
 	}
 	return row.secret(), true
-}
-
-func (r *UsersRepo) refreshedManagedGitHTTPCredential(ctx context.Context, userID int64) (domain.GitHTTPCredentialSecret, bool) {
-	if r.managedGitCredential(ctx, userID) == "" {
-		return domain.GitHTTPCredentialSecret{}, false
-	}
-	user, ok := r.User(userID)
-	if !ok {
-		return domain.GitHTTPCredentialSecret{}, false
-	}
-	return managedGitHTTPCredential(user)
 }
 
 // GitHTTPWorkspaceHosts maps each host whose credential the user hands to

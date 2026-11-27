@@ -72,66 +72,6 @@ func (d deps) speakerAccountWriter(projectID string, user domain.User, userID in
 	return d.accountHoldsProject(projectID, userID)
 }
 
-var guardedRunWrites = map[string]bool{
-	"/api/runs/:id":                    true,
-	"/api/runs/:id/approve":            true,
-	"/api/runs/:id/reject":             true,
-	"/api/runs/:id/retry":              true,
-	"/api/runs/:id/decline-retry":      true,
-	"/api/runs/:id/cancel":             true,
-	"/api/runs/:id/pause":              true,
-	"/api/runs/:id/resume":             true,
-	"/api/runs/:id/refresh-sop":        true,
-	"/api/runs/:id/pass":               true,
-	"/api/runs/:id/eval":               true,
-	"/api/runs/:id/eval/apply":         true,
-	"/api/runs/:id/workspace/takeover": true,
-	"/api/runs/:id/workspace/release":  true,
-	"/api/runs/:id/workspace/restore":  true,
-	"/api/runs/:id/workspace/file":     true,
-	"/api/runs/:id/workspace/terminal": true,
-	"/api/runs/:id/preview/backend":    true,
-	"/api/runs/:id/preview":            true,
-}
-
-// runWriteGuard limits personal workspace routes to their owner and applies
-// project write access to run controls, workspace edits and terminals.
-func (d deps) runWriteGuard() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		id, path := c.Param("id"), c.FullPath()
-		if id == "" || !strings.HasPrefix(path, "/api/runs/:id") {
-			c.Next()
-			return
-		}
-		run, err := d.repo.RunHeader(id)
-		if err != nil {
-			respond(c, err)
-			c.Abort()
-			return
-		}
-		if run.IsPersonalWorkspace() {
-			user, ok := d.requestUser(c.Request)
-			if !ok || user.ID <= 0 || user.ID != run.ExecutionContext.ResponsibleUserID {
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "无权访问个人工作区"})
-				return
-			}
-		}
-		if run.ID == "" || c.Request.Method == http.MethodGet || !guardedRunWrites[path] {
-			c.Next()
-			return
-		}
-		issueProject := ""
-		if issue, found := d.repo.Issue(run.ExecutionContext.IssueID); found {
-			issueProject = issue.ProjectID
-		}
-		if !d.requireAccountWrite(c, domain.RunProjectID(run, issueProject)) {
-			c.Abort()
-			return
-		}
-		c.Next()
-	}
-}
-
 // requireWriteOrigin admits a same-origin browser write; the session cookie
 // alone is not enough.
 func requireWriteOrigin(c *gin.Context) bool {
@@ -141,36 +81,6 @@ func requireWriteOrigin(c *gin.Context) bool {
 		return false
 	}
 	return true
-}
-
-// assetOwner returns the project of a stored asset and whether it is a
-// platform-wide asset that only administrators may change.
-func (d deps) assetOwner(kind, id string) (project string, global bool, found bool) {
-	if id == "" {
-		return "", false, false
-	}
-	switch kind {
-	case "rules":
-		v, ok := d.repo.Rule(id)
-		return v.ProjectID, v.ProjectID == "", ok
-	case "skills":
-		v, ok := d.repo.Skill(id)
-		return v.ProjectID, v.ProjectID == "", ok
-	case "sandboxes":
-		if strings.EqualFold(id, repo.DefaultSandboxProfileID) {
-			return "", true, true
-		}
-		v, ok := d.repo.Sandbox(id)
-		return v.ProjectID, v.ProjectID == "" || v.ID == repo.DefaultSandboxProfileID, ok
-	case "schedule-jobs":
-		v, ok := d.repo.ScheduleJob(id)
-		return v.ProjectID, false, ok
-	// TODO(knowledge-legacy-compat): remove with legacy /api/knowledge/submissions routes.
-	case "knowledge":
-		v, ok := d.repo.KnowledgeSubmission(id)
-		return v.ProjectID, false, ok
-	}
-	return "", false, false
 }
 
 // assetWriteGuard applies project membership to catalog assets, project MCP
@@ -226,68 +136,8 @@ func (d deps) allowAssetWrite(c *gin.Context, path string) bool {
 			return d.requireAccountWrite(c)
 		}
 		return d.requireAccountWrite(c, strings.TrimSpace(body.ProjectID))
-	case "/api/schedule-jobs/:id", "/api/schedule-jobs/:id/run":
-		project, _, _ := d.assetOwner("schedule-jobs", c.Param("id"))
-		return d.requireAccountWrite(c, project)
-	// TODO(knowledge-legacy-compat): remove with legacy /api/knowledge/submissions routes.
-	case "/api/knowledge/submissions":
-		var body struct {
-			ProjectID string `json:"projectId"`
-		}
-		peekJSON(c, &body)
-		return d.requireAccountWrite(c, strings.TrimSpace(body.ProjectID))
-	case "/api/knowledge/submissions/:id", "/api/knowledge/submissions/:id/publish", "/api/knowledge/submissions/:id/reject":
-		project, _, _ := d.assetOwner("knowledge", c.Param("id"))
-		return d.requireAccountWrite(c, project)
-	case "/api/skills/:id/files", "/api/skills/:id/files/*path":
-		return d.allowStoredAsset(c, "skills", c.Param("id"))
 	}
-	kind := strings.TrimPrefix(path, "/api/")
-	switch kind {
-	case "rules", "skills", "sandboxes", "schedule-jobs":
-	default:
-		return true
-	}
-	if c.Request.Method == http.MethodDelete {
-		return d.allowStoredAsset(c, kind, strings.TrimSpace(c.Query("id")))
-	}
-	var body struct {
-		ID        string `json:"id"`
-		ProjectID string `json:"projectId"`
-	}
-	peekJSON(c, &body)
-	id, project := strings.TrimSpace(body.ID), strings.TrimSpace(body.ProjectID)
-	if kind == "sandboxes" {
-		reserved, err := d.repo.IsReservedSandboxID(id)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return false
-		}
-		if reserved {
-			return d.requireAccountWrite(c)
-		}
-	}
-	if !d.allowStoredAsset(c, kind, id) {
-		return false
-	}
-	if project == "" && kind != "schedule-jobs" {
-		if storedProject, _, found := d.assetOwner(kind, id); found && storedProject != "" {
-			return true
-		}
-		return d.requireAccountWrite(c)
-	}
-	return d.requireAccountWrite(c, project)
-}
-
-func (d deps) allowStoredAsset(c *gin.Context, kind, id string) bool {
-	project, global, found := d.assetOwner(kind, id)
-	if !found {
-		return true
-	}
-	if global {
-		return d.requireAccountWrite(c)
-	}
-	return d.requireAccountWrite(c, project)
+	return true
 }
 
 // peekJSON decodes the request body without consuming it for the handler.

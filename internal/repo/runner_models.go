@@ -16,8 +16,8 @@ func (r *RunnersRepo) SetRunnerLoginModels(id string, ownerID int64, provider st
 		return apperr.New(apperr.Invalid, err.Error())
 	}
 	return r.DB.Transaction(func(tx *gorm.DB) error {
-		row, err := r.lockRunner(tx, id)
-		if err != nil {
+		var row runnerRow
+		if err := tx.Where("id = ?", id).First(&row).Error; err != nil {
 			return err
 		}
 		runner := runnerFromRow(row)

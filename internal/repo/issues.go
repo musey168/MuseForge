@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"agentflow/internal/domain"
-
-	"gorm.io/gorm"
 )
 
 // ---------- Issues ----------
@@ -162,29 +160,6 @@ func (r *IssuesRepo) PutIssue(v domain.Issue) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.putIssueLocked(v)
-}
-
-// ReserveIssueDispatch holds the issue row lock through task reservation so
-// dispatch and the final delete cannot both succeed.
-func (r *IssuesRepo) ReserveIssueDispatch(task domain.Task) (domain.Task, bool, error) {
-	var stored domain.Task
-	var created bool
-	err := r.DB.Transaction(func(tx *gorm.DB) error {
-		var issue issueRow
-		err := r.locking(tx).Select("id").Where("id = ?", task.IssueID).Take(&issue).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrIssueNotFound
-		}
-		if err != nil {
-			return err
-		}
-		stored, created, err = r.tasks.createTask(tx, task)
-		return err
-	})
-	if err != nil {
-		return domain.Task{}, false, err
-	}
-	return stored, created, nil
 }
 
 // PutSyncedIssue refreshes tracker data without changing an existing issue's
@@ -373,7 +348,6 @@ func (r *IssuesRepo) prepareIssueForSave(v domain.Issue, mode issueWriteMode, ex
 		v.AutomationState = "ignored"
 	} else {
 		v.SOPMode = ""
-		bindDefaultWorkflow(&v, r.projectWorkflowID(v.ProjectID), r.projectIssueWorkflowID(v.ProjectID))
 	}
 	v.UpdatedAt = now
 	return v, nil
@@ -416,65 +390,6 @@ func (r *IssuesRepo) ResponsibleUser(issue domain.Issue) (domain.User, error) {
 		return domain.User{}, errors.New("需求责任人或项目 Owner 未关联有效用户")
 	}
 	return user, nil
-}
-
-// projectWorkflowID returns the project's configured default LOOP.
-// DefaultIssueWorkflow returns the LOOP a new issue of the project would be
-// bound to when it is saved without one (see bindDefaultWorkflow).
-func (r *IssuesRepo) DefaultIssueWorkflow(projectID, source, kind string) string {
-	v := domain.Issue{ProjectID: projectID, Source: source, Kind: kind}
-	bindDefaultWorkflow(&v, r.projectWorkflowID(projectID), r.projectIssueWorkflowID(projectID))
-	return v.WorkflowID
-}
-
-func (r *IssuesRepo) projectWorkflowID(projectID string) string {
-	if strings.TrimSpace(projectID) == "" {
-		return ""
-	}
-	if p, ok := payloadOne[domain.Project](r.DB, "projects", projectID); ok {
-		return strings.TrimSpace(p.WorkflowID)
-	}
-	return ""
-}
-
-func (r *IssuesRepo) projectIssueWorkflowID(projectID string) string {
-	id := ProjectIssueWorkflowID(projectID)
-	if id == "" {
-		return ""
-	}
-	if _, ok := payloadOne[domain.WorkflowDefinition](r.DB, "workflows", id); ok {
-		return id
-	}
-	return ""
-}
-
-func (r *IssuesRepo) IssueHasTask(issueID string) bool {
-	return r.IssueHasTaskForWorkflow(issueID, "")
-}
-
-func (r *IssuesRepo) IssueHasTaskForWorkflow(issueID, workflowID string) bool {
-	issueID = strings.TrimSpace(issueID)
-	if issueID == "" {
-		return false
-	}
-	workflowID = strings.TrimSpace(workflowID)
-	for _, task := range r.tasks.Tasks() {
-		if task.IssueID != issueID {
-			continue
-		}
-		taskWF := strings.TrimSpace(task.WorkflowID)
-		// 旧 Task 可能没有 workflowId，按「这条需求已经跑过」处理，避免定时任务重复派发。
-		if workflowID == "" || taskWF == "" || taskWF == workflowID {
-			return true
-		}
-	}
-	if workflowID != "" {
-		return false
-	}
-	if issue, ok := r.Issue(issueID); ok && strings.TrimSpace(issue.LatestTaskID) != "" {
-		return true
-	}
-	return false
 }
 
 // ---------- Issue comments ----------

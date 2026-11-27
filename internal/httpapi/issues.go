@@ -90,11 +90,6 @@ func (h issuesHandlers) importTAPD(c *gin.Context) {
 		return
 	}
 	previous := issue
-	if err := h.assignIssueWorkflow(&issue, req.WorkflowID); err != nil {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	h.bindRequirementPlaybook(&issue)
 	h.applyTAPDImportRepositories(&issue, previous, probe, req.BaseBranch != nil || req.RepositoryBranches != nil)
 	if err := h.bindIssueRepositories(&issue); err != nil {
 		c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -457,7 +452,6 @@ var issueRoutes = map[string]issueRoute{
 	"/api/issues/:id":                 {handle: issuesHandlers.issueDetail, methods: []string{http.MethodGet, http.MethodDelete}},
 	"/api/issues/:id/images/:imageId": {handle: issuesHandlers.issueImage, methods: []string{http.MethodGet}},
 	"/api/issues/:id/comments":        {handle: issuesHandlers.addIssueComment, methods: []string{http.MethodPost}},
-	"/api/issues/:id/reopen":          {handle: issuesHandlers.reopenIssue, methods: []string{http.MethodPost}},
 	"/api/issues/:id/close":           {handle: issuesHandlers.closeIssue, methods: []string{http.MethodPost}},
 }
 
@@ -778,29 +772,6 @@ func keepExistingTrackerBinding(v *domain.Issue, existing domain.Issue) {
 	repo.RestoreTrackerBinding(v, existing)
 }
 
-func (h issuesHandlers) normalizeIssueSOPBindings(projectID string, in []domain.IssueSOPBinding) ([]domain.IssueSOPBinding, error) {
-	return normalizeSOPBindings(h.repo, projectID, in)
-}
-
-func normalizeSOPBindings(store *repo.Store, projectID string, in []domain.IssueSOPBinding) ([]domain.IssueSOPBinding, error) {
-	bindings := domain.NormalizeSOPBindings(in)
-	for i, binding := range bindings {
-		if !knownWorkflow(store, binding.WorkflowID) {
-			return nil, fmt.Errorf("LOOP %s 不存在", binding.WorkflowID)
-		}
-		if binding.AssigneeUserID > 0 {
-			if _, ok := store.User(binding.AssigneeUserID); !ok {
-				return nil, fmt.Errorf("步骤责任人必须是有效用户")
-			}
-		}
-		if wf, ok := store.Workflow(binding.WorkflowID); ok && strings.TrimSpace(wf.ProjectID) != "" && wf.ProjectID != projectID && !wf.Shared && !wf.Generic {
-			return nil, fmt.Errorf("LOOP %s 不属于当前项目", binding.WorkflowID)
-		}
-		bindings[i] = binding
-	}
-	return bindings, nil
-}
-
 func (h issuesHandlers) bindRequirementPlaybook(issue *domain.Issue) {
 	if issue == nil || !domain.IsRequirementWorkItem(*issue) || issue.WithoutSOP() {
 		return
@@ -829,36 +800,6 @@ func (h issuesHandlers) bindRequirementPlaybook(issue *domain.Issue) {
 	if strings.TrimSpace(issue.WorkflowID) == "" {
 		issue.WorkflowID = book.Bindings[0].WorkflowID
 	}
-}
-
-func (h issuesHandlers) assignIssueWorkflow(issue *domain.Issue, workflowID string) error {
-	if issue == nil {
-		return nil
-	}
-	workflowID = strings.TrimSpace(workflowID)
-	if workflowID == "" {
-		return nil
-	}
-	if !knownWorkflow(h.repo, workflowID) {
-		return fmt.Errorf("workflow not found")
-	}
-	issue.WorkflowID = workflowID
-	return nil
-}
-
-func (h issuesHandlers) knownWorkflow(id string) bool {
-	return knownWorkflow(h.repo, id)
-}
-
-func knownWorkflow(store *repo.Store, id string) bool {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return false
-	}
-	if _, ok := store.Workflow(id); ok {
-		return true
-	}
-	return id == repo.DefaultWorkflowID("tapd", "requirement") || id == repo.DefaultWorkflowID("gongfeng", "issue")
 }
 
 func (h issuesHandlers) createIssueOnTracker(v domain.Issue, target string) (domain.Issue, error) {

@@ -144,24 +144,8 @@ func (h *runnersHandlers) runners(c *gin.Context) {
 		projectID = ""
 	}
 	list := h.repo.RunnersForUser(user.ID, projectID)
-	var loads map[string]domain.RunnerLoad
-	if mine || projectID != "" {
-		ids := make([]string, 0, len(list))
-		for _, runner := range list {
-			ids = append(ids, runner.ID)
-		}
-		var err error
-		loads, err = h.repo.RunnerLoadSnapshots(ids)
-		if err != nil {
-			respond(c, err)
-			return
-		}
-	}
 	for i := range list {
 		list[i].Runner = runnerViewForUser(list[i].Runner, user.ID)
-		if load, ok := loads[list[i].ID]; ok {
-			list[i].Load = &load
-		}
 	}
 	c.JSON(http.StatusOK, list)
 }
