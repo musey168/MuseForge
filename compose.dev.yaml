@@ -1,6 +1,8 @@
 # Source build of this checkout, layered on compose.yaml:
 #   ./start.sh dev     or   docker compose -f compose.yaml -f compose.dev.yaml --profile platform up --build
 # The fixed local tag keeps source builds from overwriting the pinned GHCR image.
+# The datasource is unchanged: one SQLite file (AGENTFLOW_DATASOURCE_DSN in .env)
+# and no database server, unless the "mysql" profile is started as well.
 services:
   platform:
     image: loopforge-platform:local
