@@ -202,8 +202,6 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 	g.POST("/api/runners/deregister", api.runners.runnerDeregister)
 	g.POST("/api/runners/disconnect", api.runners.runnerDisconnect)
 	g.POST("/api/runners/bind-codes", api.runners.issueRunnerBindCode)
-	g.GET("/api/runners/default", api.runners.runnerDefault)
-	g.PUT("/api/runners/default", api.runners.runnerDefaultSet)
 	g.DELETE("/api/runners/:id", api.runners.runnerRemove)
 	g.GET("/api/runners/:id/maintenance", api.runners.runnerMaintenance)
 	g.POST("/api/runners/:id/maintenance", api.runners.runnerMaintenance)

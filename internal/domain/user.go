@@ -85,10 +85,6 @@ const (
 // GitHub and Gitea families accept any user with a token password.
 const GitTokenHTTPUser = "x-access-token"
 
-// ManagedGitHTTPCredentialID identifies the read-only credential the internal
-// adapter keeps (and refreshes) in user_configs.
-const ManagedGitHTTPCredentialID = "managed-internal"
-
 // GitHTTPCredential is the public description of a personal Git credential.
 // Host is a legacy HTTPS authority or an explicit HTTP endpoint.
 type GitHTTPCredential struct {
@@ -97,7 +93,6 @@ type GitHTTPCredential struct {
 	Platform string `json:"platform"`
 	Host     string `json:"host"`
 	Username string `json:"username,omitempty"`
-	Managed  bool   `json:"managed,omitempty"`
 }
 
 // GitUsername is the Basic-auth user Git sends with the token.

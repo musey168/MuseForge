@@ -232,7 +232,7 @@ func (s *Service) gongfengClientForRun(project string, q domain.BranchMRQuery) (
 	if !ok {
 		return nil, "none", fmt.Errorf("本轮责任人 %d 不存在", q.ResponsibleUserID)
 	}
-	binding, err := bindProjectUserTrackerMCP("gongfeng", s.cfg.Get(), s.projectAuth.MCPServers(), local, user, "责任人")
+	binding, err := bindProjectUserTrackerMCP("gongfeng", s.cfg.Get(), local, user, "责任人")
 	if err != nil {
 		return nil, binding.Source, err
 	}

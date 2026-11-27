@@ -90,7 +90,6 @@ type ProjectAuthStore interface {
 	Project(id string) (domain.Project, bool)
 	Repositories() []domain.Repository
 	User(id int64) (domain.User, bool)
-	MCPServers() []domain.MCPServerDefinition
 }
 
 func NewService() *Service {
@@ -99,17 +98,13 @@ func NewService() *Service {
 	}
 }
 
-// Configure updates the sync config and recreates MCP clients.
-// Prefer the catalog MCP headers, then the deployment's AGENTFLOW_MCP_TOKEN.
+// Configure updates the sync config and recreates the tracker clients. The
+// clients are bound from the sync configuration's URL and the deployment's
+// AGENTFLOW_MCP_TOKEN.
 func (s *Service) Configure(cfg domain.SyncConfig) {
-	s.ConfigureWithCatalog(cfg, nil)
-}
-
-// ConfigureWithCatalog binds Gongfeng/TAPD clients from catalog MCP assets.
-func (s *Service) ConfigureWithCatalog(cfg domain.SyncConfig, servers []domain.MCPServerDefinition) {
 	s.cfg.Set(cfg)
-	gf := bindTrackerMCP("gongfeng", cfg, servers, s.authToken)
-	tapd := bindTrackerMCP("tapd", cfg, servers, s.authToken)
+	gf := bindTrackerMCP("gongfeng", cfg, s.authToken)
+	tapd := bindTrackerMCP("tapd", cfg, s.authToken)
 	s.gfSource, s.tapdSource = gf.Source, tapd.Source
 	if gf.URL != "" {
 		s.gongfeng = NewMCPClient(gf.URL, gf.Headers)
@@ -124,14 +119,10 @@ func (s *Service) ConfigureWithCatalog(cfg domain.SyncConfig, servers []domain.M
 }
 
 // ConfigureWithStore enables project-aware authentication. Tracker calls then
-// resolve the target project's MCP asset and call it as its Owner.
+// resolve the target project and call the tracker as its Owner.
 func (s *Service) ConfigureWithStore(cfg domain.SyncConfig, store ProjectAuthStore) {
 	s.projectAuth = store
-	servers := []domain.MCPServerDefinition(nil)
-	if store != nil {
-		servers = store.MCPServers()
-	}
-	s.ConfigureWithCatalog(cfg, servers)
+	s.Configure(cfg)
 }
 
 func (s *Service) trackerClientForProject(kind, projectID string) (*MCPClient, string, error) {
@@ -158,7 +149,7 @@ func (s *Service) trackerClientForProject(kind, projectID string) (*MCPClient, s
 	if !ok {
 		return nil, "none", fmt.Errorf("项目 %s 的 Owner 不存在", project.ID)
 	}
-	binding, err := bindProjectOwnerTrackerMCP(kind, s.cfg.Get(), s.projectAuth.MCPServers(), project.ID, owner)
+	binding, err := bindProjectOwnerTrackerMCP(kind, s.cfg.Get(), project.ID, owner)
 	if err != nil {
 		return nil, binding.Source, err
 	}
@@ -178,7 +169,7 @@ func (s *Service) trackerClientForWriteBack(kind, projectID string, issue domain
 		if !ok {
 			return nil, "none", fmt.Errorf("需求责任人未关联有效用户，无法写回原单")
 		}
-		binding, err := bindProjectUserTrackerMCP(kind, s.cfg.Get(), s.projectAuth.MCPServers(), project.ID, user, "责任人")
+		binding, err := bindProjectUserTrackerMCP(kind, s.cfg.Get(), project.ID, user, "责任人")
 		if err != nil {
 			return nil, binding.Source, err
 		}

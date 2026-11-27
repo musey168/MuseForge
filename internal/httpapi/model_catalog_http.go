@@ -2,26 +2,15 @@ package httpapi
 
 import (
 	"net/http"
-	"strings"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/repo"
 
 	"github.com/gin-gonic/gin"
 )
 
-// modelCatalogEngines lists the CLIs the caller may run with: their own keys
-// and — for a scheduled AI job — the account login on their default machine.
-func modelCatalogEngines(r *repo.Store, user domain.User, projectID string, schedule bool) []assistantEngineOption {
-	options := assistantEngineOptions(user)
-	if schedule {
-		for i := range options {
-			if scheduleLoginRunner(r, user.ID, projectID, options[i].ID).ID != "" {
-				options[i].Configured = true
-			}
-		}
-	}
-	return options
+// modelCatalogEngines lists the CLIs the caller may run with: their own keys.
+func modelCatalogEngines(user domain.User) []assistantEngineOption {
+	return assistantEngineOptions(user)
 }
 
 // modelCatalog serves the personal model catalogue: the CLIs the caller may
@@ -40,7 +29,7 @@ func (h *Server) modelCatalog(c *gin.Context) {
 	}
 	ctx := c.Request.Context()
 	catalog := personalCodeBuddyCatalog(ctx, user)
-	catalog.Engines = modelCatalogEngines(h.repo, user, strings.TrimSpace(c.Query("projectId")), strings.TrimSpace(c.Query("schedule")) == "1")
+	catalog.Engines = modelCatalogEngines(user)
 	if user.ExecutorDefaults != (domain.ExecutorDefaults{}) {
 		catalog.Preferences = &user.ExecutorDefaults
 	}
