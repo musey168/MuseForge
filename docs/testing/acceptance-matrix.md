@@ -20,8 +20,8 @@ Which automated cases protect each user-facing capability, and what they need. "
 | AI requirement analysis | `e2e/ui/02-interactions.spec.mjs` | Model |
 | LOOP designer: edit nodes, save revisions | `e2e/ui/02-interactions.spec.mjs`, `e2e/api/10-catalog.test.mjs` | — |
 | Run engine: approval gates, rework, retry, manual pass, pause/resume, cancel, child LOOPs, event stream | `e2e/api/30-runs.test.mjs`, `e2e/public/platform.spec.mjs` | — |
-| Artifacts across nodes, contract errors | `e2e/api/30-runs.test.mjs`, `e2e/api/35-runner-mode.test.mjs` | — |
-| Connected execution machines (runner bind, heartbeat, tasks) | `e2e/api/35-runner-mode.test.mjs` | Runner binaries |
+| Artifacts across nodes, contract errors | `e2e/api/30-runs.test.mjs` | — |
+| Connected execution machines (runner bind, heartbeat) | `internal/runner/daemon_test.go` | Runner binaries |
 | Shared sandbox across nodes, Docker sandbox, static preview and session navigation | `e2e/api/36-cloud-pool.test.mjs`, `e2e/api/56-sandbox-preview.test.mjs`, `internal/preview/gateway_test.go` | Docker; actual remote pool needs configured workers; Chromium preview opt-in |
 | Agent node with a real executor, AI run evaluation | `e2e/api/40-model.test.mjs` | Model |
 | End-to-end delivery LOOP: plan, fix, review, test, approve, summarize | `e2e/api/45-delivery-model.test.mjs` | Model |
