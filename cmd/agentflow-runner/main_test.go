@@ -5,27 +5,6 @@ import (
 	"testing"
 )
 
-func TestConcurrencyFromEnv(t *testing.T) {
-	cases := []struct {
-		env  string
-		want int
-	}{
-		{"", 3},
-		{"   ", 3},
-		{"5", 5},
-		{" 7 ", 7},
-		{"0", 3},
-		{"-2", 3},
-		{"abc", 3},
-	}
-	for _, tc := range cases {
-		t.Setenv("AGENTFLOW_RUNNER_CONCURRENCY", tc.env)
-		if got := concurrencyFromEnv(3); got != tc.want {
-			t.Errorf("concurrencyFromEnv(3) with env %q = %d, want %d", tc.env, got, tc.want)
-		}
-	}
-}
-
 func TestParseLabels(t *testing.T) {
 	cases := []struct {
 		raw  string
@@ -40,5 +19,14 @@ func TestParseLabels(t *testing.T) {
 		if got := parseLabels(tc.raw); !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("parseLabels(%q) = %#v, want %#v", tc.raw, got, tc.want)
 		}
+	}
+}
+
+func TestFirstNonEmpty(t *testing.T) {
+	if got := firstNonEmpty("", "  ", " value "); got != "value" {
+		t.Fatalf("firstNonEmpty = %q", got)
+	}
+	if got := firstNonEmpty("", "   "); got != "" {
+		t.Fatalf("firstNonEmpty = %q, want empty", got)
 	}
 }

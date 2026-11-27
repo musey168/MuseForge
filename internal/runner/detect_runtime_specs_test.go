@@ -3,8 +3,6 @@ package runner
 import (
 	"context"
 	"testing"
-
-	"agentflow/internal/domain"
 )
 
 func TestRuntimeProviderSpecsDefaultsOnly(t *testing.T) {
@@ -44,34 +42,18 @@ func TestRuntimeProviderSpecsAppendsSortedExtraKinds(t *testing.T) {
 	}
 }
 
-func TestBuiltinRuntimes(t *testing.T) {
-	got := builtinRuntimes()
-	if len(got) != 2 {
-		t.Fatalf("len(builtinRuntimes()) = %d, want 2", len(got))
-	}
-	want := []struct {
-		provider   string
-		capability string
-	}{{mockProviderKind, "non_interactive"}, {terminalProviderKind, "terminal"}}
-	for i, w := range want {
-		rt := got[i]
-		if rt.Provider != w.provider || rt.BinaryPath != "(builtin)" || rt.Status != domain.RuntimeStatusOnline {
-			t.Fatalf("builtinRuntimes()[%d] = %+v", i, rt)
-		}
-		if len(rt.Capabilities) != 1 || rt.Capabilities[0] != w.capability {
-			t.Fatalf("builtinRuntimes()[%d].Capabilities = %v, want [%s]", i, rt.Capabilities, w.capability)
-		}
-	}
-}
-
-func TestDetectRuntimesStartsWithBuiltinRuntimes(t *testing.T) {
+// The runner reports the CLIs installed on the machine and nothing else:
+// there are no in-process pseudo-runtimes left.
+func TestDetectRuntimesReportsOnlyInstalledCLIs(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("PATH", t.TempDir())
 	got := detectRuntimes(context.Background(), nil, nil)
-	if len(got) < 2 {
-		t.Fatalf("detectRuntimes = %+v, want builtin runtimes first", got)
+	if len(got) != 0 {
+		t.Fatalf("detectRuntimes = %+v, want no runtime on an empty machine", got)
 	}
-	if got[0].Provider != mockProviderKind || got[1].Provider != terminalProviderKind {
-		t.Fatalf("detectRuntimes providers = %s, %s", got[0].Provider, got[1].Provider)
+	for _, rt := range got {
+		if rt.BinaryPath == "(builtin)" {
+			t.Fatalf("detectRuntimes reported a builtin runtime: %+v", rt)
+		}
 	}
 }

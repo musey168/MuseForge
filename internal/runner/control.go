@@ -25,9 +25,9 @@ const (
 // wire values the platform sends; they are part of the protocol, not of the
 // runner's internals.
 const (
-	controlOperationMaintenance   = "maintenance"
-	controlOperationLoginModels   = "login_models"
-	controlOperationSSHHostKey    = "ssh_host_key_probe"
+	controlOperationMaintenance = "maintenance"
+	controlOperationLoginModels = "login_models"
+	controlOperationSSHHostKey  = "ssh_host_key_probe"
 )
 
 // controlReadTimeout outlives two server ping periods (30s). Without a read
@@ -40,9 +40,9 @@ var controlWriteTimeout = 10 * time.Second
 
 // controlRequest is the request the platform sends over the control channel.
 type controlRequest struct {
-	Operation     string                          `json:"operation,omitempty"`
+	Operation     string                           `json:"operation,omitempty"`
 	Maintenance   *domain.RunnerMaintenanceRequest `json:"maintenance,omitempty"`
-	ModelProvider string                          `json:"modelProvider,omitempty"`
+	ModelProvider string                           `json:"modelProvider,omitempty"`
 	// SSHHostKeyAddress is the git host whose public key the machine should
 	// read. It belongs to the SSH host-key probe operation only.
 	SSHHostKeyAddress string `json:"sshHostKeyAddress,omitempty"`

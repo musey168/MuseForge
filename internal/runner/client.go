@@ -203,6 +203,9 @@ func (c *Client) OpenControl(ctx context.Context) (*websocket.Conn, error) {
 	}
 	u.Path = strings.TrimRight(u.Path, "/") + "/runners/connect"
 	header := http.Header{}
+	// The platform only offers the SSH host-key probe to a runner that
+	// advertises it.
+	header.Set(domain.RunnerSSHHostKeyProbeHeader, "1")
 	if session := c.sessionToken(); session != "" {
 		header.Set("Authorization", "Bearer "+session)
 	}

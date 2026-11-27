@@ -111,6 +111,8 @@ func (d *Daemon) installRunnerUpdate(ctx context.Context, binary string) (bool, 
 		return false, fmt.Errorf("replace runner executable: %w", err)
 	}
 	d.updateReady.Store(true)
+	// The new build is on disk; the daemon must hand over to it.
+	d.requestRestart()
 	log.Printf("runner update installed (%s); restarting", expectedHash[:12])
 	return true, nil
 }

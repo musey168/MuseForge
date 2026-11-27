@@ -30,9 +30,9 @@ type Daemon struct {
 	cfg    Config
 	client *Client
 
-	mu       sync.Mutex
-	state    daemonState
-	runtimes []domain.RunnerRuntime
+	mu         sync.Mutex
+	state      daemonState
+	runtimes   []domain.RunnerRuntime
 	registerMu sync.Mutex
 	wsOnline   atomic.Bool
 
@@ -48,11 +48,11 @@ type Daemon struct {
 }
 
 type Config struct {
-	ServerURL      string
-	BootstrapToken string
-	StatePath      string
-	Name           string
-	Labels         []string
+	ServerURL         string
+	BootstrapToken    string
+	StatePath         string
+	Name              string
+	Labels            []string
 	HeartbeatInterval time.Duration
 	// DisableAutoUpdate keeps the daemon from fetching a newer runner build
 	// on its own. A maintenance request can still update it explicitly.
@@ -102,10 +102,10 @@ func New(cfg Config) (*Daemon, error) {
 		cfg.Name = host
 	}
 	return &Daemon{
-		cfg:          cfg,
-		client:       NewClient(cfg.ServerURL),
+		cfg:           cfg,
+		client:        NewClient(cfg.ServerURL),
 		heartbeatWake: make(chan struct{}, 1),
-		restart:      make(chan struct{}),
+		restart:       make(chan struct{}),
 	}, nil
 }
 
