@@ -11,6 +11,7 @@ fail() { printf '\n✗ %s\n' "$1" >&2; exit 1; }
 step() { printf '\n▸ %s\n' "$1"; }
 source scripts/docker-access.sh
 source scripts/ghcr-mirror.sh
+source scripts/datasource.sh
 
 confirm() {
   [[ "${LOOPFORGE_YES:-}" == 1 ]] && return 0
@@ -163,18 +164,27 @@ fi
 
 if [[ "${COMPOSE_FILE:-}" != "$dev_compose" ]]; then
   pull_policy="${LOOPFORGE_PULL_POLICY:-missing}"
+  # The database server is only needed by a MySQL installation.
   if mirror_published_ghcr "$pull_policy"; then
     # The platform name is already local. Pull it with missing so Compose does
     # not contact ghcr.io; MySQL keeps the requested policy.
     if [[ "$pull_policy" == always ]]; then
       docker_access compose --profile platform pull --policy missing platform
-      docker_access compose --profile platform pull --policy always mysql
-    else
+      if datasource_is_mysql; then
+        docker_access compose --profile platform pull --policy always mysql
+      fi
+    elif datasource_is_mysql; then
       docker_access compose --profile platform pull --policy "$pull_policy" platform mysql
+    else
+      docker_access compose --profile platform pull --policy "$pull_policy" platform
     fi
   else
     step "Pulling the published LoopForge image ${LOOPFORGE_IMAGE:-pinned in compose.yaml}"
-    docker_access compose --profile platform pull --policy "$pull_policy" platform mysql
+    if datasource_is_mysql; then
+      docker_access compose --profile platform pull --policy "$pull_policy" platform mysql
+    else
+      docker_access compose --profile platform pull --policy "$pull_policy" platform
+    fi
   fi
   docker_access compose --profile platform up -d --no-build --wait --wait-timeout 180
 else
@@ -183,19 +193,30 @@ else
     LOOPFORGE_COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
     export LOOPFORGE_COMMIT
   fi
-  # Download MySQL while the platform image builds instead of afterwards.
-  docker_access compose pull --quiet --policy missing mysql >/dev/null 2>&1 &
-  mysql_pull=$!
-  docker_access compose --profile platform build platform
-  wait "$mysql_pull" || true
+  if datasource_is_mysql; then
+    # Download MySQL while the platform image builds instead of afterwards.
+    docker_access compose pull --quiet --policy missing mysql >/dev/null 2>&1 &
+    mysql_pull=$!
+    docker_access compose --profile platform build platform
+    wait "$mysql_pull" || true
+  else
+    docker_access compose --profile platform build platform
+  fi
   step 'Starting LoopForge'
   docker_access compose --profile platform up -d --no-build --wait --wait-timeout 180
 fi
-step 'Installing the schema extensions and the starter catalog'
-bash scripts/install-schema-extensions.sh
+if datasource_is_mysql; then
+  step 'Installing the schema extensions and the starter catalog'
+  bash scripts/install-schema-extensions.sh
+fi
 
 python3 scripts/install-address.py "$port"
-users=$(docker_access compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -N -u loopforge loopforge -e "select count(*) from users"' 2>/dev/null || echo 0)
+if datasource_is_mysql; then
+  users=$(docker_access compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -N -u loopforge loopforge -e "select count(*) from users"' 2>/dev/null || echo 0)
+else
+  # The SQLite file holds the users; the platform reports them.
+  users=1
+fi
 if [[ "${users//[^0-9]/}" == 0 ]]; then
   printf '  Open it in your browser and create the administrator account.\n'
 else
