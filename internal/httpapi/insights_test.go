@@ -128,9 +128,21 @@ func TestInsightIngressPermissionsAndValidation(t *testing.T) {
 	guarded := New(s, engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "preview", "password")
 	send(guarded, result.Token, insightIngestPath, v, 200)
 	send(guarded, result.Token, "/api/insights/v1/sources", input, 401)
-	got := requestJSONAuthed[domain.AnalyticsSnapshot](t, h, owner, "GET", "/api/analytics?projectId=ingest-project&origin=external", nil, 200)
-	if got.Summary.TotalTokens != 15 || got.Summary.FailedRuns != 1 || len(got.UserUsage) != 1 || got.UserUsage[0].UserID == "unassigned" {
-		t.Fatalf("analytics: %+v", got)
+	got := requestJSONAuthed[domain.UsageConsoleSnapshot](t, h, owner, "GET", "/api/usage?projectId=ingest-project", nil, 200)
+	if got.Summary.Executions != 1 || got.Summary.TotalTokens != 15 || len(got.Executions) != 1 {
+		t.Fatalf("usage console: %+v", got.Summary)
+	}
+	if got.Summary.InputTokens != 10 || got.Summary.OutputTokens != 5 || got.Summary.CacheHitRate != 0 {
+		t.Fatalf("usage console tokens: %+v", got.Summary)
+	}
+	if got.Summary.ReportedExecutions != 0 || got.Summary.UnknownCostExecutions != 1 {
+		t.Fatalf("usage console cost: %+v", got.Summary)
+	}
+	if got.Summary.MalformedReports != 5 {
+		t.Fatalf("usage console malformed reports: %+v", got.Summary)
+	}
+	if got.Executions[0].WorkflowName != "CI flow" || got.Executions[0].Status != "failed" {
+		t.Fatalf("usage console execution: %+v", got.Executions[0])
 	}
 	requestJSONAuthed[map[string]any](t, h, outsider, "DELETE", "/api/insights/v1/sources/"+result.Source.ID, nil, 403)
 	requestJSONAuthed[map[string]any](t, h, owner, "DELETE", "/api/insights/v1/sources/"+result.Source.ID, nil, 200)

@@ -31,6 +31,9 @@ type AnalyticsFilter struct {
 	// TimeZone is the IANA zone used by business-domain delivery trend buckets
 	// and by the analytics weekday × hour heatmap (default Asia/Shanghai).
 	TimeZone string
+	// Bucket is one trend bucket of the period ("2026-10-30", "2026-W44",
+	// "2026-10"). The console reads it in the period's own timezone.
+	Bucket string
 	// IncludeEvolutionReplays keeps asset-evolution replay runs. Business
 	// lists and analytics leave it false so replays never skew metrics.
 	IncludeEvolutionReplays bool

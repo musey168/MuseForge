@@ -559,7 +559,7 @@ func newWithNotifications(s *repo.Store, e *engine.Engine, syncSvc *tracker.Serv
 	g.GET("/api/insights/v1/sources", api.insights.sources)
 	g.POST("/api/insights/v1/sources", api.insights.sources)
 	g.DELETE("/api/insights/v1/sources/:id", api.insights.revokeSource)
-	g.GET("/api/analytics", api.runs.analytics)
+	g.GET("/api/usage", api.insights.usage)
 	g.GET("/api/observability/spec", api.observabilitySpec)
 	g.POST("/api/otel/*path", api.otel)
 

@@ -13,6 +13,9 @@ type InsightSource struct {
 	CreatedAt    time.Time        `json:"createdAt"`
 	ExpiresAt    time.Time        `json:"expiresAt"`
 	RevokedAt    *time.Time       `json:"revokedAt,omitempty"`
+	// RejectedReports counts the reports this credential sent that the
+	// platform refused as malformed.
+	RejectedReports int64 `json:"rejectedReports"`
 }
 
 type InsightWorkflow struct {

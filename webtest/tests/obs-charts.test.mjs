@@ -2,53 +2,43 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadApp, settle } from '../lib/load-app.mjs';
 
-test('observability chart options expose meaningful series, labels, tooltips, and statistics', async (t) => {
+test('usage chart options expose meaningful series, labels, tooltips, and statistics', async (t) => {
   const app = await loadApp();
   t.after(app.close);
   const result = app.evaluate(`(() => {
     const theme=OBS_THEME_PRESETS.light;
     const opts={theme,reduced:true,fmtTokens:v=>v+' tok',fmtCost:v=>'¥'+Number(v).toFixed(2),label:p=>p.date};
     const points=[
-      {date:'2026-09',tokens:100,inputTokens:60,outputTokens:20,cacheReadTokens:20,cacheWriteTokens:5,costUsd:1,costCny:7,runs:2,issues:1,succeeded:1,failed:1},
-      {date:'2026-10',tokens:240,inputTokens:120,outputTokens:60,cacheReadTokens:60,cacheWriteTokens:10,costUsd:2.5,costCny:17.5,runs:4,issues:3,succeeded:3,failed:1}
+      {date:'2026-09',executions:2,tokens:100,inputTokens:60,outputTokens:20,cacheReadTokens:20,cacheWriteTokens:5,costUsd:1,costCny:7},
+      {date:'2026-10',executions:4,tokens:240,inputTokens:120,outputTokens:60,cacheReadTokens:60,cacheWriteTokens:10,costUsd:2.5,costCny:17.5}
     ];
-    const prev=[{date:'2026-07',tokens:50,costUsd:.5,costCny:3.5,runs:1,issues:1,succeeded:1,failed:0},{date:'2026-08',tokens:80,costUsd:.8,costCny:5.6,runs:2,issues:1,succeeded:1,failed:1}];
-    const trend=OBS_TREND_MODES.map(mode=>obsTrendOption(points,mode,'2026-10',prev,opts));
-    const breakdown=obsBreakdownOption([{name:'GPT',tokens:75,costUsd:3,costCny:21},{name:'GLM',tokens:25,costUsd:1,costCny:7}],'cost',opts);
-    const heat=obsHeatOption([{weekday:1,hour:9,runs:2,tokens:90},{weekday:1,hour:9,runs:1,tokens:10},{weekday:9,hour:30,runs:8}], 'runs', opts);
-    const funnel=obsFunnelOption([{name:'需求',value:10},{name:'运行',value:8},{name:'交付',value:3}],{...opts,active:2});
-    const owners=obsOwnersOption([{name:'Alice',delivered:3,active:2,undelivered:1,durationLabel:'2h',tokens:400}],opts);
+    const trend=OBS_USAGE_TREND_MODES.map(mode=>obsUsageTrendOption(points,mode,opts));
+    const breakdown=obsBreakdownOption([{name:'GPT',tokens:75,costCny:21},{name:'GLM',tokens:25,costCny:7}],'cost',opts);
     return {
       trendSeries:trend.map(x=>x.series.length),
+      trendNames:trend[0].series.map(s=>s.name),
       trendTip:trend[0].tooltip.formatter([{dataIndex:1}]),
-      costSeries:trend[2].series.map(s=>s.data),
-      costTip:trend[2].tooltip.formatter([{dataIndex:1}]),
-      costAxis:obsTrendOption(points,'cost','',null).yAxis.axisLabel.formatter(17.5),
+      costSeries:trend[1].series[0].data,
+      costTip:trend[1].tooltip.formatter([{dataIndex:1}]),
+      execSeries:trend[2].series[0].data,
+      costAxis:obsUsageTrendOption(points,'cost',opts).yAxis.axisLabel.formatter(17.5),
       breakdownValues:breakdown.series[0].data.map(p=>p.value),
       breakdownTip:breakdown.tooltip.formatter({name:'GPT',value:21}),
-      heatCells:heat.series[0].data.length,heatTip:heat.tooltip.formatter({value:[9,1,3],data:{runs:3,tokens:100}}),
-      peak:obsHeatPeak([{weekday:2,hour:11,runs:4,tokens:50},{weekday:3,hour:8,runs:1,tokens:90}],'tokens'),
-      funnel:obsFunnelStats([{name:'需求',value:10},{name:'运行',value:8},{name:'交付',value:3}]),
-      funnelLabel:funnel.series[0].label.formatter({dataIndex:2}),
-      ownerTip:owners.tooltip.formatter([{dataIndex:0}]),
       escaped:obsEsc('<x>'),
       theme:obsEChartsTheme('light').mode
     };
   })()`);
-  assert.equal(JSON.stringify(result.trendSeries), JSON.stringify([2, 4, 2, 2, 2, 2]));
-  assert.match(result.trendTip, /240 tok|成功率/);
-  assert.equal(JSON.stringify(result.costSeries), JSON.stringify([[3.5,5.6],[7,17.5]]));
+  assert.equal(JSON.stringify(result.trendNames), JSON.stringify(['输入', '输出', '缓存读', '缓存写']));
+  assert.equal(result.trendSeries[1], 1, 'cost mode draws one series');
+  assert.equal(result.trendSeries[2], 1, 'execution mode draws one series');
+  assert.match(result.trendTip, /240 tok|缓存读/);
+  assert.equal(JSON.stringify(result.costSeries), JSON.stringify([7, 17.5]));
   assert.match(result.costTip, /¥17\.50/);
+  assert.equal(JSON.stringify(result.execSeries), JSON.stringify([2, 4]));
   assert.equal(result.costAxis, '¥17.50');
-  assert.equal(JSON.stringify(result.breakdownValues), JSON.stringify([21,7]));
+  assert.equal(JSON.stringify(result.breakdownValues), JSON.stringify([21, 7]));
   assert.match(result.breakdownTip, /¥21\.00/);
   assert.match(result.breakdownTip, /75\.0%/);
-  assert.equal(result.heatCells, 168);
-  assert.match(result.heatTip, /周二 09:00|100 tok/);
-  assert.equal(JSON.stringify(result.peak), JSON.stringify({ weekday: 3, hour: 8, value: 90 }));
-  assert.equal(result.funnel.worst, 2);
-  assert.match(result.funnelLabel, /最大流失/);
-  assert.match(result.ownerTip, /Alice|400 tok/);
   assert.equal(result.escaped, '&lt;x&gt;');
   assert.equal(result.theme, 'light');
 });

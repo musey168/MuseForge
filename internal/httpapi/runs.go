@@ -27,47 +27,6 @@ type runsHandlers struct {
 	assistant      *assistantHandlers
 }
 
-func (h *runsHandlers) analytics(c *gin.Context) {
-	filter := domain.AnalyticsFilter{
-		Origin:           c.Query("origin"),
-		ProjectID:        c.Query("projectId"),
-		WorkflowID:       c.Query("workflowId"),
-		Scope:            strings.TrimSpace(c.Query("scope")),
-		IncludeDashboard: c.Query("dashboard") == "1",
-		UserID:           strings.TrimSpace(c.Query("userId")),
-		IssueSource:      strings.TrimSpace(c.Query("issueSource")),
-		RequirementsOnly: c.Query("requirementsOnly") == "1",
-		Grain:            strings.TrimSpace(c.Query("grain")),
-		TimeZone:         strings.TrimSpace(c.Query("tz")),
-	}
-	if raw := c.Query("from"); raw != "" {
-		value, err := time.Parse(time.RFC3339, raw)
-		if err != nil {
-			c.JSON(400, map[string]string{"error": "invalid from timestamp"})
-			return
-		}
-		filter.From = value
-	}
-	if raw := c.Query("to"); raw != "" {
-		value, err := time.Parse(time.RFC3339, raw)
-		if err != nil {
-			c.JSON(400, map[string]string{"error": "invalid to timestamp"})
-			return
-		}
-		filter.To = value
-	}
-	if filter.Origin != "" && filter.Origin != "all" && filter.Origin != "internal" && filter.Origin != "external" {
-		c.JSON(400, gin.H{"error": "origin 必须为 all、internal 或 external"})
-		return
-	}
-	snap := h.repo.Analytics(filter)
-	if len(snap.DataErrors) > 0 {
-		c.JSON(503, gin.H{"error": snap.DataErrors[0]})
-		return
-	}
-	c.JSON(200, snap)
-}
-
 func (h *runsHandlers) workflowMetrics(c *gin.Context) {
 	c.JSON(200, h.repo.WorkflowMetricsFor(c.Query("projectId")))
 }

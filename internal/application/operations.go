@@ -88,7 +88,7 @@ func PublicOperations() []Operation {
 		{Name: "workflows_publish", Description: "Publish a LOOP workflow version", Method: "POST", Path: "/api/workflows/{id}/publish"},
 		{Name: "workflows_clone", Description: "Clone a LOOP workflow", Method: "POST", Path: "/api/workflows/{id}/clone"},
 		{Name: "workflow_metrics_get", Description: "Get LOOP workflow operating metrics", Method: "GET", Path: "/api/workflow-metrics", ReadOnly: true},
-		{Name: "analytics_get", Description: "Get usage and delivery analytics", Method: "GET", Path: "/api/analytics", ReadOnly: true},
+		{Name: "usage_get", Description: "Get the omp usage console: the tokens, cost, cache hits, trend and reported executions of the work reported from outside the platform", Method: "GET", Path: "/api/usage", ReadOnly: true},
 		{Name: "observability_spec_get", Description: "Get the LoopForge observability contract", Method: "GET", Path: "/api/observability/spec", ReadOnly: true},
 		{Name: "runs_list", Description: "List lightweight Run summaries", Method: "GET", Path: "/api/runs", ReadOnly: true},
 		{Name: "runs_control_get", Description: "Read the run mode (sop or workspace), waiting reason, allowed control actions and delivery acceptance. Node execution progress is separate from test results and user acceptance. Read this before changing a run's state.", Method: "GET", Path: "/api/runs/{id}/control", ReadOnly: true},

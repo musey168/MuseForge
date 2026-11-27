@@ -21,6 +21,9 @@ type insightSourceRow struct {
 	Payload   []byte `gorm:"type:json"`
 	ExpiresAt time.Time
 	RevokedAt *time.Time
+	// RejectedReports counts the reports this credential sent that the
+	// platform refused as malformed. The console shows the count.
+	RejectedReports int64
 }
 
 func (insightSourceRow) TableName() string { return "insight_sources" }
@@ -54,6 +57,7 @@ func decodeInsightSource(row insightSourceRow) (domain.InsightSource, error) {
 	var source domain.InsightSource
 	err := json.Unmarshal(row.Payload, &source)
 	source.RevokedAt = row.RevokedAt
+	source.RejectedReports = row.RejectedReports
 	return source, err
 }
 func (r *InsightsRepo) InsightSources(projectID string) ([]domain.InsightSource, error) {
@@ -80,6 +84,35 @@ func (r *InsightsRepo) ActiveInsightSource(tokenHash string, now time.Time) (dom
 }
 func (r *InsightsRepo) RevokeInsightSource(id string, now time.Time) error {
 	return r.DB.Model(&insightSourceRow{}).Where("id = ? AND revoked_at IS NULL", id).Update("revoked_at", now).Error
+}
+
+// CountRejectedInsightReport records one refused report against its
+// credential. A malformed report is counted, not stored, and never breaks the
+// reports that follow it.
+func (r *InsightsRepo) CountRejectedInsightReport(sourceID string) error {
+	if sourceID == "" {
+		return nil
+	}
+	return r.DB.Model(&insightSourceRow{}).Where("id = ?", sourceID).UpdateColumn("rejected_reports", gorm.Expr("rejected_reports + ?", 1)).Error
+}
+
+// RejectedInsightReports counts the refused reports of the credentials in the
+// scope, so the console can show that reports arrived but were not usable.
+func (r *InsightsRepo) RejectedInsightReports(projectID string, projectIDs []string) (int64, error) {
+	q := r.DB.Model(&insightSourceRow{})
+	if projectID != "" {
+		q = q.Where("project_id = ?", projectID)
+	} else if projectIDs != nil {
+		if len(projectIDs) == 0 {
+			return 0, nil
+		}
+		q = q.Where("project_id IN ?", projectIDs)
+	}
+	var total int64
+	if err := q.Select("COALESCE(SUM(rejected_reports), 0)").Scan(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 // IngestInsightExecution atomically commits an immutable completed execution.

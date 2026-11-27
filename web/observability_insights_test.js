@@ -6,104 +6,73 @@ const vm = require('node:vm');
 const ctx = {
   lfT: zh => zh,
   formatTokens: x => String(x),
-  state: {obsScope:'project',obsTrendGrain:'all',obsOriginFilter:'external',data:{users:[]}},
-  projectQuery:()=>'?projectId=p',currentProject:()=>({id:'p',ownerId:7,members:[{userId:8,role:'maintainer'}]}),
+  escapeHTML: x => String(x),
+  duration: ms => `${Math.round(Number(ms || 0) / 1000)}s`,
+  state: { usageGrain: 'day', usageBucket: '', usageBuckets: [], data: { users: [] } },
+  projectQuery: () => '?projectId=p',
+  currentProject: () => ({ id: 'p', ownerId: 7, members: [{ userId: 8, role: 'maintainer' }] }),
+  paginateList: (key, items) => ({ items, total: items.length, size: 20, page: 1, pages: 1, start: 0, end: items.length }),
+  pagerHTML: () => '',
+  bindPager() {},
 };
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync('app/obs-charts.js','utf8'),ctx,{filename:path.resolve('app/obs-charts.js')});
-vm.runInContext(fs.readFileSync('app/observability.js','utf8'),ctx,{filename:path.resolve('app/observability.js')});
-assert.match(ctx.analyticsQuery({overview:true}),/origin=external/);
-assert.match(ctx.analyticsQuery({overview:true}),/projectId=p/);
-assert.doesNotMatch(ctx.analyticsQuery({crossProject:true}),/projectId=/);
-ctx.state.currentUser={id:7};assert.equal(ctx.obsCanManageSources(),true);
-ctx.state.currentUser={id:8};assert.equal(ctx.obsCanManageSources(),true);
-ctx.state.currentUser={id:9};assert.equal(ctx.obsCanManageSources(),false);
-ctx.state.analytics={userUsage:[
-  {userId:'7',runs:1,tokens:100,costKnown:true,costCny:0.5},
-  {userId:'7',runs:1,tokens:20,costKnown:false,costCny:0},
-]};
-assert.equal(ctx.obsUserTotals()[0].costKnown,false);
-assert.equal(ctx.obsUserTotals()[0].tokens,120);
-assert.match(ctx.costLabel(0,false),/未识别/);
-assert.equal(ctx.costLabel(0,true),'¥0.00');
-assert.equal(ctx.costLabel(.007,true),'¥0.00700');
-assert.equal(ctx.obsFormatTrendValue(12.5,'cost'),'¥12.50');
-assert.match(ctx.costLabel(0.5,false),/部分未识别/);
-ctx.state.obsTrendGrain='day';ctx.state.obsPeriodKey='2026-10-08';
-ctx.state.analytics={runTraces:[
-  {origin:'external',status:'succeeded',tokens:100,durationMs:5000,costKnown:false,finishedAt:'2026-10-08T01:00:00Z'},
-  {status:'succeeded',tokens:20,durationMs:1000,humanInterventions:1,finishedAt:'2026-10-08T01:00:00Z'},
-]};
-const scoped=ctx.obsScopedView();
-assert.equal(scoped.total,2);assert.equal(scoped.tokens,120);assert.equal(scoped.succeeded,2);
-assert.equal(scoped.demo.coveredRuns,1);assert.equal(scoped.demo.coveredSucceededRuns,1);
-assert.equal(scoped.demo.automatedSucceededRuns,0);assert.equal(scoped.demo.averageHumanInterventions,1);
-assert.equal(scoped.p95,1000,'unknown external active duration must not become wall-clock duration');
-ctx.state.analytics.runTraces[0].executionDurationMs=2000;
-assert.equal(ctx.obsScopedView().p95,2000,'reported active duration should participate in period statistics');
+vm.runInContext(fs.readFileSync('app/obs-charts.js', 'utf8'), ctx, { filename: path.resolve('app/obs-charts.js') });
+vm.runInContext(fs.readFileSync('app/observability.js', 'utf8'), ctx, { filename: path.resolve('app/observability.js') });
+
+// The request carries the project scope, the grain, the reader time zone and
+// the selected bucket.
+ctx.state.currentUser = { id: 7 };
+assert.match(ctx.obsUsageQuery(), /projectId=p/);
+assert.match(ctx.obsUsageQuery(), /grain=day/);
+assert.match(ctx.obsUsageQuery(), /tz=/);
+assert.doesNotMatch(ctx.obsUsageQuery(), /bucket=/);
+ctx.state.usageBucket = '2026-10-30';
+assert.match(ctx.obsUsageQuery(), /bucket=2026-10-30/);
+ctx.state.usageGrain = 'week';
+assert.match(ctx.obsUsageQuery(), /grain=week/);
+ctx.state.usageGrain = 'month';
+assert.match(ctx.obsUsageQuery(), /grain=month/);
+ctx.state.usageGrain = 'nonsense';
+assert.equal(ctx.obsUsageGrain(), 'day', 'an unknown grain falls back to day');
+
+// Costs render in the reader currency; an unknown cost never reads as ¥0.
+assert.equal(ctx.obsUsageMoney(8.61, 'CNY'), '¥8.61');
+assert.equal(ctx.obsUsageMoney(1.23, 'USD'), '$1.23');
+assert.match(ctx.obsUsageCostText(0, 'unknown', 'CNY'), /未识别/);
+assert.equal(ctx.obsUsageCostText(2.5, 'reported', 'CNY'), '¥2.50');
+assert.equal(ctx.obsUsageCostText(2.5, 'estimated', 'CNY'), '¥2.50');
+
+// The console is empty when the server says so or when nothing was reported.
+ctx.state.usage = { empty: true, summary: { executions: 0 } };
+assert.equal(ctx.obsUsageIsEmpty(), true);
+ctx.state.usage = { summary: { executions: 0 } };
+assert.equal(ctx.obsUsageIsEmpty(), true);
+ctx.state.usage = { summary: { executions: 2 } };
+assert.equal(ctx.obsUsageIsEmpty(), false);
+ctx.state.usage = null;
+assert.equal(ctx.obsUsageIsEmpty(), false);
+
+// Managing reporting credentials follows the project role.
+ctx.state.currentUser = { id: 7 };
+assert.equal(ctx.obsCanManageSources(), true);
+ctx.state.currentUser = { id: 8 };
+assert.equal(ctx.obsCanManageSources(), true);
+ctx.state.currentUser = { id: 9 };
+assert.equal(ctx.obsCanManageSources(), false);
+ctx.state.currentUser = { id: 9, isGuest: true };
+assert.equal(ctx.obsCanManageSources(), false);
+
+// The period picker walks the buckets the server reported.
+const buckets = ['2026-10-01', '2026-10-02', '2026-10-03'];
+assert.equal(ctx.obsUsageStepBucket(buckets, '2026-10-02', 1), '2026-10-03');
+assert.equal(ctx.obsUsageStepBucket(buckets, '2026-10-02', -1), '2026-10-01');
+assert.equal(ctx.obsUsageStepBucket(buckets, '2026-10-01', -1), null, 'the picker stops at the first bucket');
+assert.equal(ctx.obsUsageStepBucket(buckets, '2026-10-03', 1), null, 'the picker stops at the last bucket');
+assert.equal(ctx.obsUsageStepBucket([], '', 1), null);
+
+// Run-quality surfaces are gone from the usage console.
+const code = fs.readFileSync('app/observability.js', 'utf8');
+for (const unwanted of ['successRate', 'p95', 'humanInterventions', 'automationRate', 'rework', 'funnel', 'ownerRows', 'weekHour', 'delivery']) {
+  assert.ok(!code.includes(unwanted), `the usage console must not contain ${unwanted}`);
+}
 console.log('external usage frontend checks passed');
-// Conversation metrics have their own creation-time buckets, including periods
-// with no Run/token usage, and remain available on the lightweight overview.
-ctx.escapeHTML=x=>String(x);
-ctx.state.obsTrendGrain='all';
-ctx.state.analytics={activity:{sessions:3,collaborativeSessions:2,requirements:4,sopRuns:5},activityTrend:[{date:'2026-10-08',sessions:2,collaborativeSessions:1,requirements:1,sopRuns:0}]};
-assert.equal(ctx.obsActivityView().sessions,3);
-assert.match(ctx.obsActivityKpis(),/66\.7%/);
-assert.match(ctx.obsActivityKpis(),/需求 LOOP/);
-ctx.state.obsTrendGrain='day';ctx.state.obsPeriodKey='2026-10-08';
-assert.equal(ctx.obsActivityView().sessions,2);
-assert.match(ctx.obsActivityKpis(),/50\.0%/);
-ctx.state.obsPeriodKey='2026-10-09';
-assert.equal(ctx.obsActivityView().sessions,0);
-assert.match(ctx.obsActivityKpis(),/暂无会话/);
-assert.doesNotMatch(ctx.obsActivityKpis(),/NaN|Infinity/);
-ctx.state.obsTrendGrain='month';ctx.state.obsPeriodKey='2026-10';
-ctx.state.analytics.activityTrend=[{date:'2026-10',sessions:3,collaborativeSessions:2,requirements:4,sopRuns:5}];
-assert.equal(ctx.obsActivityView().sopRuns,5);
-ctx.state.analytics={};
-assert.match(ctx.obsActivityKpis(),/暂无统计数据/);
-ctx.state.obsTrendGrain='day';ctx.state.obsPeriodKey='';
-ctx.state.analytics={activity:{sessions:1},trend:[],activityTrend:[{date:'2026-10-08',sessions:1}]};
-assert.equal(ctx.obsPeriodKey(),'2026-10-08');
-assert.ok(ctx.obsPeriodChoices().includes('2026-10-08'));
-const usage={sessionUsage:{tokens:123,reportedReplies:1,missingReplies:2},collaborativeUsage:{tokens:50,reportedReplies:1}};
-assert.equal(ctx.obsActivityUsageCard(usage,false).value,'123');
-assert.equal(ctx.obsActivityUsageCard(usage,true).value,'50');
-assert.match(ctx.obsActivityUsageCard(usage,false).foot,/2 条回复未采集/);
-assert.equal(ctx.obsActivityUsageCard({sessionUsage:{missingReplies:1}},false).value,'未采集');
-assert.equal(ctx.obsActivityUsageCard({sessionUsage:{}},false).value,'0');
-assert.equal(ctx.obsActivityUsageCard(null,false).value,'—');
-
-ctx.lfT = (_zh, en) => en;
-assert.match(ctx.obsActivityKpis(), /Counts by creation time, tokens by reply time/);
-assert.equal(ctx.obsActivityUsageCard(usage,false).foot,'2 replies missing usage · reported usage only');
-ctx.state.obsTrendGrain='month';
-ctx.state.obsPeriodKey='2026-10';
-ctx.state.analytics={
-  summary:{conversationWorkspaces:1},
-  activity:{sessionUsage:{},collaborativeUsage:{}},
-  activityTrend:[{date:'2026-10',sessionUsage:{},collaborativeUsage:{}}],
-};
-assert.equal(ctx.obsPeriodRange('2026-10').label,'Oct 2026');
-assert.equal(ctx.obsActivityKpis().match(/Input 0 \/ Output 0/g).length,2);
-const monthlyUsage=ctx.obsUsageKpis({period:true});
-assert.match(monthlyUsage,/Oct 2026 runs/);
-assert.match(monthlyUsage,/Oct 2026 requirements/);
-assert.match(monthlyUsage,/Oct 2026 cost/);
-assert.match(monthlyUsage,/Oct 2026 workspaces/);
-assert.match(monthlyUsage,/0 this month/);
-ctx.lfT = zh => zh;
-assert.equal(ctx.obsPeriodRange('2026-10').label,'2026年10月');
-assert.match(ctx.obsActivityKpis(),/输入 0 \/ 输出 0/);
-assert.match(ctx.obsUsageKpis({period:true}),/10月运行/);
-
-// Unknown conversation costs must remain partial in totals and period views.
-ctx.state.obsTrendGrain='all';
-ctx.state.analytics={summary:{costUnknownRuns:0,conversationWorkspaces:1,conversationCostUnknownWorkspaces:1,totalCostCny:0}};
-assert.equal(ctx.obsScopedView().costKnown,false);
-assert.equal(ctx.obsScopedView().conversationCostKnown,false);
-assert.match(ctx.costLabel(0,ctx.obsScopedView().costKnown),/未识别/);
-ctx.state.obsTrendGrain='day';ctx.state.obsPeriodKey='2026-10-08';
-ctx.state.analytics={runTraces:[],trend:[{date:'2026-10-08',costUnknownRuns:0,conversationWorkspaces:1,conversationCostUnknownWorkspaces:1}]};
-assert.equal(ctx.obsScopedView().costKnown,false);
-assert.equal(ctx.obsScopedView().conversationCostKnown,false);
