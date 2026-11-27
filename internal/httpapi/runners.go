@@ -8,11 +8,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"os"
-	"slices"
 	"strings"
 	stdsync "sync"
 	"time"
@@ -29,11 +26,7 @@ import (
 // Runner-agent endpoints authenticate with their own credentials and are
 // therefore exempt from user access auth: register uses the shared bootstrap
 // token, everything else uses the runner's session token. Management
-// endpoints (list runners, create/cancel tasks) stay behind user auth.
-//
-// Task reliability never depends on a live connection: the task table is the
-// queue, the long poll is only a wakeup path, and WebSocket is the low-latency
-// control path.
+// endpoints stay behind user auth.
 //
 // 路由（gin 注册，供 server.go 参考）：
 //
@@ -45,43 +38,20 @@ import (
 //	g.POST("/api/runners/disconnect", h.runnerDisconnect)
 //	g.POST("/api/runners/bind-codes", h.issueRunnerBindCode)
 //	g.GET("/api/runners/default", h.runnerDefault)
-//	g.DELETE("/api/runners/:id", h.runnerRemove)
 //	g.PUT("/api/runners/default", h.runnerDefaultSet)
+//	g.DELETE("/api/runners/:id", h.runnerRemove)
 //	g.PUT("/api/runners/runtimes", h.runnerRuntimeStatus)
 //	g.POST("/api/runners/runtimes", h.runnerRuntimeStatus)
-//	g.GET("/api/runners/tasks", h.runnerTasksCollection)
-//	g.POST("/api/runners/tasks", h.runnerTasksCollection)
-//	g.POST("/api/runners/tasks/claim", h.runnerTaskClaim)
-//	g.GET("/api/runners/tasks/:id", h.runnerTaskGet)
-//	g.POST("/api/runners/tasks/:id/cancel", h.runnerTaskCancel)
-//	g.GET("/api/runners/tasks/:id/events", h.runnerTaskEventsOut)
-//	g.POST("/api/runners/tasks/:id/events", h.runnerTaskEventsIngest)
-//	g.POST("/api/runners/tasks/:id/start", h.runnerTaskStart)
-//	g.POST("/api/runners/tasks/:id/lease/renew", h.runnerTaskLeaseRenew)
-//	g.POST("/api/runners/tasks/:id/complete", h.runnerTaskComplete)
-//	g.GET("/api/runners/tasks/:id/control", h.runnerTaskControl)
 //
 // 机器面 /runners/*（豁免 userAccessAuth，runner 使用自有凭证）:
 //
-//	g.GET("/runners/install.sh", serveBindCLIScript)（定义在 server.go）
-//	g.GET("/runners/agentflow-runner", serveRunnerBinary)
-//	g.GET("/runners/health", h.health)（定义在 server.go）
 //	g.POST("/runners/register", h.runnerRegister)
 //	g.POST("/runners/deregister", h.runnerDeregister)
 //	g.POST("/runners/disconnect", h.runnerDisconnect)
 //	g.POST("/runners/heartbeat", h.runnerHeartbeat)
-//	g.POST("/runners/tasks/claim", h.runnerTaskClaim)
-//	g.POST("/runners/tasks/:id/start", h.runnerTaskStart)
-//	g.POST("/runners/tasks/:id/lease/renew", h.runnerTaskLeaseRenew)
-//	g.POST("/runners/tasks/:id/events", h.runnerTaskEventsIngest)
-//	g.POST("/runners/tasks/:id/complete", h.runnerTaskComplete)
-//	g.GET("/runners/tasks/:id/control", h.runnerTaskControl)
 
 const (
-	runnerLongPollDefault    = 30 * time.Second
-	runnerDBPollDefault      = time.Second
 	runnerOfflineThreshold   = 90 * time.Second
-	runnerTaskLeaseTTL       = 120 * time.Second
 	runnerSweepInterval      = 15 * time.Second
 	runnerSessionTokenPrefix = "afr_"
 	runnerSessionTTL         = 30 * 24 * time.Hour
@@ -89,89 +59,21 @@ const (
 
 type runnersHandlers struct {
 	*deps
-	runnerWaiters   *runnerWaiterRegistry
 	runnerControls  *runnerControlHub
 	runnerBindMu    stdsync.Mutex
 	runnerBindCodes map[string]runnerBindCode
 }
 
-// ---------- waiter registry ----------
-
-// runnerWaiterRegistry wakes long-polling runners when a task may have become
-// claimable. Notify is only "there might be work": the DB claim is still the
-// single source of truth, so a lost or spurious wakeup is harmless.
-type runnerWaiterRegistry struct {
-	mu      stdsync.Mutex
-	nextID  int64
-	waiters map[int64]*runnerWaiter
-}
-
-type runnerWaiter struct {
-	id        int64
-	providers []string
-	ch        chan struct{}
-}
-
-func newRunnerWaiterRegistry() *runnerWaiterRegistry {
-	return &runnerWaiterRegistry{waiters: map[int64]*runnerWaiter{}}
-}
-
-func (r *runnerWaiterRegistry) register(providers []string) *runnerWaiter {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.nextID++
-	w := &runnerWaiter{id: r.nextID, providers: providers, ch: make(chan struct{}, 1)}
-	r.waiters[w.id] = w
-	return w
-}
-
-func (r *runnerWaiterRegistry) unregister(w *runnerWaiter) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.waiters, w.id)
-}
-
-func (r *runnerWaiterRegistry) notify(providers []string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for _, w := range r.waiters {
-		if !w.accepts(providers) {
-			continue
-		}
-		select {
-		case w.ch <- struct{}{}:
-		default:
-		}
-	}
-}
-
-// accepts reports whether any of providers matches one the waiter is polling
-// for, compared case-insensitively.
-func (w *runnerWaiter) accepts(providers []string) bool {
-	return slices.ContainsFunc(providers, func(p string) bool {
-		return slices.ContainsFunc(w.providers, func(v string) bool { return strings.EqualFold(v, p) })
-	})
-}
-
 // ---------- background sweeper ----------
 
-// startRunnerSweeper recovers tasks whose lease expired (runner slept or
-// crashed) and marks silent runners offline. Both thresholds follow the
-// defaults recommended in cli-connect.md.
+// startRunnerSweeper marks silent runners offline on the presence threshold
+// recommended in cli-connect.md.
 func (h *runnersHandlers) startRunnerSweeper() {
 	go func() {
 		ticker := time.NewTicker(runnerSweepInterval)
 		defer ticker.Stop()
 		for range ticker.C {
-			now := time.Now().UTC()
-			h.repo.MarkOfflineRunners(runnerOfflineThreshold, now)
-			recovered, err := h.repo.ExpireRunnerTasks(now)
-			if err != nil {
-				continue
-			}
-			for _, task := range recovered {
-				h.engine.NotifyRunnerTaskChanged(task.ID)
-			}
+			h.repo.MarkOfflineRunners(runnerOfflineThreshold, time.Now().UTC())
 		}
 	}()
 }
@@ -338,43 +240,9 @@ func (h *runnersHandlers) platformRunnerStatus(ctx context.Context, projectID st
 		RunLimit: h.repo.PlatformRunnerRunLimit(), CanEditLimit: canEdit, Load: &load,
 		AllowPrivilegedSandbox: allowed,
 	}
-	if h.engine != nil {
-		status.CloudPool, status.CloudPoolOnline = h.engine.CloudPoolStatus()
-		if h.engine.PlatformRunnerOnline(projectID) {
-			status.Status = domain.RunnerStatusOnline
-		}
-	}
 	return status, nil
 }
 
-// 路由: g.PUT("/api/runners/:id/shared-projects", h.runnerSharedProjectsSet)
-func (h *runnersHandlers) runnerSharedProjectsSet(c *gin.Context) {
-	user, ok := h.requestUser(c.Request, true)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录后管理执行机器"})
-		return
-	}
-	var input struct {
-		ProjectIDs []string `json:"projectIds"`
-	}
-	if !decode(c, &input) {
-		return
-	}
-	if input.ProjectIDs == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请提供 projectIds，空数组表示取消共享"})
-		return
-	}
-	id := strings.TrimSpace(c.Param("id"))
-	if err := h.repo.SetRunnerSharedProjects(id, user.ID, input.ProjectIDs); err != nil {
-		if errors.Is(err, repo.ErrRunnerProjectDenied) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只能共享给你有写权限的项目"})
-			return
-		}
-		runnerPreferenceError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"ok": true})
-}
 
 func runnerPreferenceError(c *gin.Context, err error) {
 	switch {
@@ -416,83 +284,6 @@ func (h *runnersHandlers) runnerRemove(c *gin.Context) {
 	c.JSON(http.StatusOK, map[string]bool{"ok": true})
 }
 
-// runnerRunLimitSet sets how many top-level LOOP runs one of the caller's own
-// machines may hold at once. 0 sets unlimited mode.
-// 路由: g.PUT("/api/runners/:id/run-limit", h.runnerRunLimitSet)
-func (h *runnersHandlers) runnerRunLimitSet(c *gin.Context) {
-	user, ok := h.requestUser(c.Request, true)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, map[string]string{"error": "请先登录后管理执行机器"})
-		return
-	}
-	var input struct {
-		RunLimit *int `json:"runLimit"`
-	}
-	if !decode(c, &input) {
-		return
-	}
-	if input.RunLimit == nil || *input.RunLimit < 0 {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": "runLimit 需为非负整数，0 表示不限制"})
-		return
-	}
-	runner, found := h.repo.Runner(strings.TrimSpace(c.Param("id")))
-	if !found {
-		c.JSON(http.StatusNotFound, map[string]string{"error": "执行机器不存在"})
-		return
-	}
-	if runner.OwnerUserID == 0 || runner.OwnerUserID != user.ID {
-		c.JSON(http.StatusForbidden, map[string]string{"error": "只能设置自己绑定的执行机器"})
-		return
-	}
-	if err := h.repo.SetRunnerRunLimit(runner.ID, *input.RunLimit); err != nil {
-		if err == repo.ErrRunnerNotFound {
-			c.JSON(http.StatusNotFound, map[string]string{"error": "执行机器不存在"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	if h.engine != nil && (*input.RunLimit == 0 || (runner.RunLimit > 0 && *input.RunLimit > runner.RunLimit)) {
-		h.engine.PromoteQueuedRunsAsync()
-	}
-	runner, _ = h.repo.Runner(runner.ID)
-	c.JSON(http.StatusOK, domain.PublicRunner(runner))
-}
-
-func (h *runnersHandlers) platformRunnerRunLimitSet(c *gin.Context) {
-	if !h.platformAdminWrite(c) {
-		return
-	}
-	user, ok := h.requestUser(c.Request, true)
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "只有平台管理员可以执行该操作"})
-		return
-	}
-	var input struct {
-		RunLimit *int `json:"runLimit"`
-	}
-	if !decode(c, &input) {
-		return
-	}
-	if input.RunLimit == nil || *input.RunLimit < 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "runLimit 需为非负整数，0 表示不限制"})
-		return
-	}
-	previous := h.repo.PlatformRunnerRunLimit()
-	if err := h.repo.SetPlatformRunnerRunLimit(*input.RunLimit, user.ID); err != nil {
-		respond(c, err)
-		return
-	}
-	if h.engine != nil && (*input.RunLimit == 0 || (previous > 0 && *input.RunLimit > previous)) {
-		h.engine.PromoteQueuedRunsAsync()
-	}
-	status, err := h.platformRunnerStatus(c.Request.Context(), strings.TrimSpace(c.Query("projectId")), true)
-	if err != nil {
-		respond(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, status)
-}
 
 // runnerDefaultSet selects the user's personal default or a project override.
 // 路由: g.PUT("/api/runners/default", h.runnerDefaultSet)
@@ -877,7 +668,6 @@ func (h *runnersHandlers) runnerRegister(c *gin.Context) {
 		"sessionToken":      plain,
 		"expiresAt":         expires,
 		"heartbeatInterval": 30 * time.Second,
-		"leaseTTL":          runnerTaskLeaseTTL,
 	})
 }
 
@@ -934,555 +724,6 @@ func (h *runnersHandlers) runnerHeartbeat(c *gin.Context) {
 	c.JSON(http.StatusOK, map[string]any{"ok": true, "serverTime": now, "expiresAt": expires})
 }
 
-// ---------- task collection (management) ----------
-
-// 路由: g.GET("/api/runners/tasks", h.runnerTasksCollection)
-//
-//	g.POST("/api/runners/tasks", h.runnerTasksCollection)
-func (h *runnersHandlers) runnerTasksCollection(c *gin.Context) {
-	if !h.requireRunnerTaskAdmin(c) {
-		return
-	}
-	switch c.Request.Method {
-	case http.MethodGet:
-		tasks := h.repo.RunnerTasks()
-		for i := range tasks {
-			tasks[i] = domain.PublicRunnerTask(tasks[i])
-			if len(tasks[i].Prompt) > 512 {
-				tasks[i].Prompt = tasks[i].Prompt[:512] + "..."
-			}
-		}
-		c.JSON(http.StatusOK, tasks)
-	case http.MethodPost:
-		var input struct {
-			Provider    string   `json:"provider"`
-			Prompt      string   `json:"prompt"`
-			Workspace   string   `json:"workspace"`
-			RunnerID    string   `json:"runnerId"`
-			Args        []string `json:"args"`
-			MaxAttempts int      `json:"maxAttempts"`
-		}
-		if !decode(c, &input) {
-			return
-		}
-		input.Provider = strings.TrimSpace(input.Provider)
-		if input.Provider == "" {
-			c.JSON(http.StatusBadRequest, map[string]string{"error": "provider 不能为空"})
-			return
-		}
-		if strings.TrimSpace(input.Prompt) == "" {
-			c.JSON(http.StatusBadRequest, map[string]string{"error": "prompt 不能为空"})
-			return
-		}
-		if input.MaxAttempts < 1 {
-			input.MaxAttempts = 1
-		}
-		if input.MaxAttempts > 5 {
-			input.MaxAttempts = 5
-		}
-		task := domain.RunnerTask{
-			ID:          "rt-" + randomID(),
-			RunnerID:    strings.TrimSpace(input.RunnerID),
-			Provider:    input.Provider,
-			Prompt:      input.Prompt,
-			Workspace:   strings.TrimSpace(input.Workspace),
-			Args:        input.Args,
-			Status:      domain.RunnerTaskQueued,
-			MaxAttempts: input.MaxAttempts,
-		}
-		if err := h.repo.PutRunnerTask(task); err != nil {
-			c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		// Re-read so the response carries the persisted timestamps.
-		created, ok := h.repo.RunnerTask(task.ID)
-		if !ok {
-			created = task
-		}
-		// Wake any long-polling runner that can serve this provider.
-		h.runnerWaiters.notify([]string{task.Provider})
-		c.JSON(http.StatusCreated, created)
-	}
-}
-
-// ---------- long-poll claim ----------
-
-func runnerLongPollTimeout() time.Duration {
-	if raw := strings.TrimSpace(os.Getenv("AGENTFLOW_RUNNER_LONG_POLL_TIMEOUT")); raw != "" {
-		if parsed, err := time.ParseDuration(raw); err == nil && parsed > 0 && parsed <= 5*time.Minute {
-			return parsed
-		}
-	}
-	return runnerLongPollDefault
-}
-
-func runnerDBPollInterval() time.Duration {
-	if raw := strings.TrimSpace(os.Getenv("AGENTFLOW_RUNNER_DB_POLL_INTERVAL")); raw != "" {
-		if parsed, err := time.ParseDuration(raw); err == nil && parsed > 0 && parsed <= 30*time.Second {
-			return parsed
-		}
-	}
-	return runnerDBPollDefault
-}
-
-// 路由: g.POST("/api/runners/tasks/claim", h.runnerTaskClaim)
-//
-//	g.POST("/runners/tasks/claim", h.runnerTaskClaim)
-func (h *runnersHandlers) runnerTaskClaim(c *gin.Context) {
-	runner, ok := h.runnerSessionAuth(c)
-	if !ok {
-		return
-	}
-	var input struct {
-		AvailableRuntimes           []string `json:"availableRuntimes"`
-		Capacity                    int      `json:"capacity"`
-		Preflight                   bool     `json:"preflight"`
-		NoWait                      bool     `json:"noWait"`
-		SupportsGitSSHKnownHosts    bool     `json:"supportsGitSshKnownHosts"`
-		SupportsDockerSandboxLimits bool     `json:"supportsDockerSandboxLimits"`
-	}
-	if !decode(c, &input) {
-		return
-	}
-	if len(input.AvailableRuntimes) == 0 {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": "availableRuntimes 不能为空"})
-		return
-	}
-	if input.Capacity <= 0 {
-		input.Capacity = 1
-	}
-	claimOrSignal := func() (domain.RunnerTask, bool, error) {
-		if input.Preflight {
-			available, err := h.repo.RunnerTaskAvailable(runner.ID, input.AvailableRuntimes)
-			return domain.RunnerTask{}, available, err
-		}
-		for {
-			task, claimed, err := h.repo.ClaimRunnerTask(runner.ID, input.AvailableRuntimes, time.Now().UTC(), runnerTaskLeaseTTL)
-			if err != nil || !claimed || task.Sandbox == nil {
-				return task, claimed, err
-			}
-			profile := task.Sandbox.Profile
-			switch {
-			case profile.Privileged && c.GetHeader(domain.RunnerPrivilegedSandboxHeader) != "1":
-				err = errors.New(domain.RunnerPrivilegedSandboxUpgradeMessage)
-			case profile.HasResourceLimits() && !input.SupportsDockerSandboxLimits:
-				err = errors.New(domain.RunnerDockerSandboxLimitsUpgradeMessage)
-			case task.RunID != "" && task.Action == "":
-				err = domain.ValidateFrozenSandbox(profile)
-				if err == nil {
-					task.ProjectCredentialEnv, err = h.runnerTaskProjectCredentialEnv(c.Request.Context(), task, runner)
-				}
-			}
-			if err != nil {
-				// Finish the task before sending an unusable sandbox to the runner.
-				if finishErr := h.repo.CompleteRunnerTask(task.ID, runner.ID, domain.RunnerTaskFailed, nil, "", err.Error(), nil, nil, time.Now().UTC()); finishErr != nil {
-					return domain.RunnerTask{}, false, finishErr
-				}
-				if ctxErr := c.Request.Context().Err(); ctxErr != nil {
-					return domain.RunnerTask{}, false, ctxErr
-				}
-				continue
-			}
-			return task, true, nil
-		}
-	}
-	respond := func(task domain.RunnerTask) {
-		if input.Preflight {
-			c.JSON(http.StatusOK, map[string]bool{"taskAvailable": true})
-			return
-		}
-		if len(task.ProjectCredentialEnv) > 0 {
-			c.Header("Cache-Control", "no-store")
-		}
-		if task.Invocation != nil && task.Invocation.GitSSHUserID > 0 && runner.SupportsGitSSH() && len(task.Invocation.GitSSHRemotes()) > 0 {
-			task.Invocation.GitSSHKeys = h.repo.GitSSHKeysForRemotes(task.Invocation.GitSSHUserID, task.Invocation.GitSSHRemotes())
-			if input.SupportsGitSSHKnownHosts {
-				ctx := gitwork.WithSSHKnownHostsLookup(c.Request.Context(), h.repo.PlatformSSHKnownHosts)
-				task.GitSSHKnownHosts = gitwork.SSHKnownHostsForKeys(ctx, task.Invocation.GitSSHKeys)
-			}
-			task.Invocation.GitSSHUserID = 0
-			c.Header("Cache-Control", "no-store")
-		}
-		if task.Invocation != nil && task.Invocation.GitHTTPUserID > 0 && runner.SupportsGitHTTP() {
-			credentials := h.repo.GitHTTPCredentialSecrets(c.Request.Context(), task.Invocation.GitHTTPUserID)
-			task.Invocation.GitHTTPCredentials = runner.FilterGitHTTPCredentials(credentials)
-			task.Invocation.GitHTTPUserID = 0
-			c.Header("Cache-Control", "no-store")
-		}
-		c.JSON(http.StatusOK, map[string]any{"task": resolveRunnerTaskSandbox(task, runner.OS)})
-	}
-	deadline := time.Now().Add(runnerLongPollTimeout())
-	for {
-		if input.Capacity <= 0 {
-			c.JSON(http.StatusNoContent, nil)
-			return
-		}
-		task, claimed, err := claimOrSignal()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		if claimed {
-			respond(task)
-			return
-		}
-		if input.NoWait {
-			c.Status(http.StatusNoContent)
-			return
-		}
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			c.Status(http.StatusNoContent)
-			return
-		}
-		// Register before the second claim. This closes the race where a task
-		// is inserted after the first DB check but before the waiter exists.
-		// In an all-in-one process the waiter is notified immediately. In the
-		// production API/worker split, the worker writes the durable queue from
-		// another process, so a bounded DB poll is also required.
-		waiter := h.runnerWaiters.register(input.AvailableRuntimes)
-		task, claimed, err = claimOrSignal()
-		if err != nil {
-			h.runnerWaiters.unregister(waiter)
-			c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		if claimed {
-			h.runnerWaiters.unregister(waiter)
-			respond(task)
-			return
-		}
-		waitFor := runnerDBPollInterval()
-		if remaining < waitFor {
-			waitFor = remaining
-		}
-		wake := time.NewTimer(waitFor)
-		select {
-		case <-waiter.ch:
-		case <-wake.C:
-		case <-c.Request.Context().Done():
-			h.runnerWaiters.unregister(waiter)
-			wake.Stop()
-			return
-		}
-		wake.Stop()
-		h.runnerWaiters.unregister(waiter)
-	}
-}
-
-// ---------- task item endpoints (session-authenticated) ----------
-//
-// 原 runnerTaskItem 分发器按 "{id}" / "{id}/{action}" 拆分为独立 handler，
-// id 由 gin 路由参数 :id 提供。
-
-// runnerTaskGet returns one task by id.
-// 路由: g.GET("/api/runners/tasks/:id", h.runnerTaskGet)
-func (h *runnersHandlers) runnerTaskGet(c *gin.Context) {
-	runner, ok := h.runnerSessionAuth(c)
-	if !ok {
-		return
-	}
-	task, exists := h.repo.RunnerTask(c.Param("id"))
-	if !exists || !runnerMaySeeTask(runner, task) {
-		c.Status(http.StatusNotFound)
-		return
-	}
-	c.JSON(http.StatusOK, domain.PublicRunnerTask(resolveRunnerTaskSandbox(task, runner.OS)))
-}
-
-// resolveRunnerTaskSandbox hands the runner a concrete sandbox driver: the
-// native option becomes seatbelt or bwrap by the OS the runner reported, so
-// runner builds that predate native keep working. A runner on an
-// unsupported OS keeps native and reports the error when it opens the
-// sandbox.
-func resolveRunnerTaskSandbox(task domain.RunnerTask, runnerOS string) domain.RunnerTask {
-	if task.Sandbox == nil {
-		return task
-	}
-	driver, err := domain.ResolveSandboxDriver(task.Sandbox.Profile.Driver, runnerOS)
-	if err != nil || driver == task.Sandbox.Profile.Driver {
-		return task
-	}
-	spec := *task.Sandbox
-	spec.Profile.Driver = driver
-	task.Sandbox = &spec
-	return task
-}
-
-// runnerMaySeeTask limits task reads to the runner it is targeted at or
-// leased by. An untargeted, unleased task is visible to every runner because
-// any of them may claim it.
-func runnerMaySeeTask(runner domain.Runner, task domain.RunnerTask) bool {
-	if task.LeaseOwner != "" {
-		return task.LeaseOwner == runner.ID
-	}
-	return task.RunnerID == "" || task.RunnerID == runner.ID
-}
-
-// requireRunnerTaskAdmin guards raw task management (list/create/cancel):
-// creating a task runs an arbitrary prompt on a user's machine, and the list
-// exposes every project's prompts. Only platform admins may use it once
-// authentication is enabled; the engine dispatches workflow tasks directly.
-func (h *runnersHandlers) requireRunnerTaskAdmin(c *gin.Context) bool {
-	if !authRequired() || h.isPlatformAdmin(c.Request) {
-		return true
-	}
-	c.JSON(http.StatusForbidden, map[string]string{"error": "只有平台管理员可以直接管理执行机器任务"})
-	return false
-}
-
-// runnerTaskCancel is a management action: it authenticates the interactive
-// user (userAccessAuth), not the runner session.
-// 路由: g.POST("/api/runners/tasks/:id/cancel", h.runnerTaskCancel)
-func (h *runnersHandlers) runnerTaskCancel(c *gin.Context) {
-	if !h.requireRunnerTaskAdmin(c) {
-		return
-	}
-	taskID := c.Param("id")
-	if err := h.repo.CancelRunnerTask(taskID, time.Now().UTC()); err != nil {
-		c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	h.engine.NotifyRunnerTaskChanged(taskID)
-	c.JSON(http.StatusOK, map[string]bool{"ok": true})
-}
-
-// runnerTaskEventsOut serves stored task events to management callers.
-// 路由: g.GET("/api/runners/tasks/:id/events", h.runnerTaskEventsOut)
-func (h *runnersHandlers) runnerTaskEventsOut(c *gin.Context) {
-	runner, ok := h.runnerSessionAuth(c)
-	if !ok {
-		return
-	}
-	task, exists := h.repo.RunnerTask(c.Param("id"))
-	if !exists || !runnerMaySeeTask(runner, task) {
-		c.Status(http.StatusNotFound)
-		return
-	}
-	c.JSON(http.StatusOK, h.repo.RunnerTaskEvents(task.ID))
-}
-
-// runnerTaskStart acknowledges the runner picked up the leased task.
-// 路由: g.POST("/api/runners/tasks/:id/start", h.runnerTaskStart)
-//
-//	g.POST("/runners/tasks/:id/start", h.runnerTaskStart)
-func (h *runnersHandlers) runnerTaskStart(c *gin.Context) {
-	runner, ok := h.runnerSessionAuth(c)
-	if !ok {
-		return
-	}
-	if err := h.repo.StartRunnerTask(c.Param("id"), runner.ID, time.Now().UTC()); err != nil {
-		if err == repo.ErrRunnerTaskLeaseLost {
-			c.JSON(http.StatusConflict, map[string]string{"error": "task lease lost"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, map[string]bool{"ok": true})
-}
-
-// runnerTaskLeaseRenew extends the lease and reports the desired state.
-// 路由: g.POST("/api/runners/tasks/:id/lease/renew", h.runnerTaskLeaseRenew)
-//
-//	g.POST("/runners/tasks/:id/lease/renew", h.runnerTaskLeaseRenew)
-func (h *runnersHandlers) runnerTaskLeaseRenew(c *gin.Context) {
-	runner, ok := h.runnerSessionAuth(c)
-	if !ok {
-		return
-	}
-	desired, err := h.repo.RenewRunnerTaskLease(c.Param("id"), runner.ID, runnerTaskLeaseTTL, time.Now().UTC())
-	if err != nil {
-		if err == repo.ErrRunnerTaskLeaseLost {
-			c.JSON(http.StatusConflict, map[string]string{"error": "task lease lost"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, map[string]any{"leaseUntil": time.Now().UTC().Add(runnerTaskLeaseTTL), "desiredState": desired})
-}
-
-// runnerTaskEventsIngest accepts batched task events from the lease owner.
-// 路由: g.POST("/api/runners/tasks/:id/events", h.runnerTaskEventsIngest)
-//
-//	g.POST("/runners/tasks/:id/events", h.runnerTaskEventsIngest)
-func (h *runnersHandlers) runnerTaskEventsIngest(c *gin.Context) {
-	runner, ok := h.runnerSessionAuth(c)
-	if !ok {
-		return
-	}
-	taskID := c.Param("id")
-	task, exists := h.repo.RunnerTask(taskID)
-	if !exists {
-		c.Status(http.StatusNotFound)
-		return
-	}
-	// Events are accepted from the lease owner; retries after a lease loss
-	// are idempotent through (task_id, seq) anyway.
-	if task.LeaseOwner != runner.ID || (task.Status != domain.RunnerTaskLeased && task.Status != domain.RunnerTaskRunning) {
-		c.JSON(http.StatusConflict, map[string]string{"error": "task lease lost"})
-		return
-	}
-	var input struct {
-		Events []domain.RunnerTaskEvent `json:"events"`
-	}
-	if !decode(c, &input) {
-		return
-	}
-	if len(input.Events) == 0 {
-		c.JSON(http.StatusOK, map[string]int{"accepted": 0})
-		return
-	}
-	if len(input.Events) > 500 {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": "单批事件数量不能超过 500"})
-		return
-	}
-	for i := range input.Events {
-		if input.Events[i].Type == "" {
-			input.Events[i].Type = "stdout"
-		}
-		if input.Events[i].Ts.IsZero() {
-			input.Events[i].Ts = time.Now().UTC()
-		}
-	}
-	accepted, err := h.repo.AppendRunnerTaskEvents(taskID, input.Events)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, map[string]int{"accepted": accepted})
-}
-
-// runnerTaskComplete closes out a task with result and artifacts.
-// 路由: g.POST("/api/runners/tasks/:id/complete", h.runnerTaskComplete)
-//
-//	g.POST("/runners/tasks/:id/complete", h.runnerTaskComplete)
-func (h *runnersHandlers) runnerTaskComplete(c *gin.Context) {
-	runner, ok := h.runnerSessionAuth(c)
-	if !ok {
-		return
-	}
-	var input struct {
-		Status    string                    `json:"status"`
-		ExitCode  *int                      `json:"exitCode"`
-		Result    string                    `json:"result"`
-		Error     string                    `json:"error"`
-		Artifacts map[string]string         `json:"artifacts"`
-		Outputs   *domain.RunnerTaskOutputs `json:"outputs"`
-	}
-	// Legacy runners still post several inline files in one completion.
-	if !decodeLimit(c, &input, 16<<20) {
-		return
-	}
-	if input.Status == "" {
-		input.Status = domain.RunnerTaskSuccess
-	}
-	if len(input.Artifacts) > 64 {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": "单次最多上报 64 个产物文件"})
-		return
-	}
-	for name, content := range input.Artifacts {
-		if len(content) > 1<<20 {
-			c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("产物 %s 超过 1MB 上传限制", name)})
-			return
-		}
-	}
-	if message := validateRunnerTaskOutputs(input.Outputs); message != "" {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": message})
-		return
-	}
-	if input.Outputs != nil && (len(input.Outputs.FileBlobs) != 0 || len(input.Outputs.FileErrors) != 0) && !h.validateRunnerOutputTransfer(c, runner.ID, input.Outputs) {
-		return
-	}
-	if err := h.repo.CompleteRunnerTask(c.Param("id"), runner.ID, input.Status, input.ExitCode, input.Result, input.Error, input.Artifacts, input.Outputs, time.Now().UTC()); err != nil {
-		if err == repo.ErrRunnerTaskLeaseLost {
-			c.JSON(http.StatusConflict, map[string]string{"error": "task lease lost"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	h.engine.NotifyRunnerTaskChanged(c.Param("id"))
-	if task, ok := h.repo.RunnerTask(c.Param("id")); ok {
-		h.engine.OnRunnerTaskCompleted(task)
-	}
-	c.JSON(http.StatusOK, map[string]bool{"ok": true})
-}
-
-// runnerTaskControl lets the runner poll the desired state while running.
-// 路由: g.GET("/api/runners/tasks/:id/control", h.runnerTaskControl)
-//
-//	g.GET("/runners/tasks/:id/control", h.runnerTaskControl)
-func (h *runnersHandlers) runnerTaskControl(c *gin.Context) {
-	runner, ok := h.runnerSessionAuth(c)
-	if !ok {
-		return
-	}
-	task, exists := h.repo.RunnerTaskControl(c.Param("id"))
-	if !exists {
-		c.Status(http.StatusNotFound)
-		return
-	}
-	if task.LeaseOwner != runner.ID {
-		c.JSON(http.StatusConflict, map[string]string{"error": "task lease lost"})
-		return
-	}
-	c.JSON(http.StatusOK, map[string]any{
-		"desiredState": task.DesiredState,
-		"status":       task.Status,
-		"leaseOwner":   task.LeaseOwner,
-	})
-}
-
-// isRunnerAgentPath reports whether a path is a runner-agent endpoint that
-// authenticates with bootstrap/session credentials instead of a user session.
-// Used by userAccessAuth to skip the user-identity requirement. Method checks
-// and session validation happen inside each handler, so an exempted path never
-// exposes data without its own credential.
-// validateRunnerTaskOutputs applies the per-file limits of legacy artifact
-// uploads to reported outputs and rejects paths outside the task workspace.
-func validateRunnerTaskOutputs(outputs *domain.RunnerTaskOutputs) string {
-	if outputs == nil {
-		return ""
-	}
-	if len(outputs.Files) > 64 {
-		return "单次最多上报 64 个产物文件"
-	}
-	if len(outputs.Patches) > 64 {
-		return "单次最多上报 64 个仓库的变更清单"
-	}
-	for path, content := range outputs.Files {
-		if !domain.SafeWorkspaceRelPath(path) {
-			return fmt.Sprintf("产物路径 %q 不合法", path)
-		}
-		if len(content) > domain.MaxInlineRunnerArtifactBytes {
-			return fmt.Sprintf("旧版行内产物 %s 超过 1 MiB 上传限制", path)
-		}
-	}
-	for path, message := range outputs.FileErrors {
-		if !domain.SafeWorkspaceRelPath(path) || len(message) > 2048 {
-			return "无效的产物错误报告"
-		}
-	}
-	for _, path := range outputs.TooLarge {
-		if !domain.SafeWorkspaceRelPath(path) {
-			return fmt.Sprintf("产物路径 %q 不合法", path)
-		}
-	}
-	for dir, patch := range outputs.Patches {
-		if dir != "" && !domain.SafeWorkspaceRelPath(dir) {
-			return fmt.Sprintf("仓库目录 %q 不合法", dir)
-		}
-		if len(patch) > 1<<20 {
-			return fmt.Sprintf("仓库 %s 的变更清单超过 1MB", dir)
-		}
-	}
-	if len(outputs.Recovered) > 64 {
-		return "单次最多上报 64 条收回记录"
-	}
-	return ""
-}
 
 func isRunnerAgentPath(path string) bool {
 	if strings.HasPrefix(path, "/runners/") {
@@ -1492,56 +733,12 @@ func isRunnerAgentPath(path string) bool {
 		return false
 	}
 	rest := strings.Trim(strings.TrimPrefix(path, "/api/runners/"), "/")
+	// Only the machine lifecycle endpoints authenticate with a runner
+	// credential; everything else stays behind user auth.
 	switch rest {
-	case "register", "deregister", "disconnect", "heartbeat", "tasks/claim":
+	case "register", "deregister", "disconnect", "heartbeat":
 		return true
-	}
-	// tasks/{id} and tasks/{id}/{action}: only the runner-agent actions are
-	// exempt; task creation (POST /api/runners/tasks) and cancel stay behind
-	// user auth.
-	if after, ok := strings.CutPrefix(rest, "tasks/"); ok && after != "" {
-		parts := strings.Split(after, "/")
-		if len(parts) == 1 {
-			return true
-		}
-		switch strings.Join(parts[1:], "/") {
-		case "start", "lease/renew", "events", "complete", "control", "input-file", "output-file":
-			return true
-		}
 	}
 	return false
 }
 
-// runnerPreviewContent accepts a runner's compressed preview upload. The
-// upload token comes from the task payload; the runner session identifies the
-// uploader.
-func (h *runnersHandlers) runnerPreviewContent(c *gin.Context) {
-	runner, ok := h.runnerSessionAuth(c)
-	if !ok {
-		return
-	}
-	svc := h.engine.Preview()
-	if svc == nil {
-		c.JSON(http.StatusNotFound, map[string]string{"error": "preview is not enabled"})
-		return
-	}
-	token := strings.TrimSpace(c.GetHeader("X-Preview-Upload-Token"))
-	if token == "" {
-		c.JSON(http.StatusUnauthorized, map[string]string{"error": "preview upload token required"})
-		return
-	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, svc.Config().MaxCompressed+1)
-	if err := svc.AcceptUpload(c.Request.Context(), c.Param("previewId"), runner.ID, token, c.Request.Body); err != nil {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, map[string]bool{"ok": true})
-}
-
-func (h *runnersHandlers) runnerPreviewComplete(c *gin.Context) {
-	if _, ok := h.runnerSessionAuth(c); !ok {
-		return
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(c.Request.Body, 1<<20))
-	c.JSON(http.StatusOK, map[string]bool{"ok": true})
-}
