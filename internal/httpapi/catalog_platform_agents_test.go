@@ -15,9 +15,9 @@ import (
 )
 
 // A role without a project is platform-wide: every project's LOOPs can use it.
-// Like platform rules and skills, only administrators may change it; project
-// writers must copy it into their project first.
-func TestPlatformAgentWritesRequirePlatformAdmin(t *testing.T) {
+// The platform has one account and no administrator, so the account owns the
+// platform-wide roles just like its own project roles.
+func TestPlatformAgentWritesFollowTheAccount(t *testing.T) {
 	t.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
 	t.Setenv("AGENTFLOW_SCHEDULER_ENABLED", "false")
 	s, err := repo.OpenTest()
@@ -47,7 +47,6 @@ func TestPlatformAgentWritesRequirePlatformAdmin(t *testing.T) {
 		h.ServeHTTP(w, r)
 		return w
 	}
-	admin := session("admin")
 	owner := session("owner")
 	ownerUser, _ := s.UserByLoginName("owner")
 	if err := s.PutProject(domain.Project{ID: "p1", Name: "P1", OwnerID: ownerUser.ID}); err != nil {
@@ -57,53 +56,37 @@ func TestPlatformAgentWritesRequirePlatformAdmin(t *testing.T) {
 	if err := s.PutAgent(platform); err != nil {
 		t.Fatal(err)
 	}
-	unchanged := func(step string) {
-		t.Helper()
-		got, ok := s.Agent("platform-role")
-		if !ok || got.ProjectID != "" || got.Prompt != "platform prompt" || got.Name != "Platform" {
-			t.Fatalf("%s changed the platform role: ok=%v %+v", step, ok, got)
-		}
-	}
-
-	// A project writer may not take over the platform role through any write path.
-	hijack := `{"id":"platform-role","projectId":"p1","name":"Mine","executorId":"codebuddy","prompt":"owned"}`
-	if w := call(owner, "PUT", "/api/agents", hijack); w.Code != http.StatusForbidden {
-		t.Fatalf("project writer PUT platform role: %d %s", w.Code, w.Body.String())
-	}
-	unchanged("PUT")
-	if w := call(owner, "DELETE", "/api/agents/platform-role", ""); w.Code != http.StatusForbidden {
-		t.Fatalf("project writer DELETE platform role: %d %s", w.Code, w.Body.String())
-	}
-	unchanged("DELETE")
-	if w := call(owner, "POST", "/api/agents/platform-role/revisions/rev-x/restore", ""); w.Code != http.StatusForbidden {
-		t.Fatalf("project writer restore platform role: %d %s", w.Code, w.Body.String())
-	}
-	unchanged("restore")
 	if err := s.PutAgent(domain.AgentDefinition{ID: "own-role", Name: "Own", ProjectID: "p1", ExecutorID: "codebuddy"}); err != nil {
 		t.Fatal(err)
 	}
-	if w := call(owner, "POST", "/api/agents/own-role/clone", `{"id":"platform-role","name":"Over","projectId":"p1"}`); w.Code != http.StatusForbidden {
-		t.Fatalf("clone onto the platform role id: %d %s", w.Code, w.Body.String())
+
+	// The account owns the platform-wide role: there is no administrator left
+	// to tell it apart from anybody else.
+	hijack := `{"id":"platform-role","projectId":"p1","name":"Mine","executorId":"codebuddy","prompt":"owned"}`
+	if w := call(owner, "PUT", "/api/agents", hijack); w.Code != http.StatusOK {
+		t.Fatalf("account PUT platform role: %d %s", w.Code, w.Body.String())
 	}
-	unchanged("clone onto")
+	if got, ok := s.Agent("platform-role"); !ok || got.ProjectID != "p1" || got.Prompt != "owned" {
+		t.Fatalf("the account did not take the platform role over: ok=%v %+v", ok, got)
+	}
 
 	// Copying the platform role into the project still works.
 	if w := call(owner, "POST", "/api/agents/platform-role/clone", `{"id":"platform-copy","name":"Copy","projectId":"p1"}`); w.Code != http.StatusCreated {
 		t.Fatalf("clone platform role into project: %d %s", w.Code, w.Body.String())
 	}
-	if copy, ok := s.Agent("platform-copy"); !ok || copy.ProjectID != "p1" || copy.Prompt != "platform prompt" {
+	if copy, ok := s.Agent("platform-copy"); !ok || copy.ProjectID != "p1" || copy.Prompt != "owned" {
 		t.Fatalf("copy: ok=%v %+v", ok, copy)
 	}
 	// The project's own roles keep project write access.
 	if w := call(owner, "PUT", "/api/agents", `{"id":"own-role","projectId":"p1","name":"Own 2","executorId":"codebuddy"}`); w.Code != http.StatusOK {
-		t.Fatalf("project writer PUT own role: %d %s", w.Code, w.Body.String())
+		t.Fatalf("account PUT own role: %d %s", w.Code, w.Body.String())
 	}
 
 	// New project and role ids are path segments of their APIs: ids that a URL
 	// path cannot carry would create records nobody can open or delete.
 	for _, id := range []string{"wa bad/id?x", "a%2Fb", strings.Repeat("p", 65)} {
 		body, _ := json.Marshal(map[string]any{"id": id, "key": "BAD", "name": "Bad"})
-		if w := call(admin, "POST", "/api/projects", string(body)); w.Code != http.StatusBadRequest {
+		if w := call(owner, "POST", "/api/projects", string(body)); w.Code != http.StatusBadRequest {
 			t.Fatalf("project id %q: %d %s", id, w.Code, w.Body.String())
 		}
 		role, _ := json.Marshal(map[string]any{"id": id, "projectId": "p1", "name": "Bad", "executorId": "codebuddy"})
@@ -123,11 +106,11 @@ func TestPlatformAgentWritesRequirePlatformAdmin(t *testing.T) {
 		t.Fatalf("legacy role edit: %d %s", w.Code, w.Body.String())
 	}
 
-	// Administrators manage platform roles.
-	if w := call(admin, "DELETE", "/api/agents/platform-role", ""); w.Code != http.StatusNoContent {
-		t.Fatalf("admin DELETE platform role: %d %s", w.Code, w.Body.String())
+	// The account manages the platform roles.
+	if w := call(owner, "DELETE", "/api/agents/platform-role", ""); w.Code != http.StatusNoContent {
+		t.Fatalf("account DELETE platform role: %d %s", w.Code, w.Body.String())
 	}
 	if _, ok := s.Agent("platform-role"); ok {
-		t.Fatal("admin delete kept the platform role")
+		t.Fatal("the delete kept the platform role")
 	}
 }
