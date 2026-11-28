@@ -82,9 +82,6 @@ func main() {
 	if os.Getenv("AGENTFLOW_SESSION_SECRET") == "" && *cliAction == "" {
 		log.Fatal("AGENTFLOW_SESSION_SECRET is required; generate with openssl rand -hex 32")
 	}
-	if os.Getenv("AGENTFLOW_AUTH_REQUIRED") == "" {
-		os.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
-	}
 	if *cliAction != "" || *cliProvider != "" {
 		if flag.NArg() != 0 {
 			log.Fatal("CLI administration does not accept positional arguments")

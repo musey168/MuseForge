@@ -20,7 +20,6 @@ func (r *IssuesRepo) CloseIssue(issueID string) (domain.Issue, error) {
 		}
 		issue.Status = "closed"
 		issue.CloseSource = "manual"
-		issue.AutomationState = "ignored"
 		return nil
 	})
 }
