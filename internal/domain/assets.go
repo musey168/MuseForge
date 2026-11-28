@@ -149,8 +149,8 @@ type SandboxProfile struct {
 	Environment    map[string]string `json:"environment,omitempty"`
 	// Dockerfile is the image recipe of a docker sandbox.
 	Dockerfile *SandboxDockerfile `json:"dockerfile,omitempty"`
-	// DockerfileID names the recipe in runner specs (see RunnerSandbox);
-	// stored profiles leave it empty.
+	// DockerfileID names the recipe a runner spec points at; stored profiles
+	// leave it empty.
 	DockerfileID string `json:"dockerfileId,omitempty"`
 }
 
@@ -213,22 +213,6 @@ func ValidateSandboxAssets(v SandboxProfile) error {
 		}
 	}
 	return ValidateEnvironmentVariables(v.Environment)
-}
-
-// RunnerSandbox is the runner spec of a stored profile: its Dockerfile
-// becomes the recipe a runner builds, named after the sandbox. The spec's
-// profile drops the embedded copy.
-func RunnerSandbox(profile SandboxProfile) *RunnerSandboxSpec {
-	spec := &RunnerSandboxSpec{Profile: profile}
-	// The description is catalog copy only; keeping it out of the runner spec
-	// keeps the run snapshot and preparation fingerprints execution-only.
-	spec.Profile.Description = ""
-	spec.Profile.Dockerfile = nil
-	if d := profile.Dockerfile; d != nil && strings.TrimSpace(d.Content) != "" {
-		spec.Profile.DockerfileID = profile.ID
-		spec.Dockerfile = &DockerfileDefinition{ID: profile.ID, Name: profile.Name, ProjectID: profile.ProjectID, Shared: profile.Shared, Content: d.Content, Files: d.Files}
-	}
-	return spec
 }
 
 // Sandbox drivers. Profiles store native or docker; native is the OS

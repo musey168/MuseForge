@@ -9,10 +9,6 @@ type AssetReference struct {
 	Name        string `json:"name,omitempty"`
 	ProjectID   string `json:"projectId,omitempty"`
 	ProjectName string `json:"projectName,omitempty"`
-	// Element describes a page element the user picked in the native
-	// preview (Type "element"); it is the user's own context, not an object
-	// the platform looks up.
-	Element *BrowserPageElement `json:"element,omitempty"`
 }
 
 // CloneAssetReferences returns an independent copy for persisted task

@@ -178,10 +178,6 @@ type WorkflowDefinition struct {
 	SOPLane      string                `json:"sopLane,omitempty"`
 	Generic      bool                  `json:"generic,omitempty"`
 	Requirements []WorkflowRequirement `json:"requirements,omitempty"`
-	// SandboxSnapshot is populated only on Run.WorkflowSnapshot. It freezes
-	// the resolved profile plus Dockerfile/environment payload so retries can
-	// reconstruct the original environment after catalog definitions change.
-	SandboxSnapshot *RunnerSandboxSpec `json:"sandboxSnapshot,omitempty"`
 	// Preview is the optional frontend delivery contract. It is frozen into
 	// the run snapshot so later LOOP edits cannot change an in-flight archive.
 	Preview   *PreviewContract `json:"preview,omitempty"`
