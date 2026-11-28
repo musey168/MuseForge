@@ -1,0 +1,2 @@
+{"timestamp":"2026-11-20T08:00:00.000Z","ordinal":0,"type":"session_meta","payload":{"session_id":"01a1f300-0000-7000-8000-000000000002","timestamp":"2026-11-20T08:00:00.000Z","cwd":"/Users/csb/demo","model_provider":"openai"}}
+{"timestamp":"2026-11-20T08:00:05.000Z","ordinal":1,"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1000,"cached_input_tokens":100,"cache_write_input_tokens":10,"output_tokens":20,"reasoning_output_tokens":5,"total_tokens":1020}}}}

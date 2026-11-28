@@ -1,0 +1,6 @@
+{"type":"session","version":3,"id":"01a2066b-3665-729c-bd35-ed0425d0afe2","timestamp":"2026-11-23T03:20:19.302Z","cwd":"/Users/csb/demo"}
+{"type":"model_change","id":"fde66ebc","parentId":null,"timestamp":"2026-11-23T03:20:19.546Z","provider":"minimax-cn","modelId":"MiniMax-M3.1-Flash"}
+{"type":"message","id":"u1","timestamp":"2026-11-23T03:20:24.178Z","message":{"role":"user","content":[{"type":"text","text":"hello"}]}}
+{"type":"message","id":"a1","timestamp":"2026-11-23T03:20:29.988Z","message":{"role":"assistant","api":"anthropic-messages","provider":"minimax-cn","model":"MiniMax-M3.1-Flash","usage":{"input":1000,"output":40,"cacheRead":100,"cacheWrite":0,"totalTokens":1140,"cost":{"input":0.001,"output":0.0004,"cacheRead":0.0001,"cacheWrite":0,"total":0.01,"totalFromProvider":false}},"stopReason":"stop"}}
+{"type":"message","id":"a2","timestamp":"2026-11-23T03:20
+{"type":"message","id":"a2","timestamp":"2026-11-23T03:21:00.000Z","message":{"role":"assistant","api":"anthropic-messages","provider":"minimax-cn","model":"MiniMax-M3.1-Flash","usage":{"input":9500,"output":60,"cacheRead":5000,"cacheWrite":20,"totalTokens":14580,"cost":{"input":0.0095,"output":0.0006,"cacheRead":0.005,"cacheWrite":0.00002,"total":0.02,"totalFromProvider":false}},"stopReason":"stop"}}
