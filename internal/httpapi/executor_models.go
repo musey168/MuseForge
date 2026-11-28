@@ -211,15 +211,15 @@ func cursorCatalogModels() []executorModelInfo {
 
 // executorModels returns built-in defaults and effort levels, with the
 // signed-in editor's model lists substituted where available.
-func (s *Server) executorModels(c *gin.Context) {
+func (h modelCatalogHandlers) executorModels(c *gin.Context) {
 	c.Header("Cache-Control", "private, no-store")
 	if c.Query("builtin") == "1" {
 		c.JSON(http.StatusOK, executorModelCatalogs("", loadAssistantModels("", "")))
 		return
 	}
 	var user domain.User
-	if current, ok := s.requestUser(c.Request); ok {
-		if stored, found := s.repo.User(current.ID); found {
+	if current, ok := h.requestUser(c.Request); ok {
+		if stored, found := h.repo.User(current.ID); found {
 			user = stored
 			refreshOfficialCodeBuddyModels(c.Request.Context(), user)
 		}

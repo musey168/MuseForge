@@ -36,6 +36,7 @@ type Server struct {
 	*deps
 	github       *githubHandlers
 	users        *usersHandlers // users.go
+	catalog      *modelCatalogHandlers
 	account      *accountHandlers
 	projects     *projectsHandlers
 	repositories *repositoriesHandlers
@@ -57,6 +58,7 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 		deps:         d,
 		github:       newGitHubHandlers(d),
 		users:        &usersHandlers{deps: d},
+		catalog:      &modelCatalogHandlers{deps: d},
 		account:      &accountHandlers{deps: d},
 		insights:     &insightsHandlers{deps: d},
 		projects:     &projectsHandlers{deps: d},
@@ -119,8 +121,8 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 
 	// --- service & personal surfaces ---
 	g.GET("/api/capabilities", api.capabilities)
-	g.GET("/api/model-catalog", api.modelCatalog)
-	g.GET("/api/executor-models", api.executorModels)
+	g.GET("/api/model-catalog", api.catalog.modelCatalog)
+	g.GET("/api/executor-models", api.catalog.executorModels)
 	g.GET("/api/openapi.yaml", api.openAPI)
 	g.GET("/api/bootstrap", api.bootstrap)
 	g.POST("/api/account", api.account.account)

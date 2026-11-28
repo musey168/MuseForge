@@ -13,10 +13,16 @@ func modelCatalogEngines(user domain.User) []assistantEngineOption {
 	return assistantEngineOptions(user)
 }
 
+// modelCatalogHandlers owns the personal model catalogue: the CLIs the person
+// may run with and the models each of them offers.
+type modelCatalogHandlers struct {
+	*deps
+}
+
 // modelCatalog serves the personal model catalogue: the CLIs the caller may
 // run with and the models each of them offers. It is the catalogue the
-// personal settings and the task pickers read.
-func (h *Server) modelCatalog(c *gin.Context) {
+// personal settings read.
+func (h modelCatalogHandlers) modelCatalog(c *gin.Context) {
 	authUser, ok := h.requestUser(c.Request)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
