@@ -3,7 +3,7 @@
 本文档以 `internal/httpapi/server.go` 注册的路由为准，OpenAPI 契约见 [openapi.yaml](openapi.yaml)（`GET /api/openapi.yaml` 原样返回）。接口按领域划分：
 
 - **需求**：需求列表、单条需求、评论、关闭、重新打开、删除
-- **项目**：项目、项目凭据、默认代码仓库
+- **项目**：项目、默认代码仓库
 - **代码仓库**：仓库绑定（GitHub 与 GitLab）
 - **个人**：账号、模型目录、个人凭据、Git 凭据
 - **机器**：机器注册、心跳、CLI 清单、模型探测、CLI 维护

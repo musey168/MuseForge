@@ -510,52 +510,6 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
-  /api/projects/{id}/credentials:
-    get:
-      tags: [Projects]
-      operationId: get_api_projects_id_credentials
-      summary: "List a project's credentials with the secrets redacted"
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: The request is malformed
-        "404":
-          description: The resource does not exist
-    post:
-      tags: [Projects]
-      operationId: post_api_projects_id_credentials
-      summary: "Create a project credential"
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: The request is malformed
-        "404":
-          description: The resource does not exist
-  /api/projects/{id}/credentials/{credentialId}:
-    delete:
-      tags: [Projects]
-      operationId: delete_api_projects_id_credentials_credentialId
-      summary: "DELETE /api/projects/{id}/credentials/{credentialId}"
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: The request is malformed
-        "404":
-          description: The resource does not exist
-    put:
-      tags: [Projects]
-      operationId: put_api_projects_id_credentials_credentialId
-      summary: "PUT /api/projects/{id}/credentials/{credentialId}"
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: The request is malformed
-        "404":
-          description: The resource does not exist
   /api/projects/{projectId}/restore:
     parameters:
       - name: projectId

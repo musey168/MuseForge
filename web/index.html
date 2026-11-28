@@ -17,7 +17,6 @@
   <link rel="stylesheet" href="/product-v3.css?v=20261030runs1">
   <link rel="stylesheet" href="/product-v4.css?v=20261123run-eval">
   <link rel="stylesheet" href="/app/harness-ui.css?v=20261031req1">
-  <link rel="stylesheet" href="/app/project-credentials.css">
   <link rel="stylesheet" href="/assistant-models.css">
   <link rel="stylesheet" href="/app/frame.css">
   <link rel="stylesheet" href="/app/harness-icons.css">
@@ -110,7 +109,6 @@
       <button class="nav" data-view="settings"><span class="nav-icon"><svg class="agent-icon harness-icon" data-icon="user" data-icon-motion="idle" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle class="head" cx="12" cy="8" r="4"/><path class="body" d="M4 21a8 8 0 0 1 16 0"/></svg></span><span class="nav-label">个人配置</span></button>
       <p>项目</p>
       <button class="nav" data-view="projects"><span class="nav-icon"><svg class="agent-icon harness-icon" data-icon="users" data-icon-motion="idle" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><g class="team-front"><circle cx="9" cy="8" r="3"/><path d="M3 20v-1a6 6 0 0 1 12 0v1"/></g><g class="team-back"><path d="M16 5a3 3 0 0 1 0 6M17 14a5 5 0 0 1 4 5v1"/></g></svg></span><span class="nav-label">项目配置</span></button>
-      <button class="nav" data-view="projectCredentials"><span class="nav-icon"><svg class="agent-icon harness-icon" data-icon="key" data-icon-motion="idle" width="15" height="15" aria-hidden="true"></svg></span><span class="nav-label">凭据管理</span></button>
       <p>机器</p>
       <button class="nav" data-view="runners"><span class="nav-icon"><svg class="agent-icon harness-icon" data-icon="server" data-icon-motion="idle" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01"/><path d="M7 17.5h.01"/></svg></span><span class="nav-label">我的机器</span></button>
       </div>
@@ -245,21 +243,6 @@
       </div>
     </section>
 
-    <section id="projectCredentialsView" class="view page-view">
-      <header class="page-heading">
-        <div>
-          <div class="project-credential-heading-title">
-            <h1>凭据管理</h1>
-            <span id="projectCredentialsProject" class="project-credential-project-chip" data-i18n-skip hidden></span>
-          </div>
-          <p class="project-credential-page-desc">加密保存项目级账号、令牌与密钥；在 LOOP 中选用后，将作为环境变量注入沙箱进程，并在输出中自动脱敏。</p>
-        </div>
-        <div class="heading-actions">
-          <button id="newProjectCredential" type="button" class="button primary" hidden><svg class="agent-icon harness-icon" data-icon="plus" width="14" height="14" aria-hidden="true" focusable="false"></svg>新增凭据</button>
-        </div>
-      </header>
-      <div id="projectCredentialsContent" class="project-credential-shell" aria-live="polite"></div>
-    </section>
 
     <!-- 我的机器：本机 / 云主机清单 -->
     <section id="runnersView" class="view page-view">
@@ -537,7 +520,6 @@
   <script src="/app/dashboards.js"></script>
   <script src="/app/issue-model.js"></script>
   <script src="/app/projects.js"></script>
-  <script src="/app/project-credentials.js"></script>
   <script src="/app/github-connect.js"></script>
   <script src="/app/project-wizard.js"></script>
   <script src="/app/repo_drawer.js"></script>

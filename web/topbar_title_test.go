@@ -26,7 +26,8 @@ func TestTopbarTitleHiddenWhenViewHasHeading(t *testing.T) {
 	}
 
 	starts := regexp.MustCompile(`<section id="(\w+)View" class="view`).FindAllStringSubmatchIndex(html, -1)
-	if len(starts) < 7 {
+	// Six views survive the trim: 需求列表, 统计台, 项目配置, 我的机器, 个人配置, 平台.
+	if len(starts) < 6 {
 		t.Fatalf("expected the static views in index.html, found %d", len(starts))
 	}
 	heading := regexp.MustCompile(`class="(?:page-heading|page-header|kb-head|pa-ph)[" ]`)

@@ -38,13 +38,17 @@ func TestOpenSQLiteCreatesSchemaFromModelManifest(t *testing.T) {
 		t.Fatalf("storage driver = %v, want %q", driver, datasourceSQLite)
 	}
 	for _, table := range []string{
-		"issues", "issue_comments", "issue_images", "projects", "project_credentials",
+		"issues", "issue_comments", "issue_images", "projects",
 		"repositories", "users", "user_configs", "runners",
 		"insight_sources", "insight_executions", "tracker_import_runs",
 	} {
 		if !s.DB.Migrator().HasTable(table) {
 			t.Fatalf("fresh sqlite database is missing table %q", table)
 		}
+	}
+	// The credentials table went with the LOOP consumer it served.
+	if s.DB.Migrator().HasTable("project_credentials") {
+		t.Fatal("a fresh database must not create the retired project_credentials table")
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("sqlite file was not created: %v", err)

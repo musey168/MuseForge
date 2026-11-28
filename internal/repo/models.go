@@ -691,7 +691,7 @@ func (trackerImportRunRow) TableName() string { return "tracker_import_runs" }
 func allModels() []any {
 	return []any{userRow{}, userConfigRow{}, gitSSHKeyRow{}, gitHTTPCredentialRow{}, authIntegrationRow{},
 		insightSourceRow{}, insightExecutionRow{},
-		projectRow{}, projectCredentialRow{}, repositoryRow{},
+		projectRow{}, repositoryRow{},
 		issueRow{}, issueCommentRow{}, issueImageRow{},
 		runnerRow{}, userRunnerPrefRow{}, userProjectRunnerPrefRow{},
 		trackerImportRunRow{},

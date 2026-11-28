@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { loadApp, settle } from '../lib/load-app.mjs';
 
 const SURVIVING_VIEWS = [
-  'issues', 'observability', 'settings', 'projects', 'projectCredentials',
+  'issues', 'observability', 'settings', 'projects',
   'runners',
 ];
 

@@ -68,7 +68,7 @@ CONF=$(json 'd["codeBuddyApiKeyConfigured"]')
 git -C .. >/dev/null 2>&1 || true
 if grep -q "ck_verify" /tmp/mf-e2e/out.json; then bad "the response leaks the key"; else ok "the response never returns the key"; fi
 check "the model catalogue" "$(code $BASE/api/model-catalog)" 200
-check "a project credential list" "$(code $BASE/api/projects/demo/credentials)" 200
+check "the retired project credential list" "$(code $BASE/api/projects/demo/credentials)" 404
 
 echo "== the machine inventory =="
 check "register a machine" "$(code -X POST $BASE/api/runners/register -H 'Content-Type: application/json' -H 'X-Bootstrap-Token: boot-verify' -d '{"name":"我的 MacBook","os":"darwin","arch":"arm64","runnerVersion":"0.13.2","runtimes":[{"provider":"claude","binaryPath":"/usr/local/bin/claude","version":"1.2.3"}]}')" 200

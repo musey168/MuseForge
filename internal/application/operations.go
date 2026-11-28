@@ -30,9 +30,6 @@ func PublicOperations() []Operation {
 		{Name: "projects_get", Description: "Get one project with secrets redacted", Method: "GET", Path: "/api/projects/{id}", ReadOnly: true},
 		{Name: "projects_delete", Description: "Delete a project. It is archived: hidden from lists, its requirements and settings kept, its identifier still taken, restorable with projects_restore.", Method: "DELETE", Path: "/api/projects/{id}"},
 		{Name: "projects_restore", Description: "Restore a deleted project", Method: "POST", Path: "/api/projects/{id}/restore"},
-		{Name: "project_credentials_list", Description: "List a project's credentials with the secrets redacted", Method: "GET", Path: "/api/projects/{id}/credentials", ReadOnly: true},
-		{Name: "project_credentials_save", Description: "Create a project credential. The value is sealed at rest and never returned.", Method: "POST", Path: "/api/projects/{id}/credentials"},
-
 		{Name: "repositories_list", Description: "List the repositories with secrets redacted", Method: "GET", Path: "/api/repositories", ReadOnly: true},
 		{Name: "repositories_save", Description: "Create or update a repository. Pass projectId and a GitHub or GitLab web, SSH or clone address; the name and the repository identity are derived from it. A GitLab project key has the form gitlab:<host>/<group>/<repo>.", Method: "PUT", Path: "/api/repositories"},
 		{Name: "repositories_delete", Description: "Delete a repository", Method: "DELETE", Path: "/api/repositories"},

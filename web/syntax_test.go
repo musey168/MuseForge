@@ -1345,10 +1345,13 @@ func TestCodexStyleLeftMiniRailLayout(t *testing.T) {
 	if strings.Contains(managed, "'observability'") {
 		t.Fatal("用量台 must not enter settings management mode")
 	}
-	for _, view := range []string{"'projects'", "'projectCredentials'", "'runners'"} {
+	for _, view := range []string{"'projects'", "'runners'"} {
 		if !strings.Contains(managed, view) {
 			t.Fatalf("%s moved into the settings sidebar and must enter settings management mode", view)
 		}
+	}
+	if strings.Contains(managed, "'projectCredentials'") {
+		t.Fatal("凭据管理 was deleted and must not stay in the settings views")
 	}
 	if !strings.Contains(appJs, "observability:'统计台'") {
 		t.Fatal("viewTitles.observability must be 统计台")

@@ -40,7 +40,6 @@ type Server struct {
 	account      *accountHandlers
 	projects     *projectsHandlers
 	repositories *repositoriesHandlers
-	credentials  *projectCredentialsHandlers
 	insights     *insightsHandlers
 	issues       *issuesHandlers
 	runners      *runnersHandlers // runners.go
@@ -64,7 +63,6 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 		insights:     &insightsHandlers{deps: d},
 		projects:     &projectsHandlers{deps: d},
 		repositories: &repositoriesHandlers{deps: d},
-		credentials:  &projectCredentialsHandlers{deps: d},
 		issues:       &issuesHandlers{deps: d},
 		runners:      &runnersHandlers{deps: d, runnerControls: runnerControls, runnerBindCodes: map[string]runnerBindCode{}},
 		tokens:       &tokenHandlers{deps: d},
@@ -137,10 +135,6 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 	g.PUT("/api/projects", api.projects.projects)
 	g.POST("/api/projects", api.projects.projects)
 	g.GET("/api/projects/:id", api.projects.project)
-	g.GET("/api/projects/:id/credentials", api.credentials.list)
-	g.POST("/api/projects/:id/credentials", api.credentials.save)
-	g.PUT("/api/projects/:id/credentials/:credentialId", api.credentials.save)
-	g.DELETE("/api/projects/:id/credentials/:credentialId", api.credentials.delete)
 	g.DELETE("/api/projects/:id", api.projects.deleteProject)
 	g.POST("/api/projects/:id/restore", api.projects.restoreProject)
 	g.GET("/api/issues", api.issues.issues)

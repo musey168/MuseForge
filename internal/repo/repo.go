@@ -111,7 +111,6 @@ type RunnersRepo struct {
 type Store struct {
 	*deps
 	*ProjectsRepo
-	*ProjectCredentialsRepo
 	*RepositoriesRepo
 	*IssuesRepo
 	*UsersRepo
@@ -126,7 +125,6 @@ func newStore(db *gorm.DB) *Store {
 	d := &deps{DB: db}
 	s := &Store{deps: d}
 	s.ProjectsRepo = &ProjectsRepo{deps: d}
-	s.ProjectCredentialsRepo = &ProjectCredentialsRepo{deps: d, projects: s.ProjectsRepo}
 	s.UsersRepo = &UsersRepo{deps: d}
 	s.RepositoriesRepo = &RepositoriesRepo{deps: d, projects: s.ProjectsRepo}
 	s.IssuesRepo = &IssuesRepo{deps: d, projects: s.ProjectsRepo, users: s.UsersRepo}

@@ -988,7 +988,6 @@ function bind(){
     state.projectFilter=e.target.value;state.selectedIssue=null;
     if(state.currentView==='runners')refreshRunners(true);
     localStorage.setItem('agentflow.activeProject',state.projectFilter);
-    if(state.currentView==='projectCredentials')loadProjectCredentialsPage();
     resetListPages();
     renderProjectSwitcher();renderIssues();renderSync();renderProjectAdmin();
     renderObservability();
@@ -1096,7 +1095,7 @@ function settingsSidebarExpanded(){
 }
 let settingsSidebarEntryFrame=0;
 let settingsSidebarWasManaged=false;
-const settingsManagementViews=['settings','projects','projectCredentials','runners','guide','platform'];const settingsRouteMotion=matchMedia('(prefers-reduced-motion: reduce)');
+const settingsManagementViews=['settings','projects','runners','guide','platform'];const settingsRouteMotion=matchMedia('(prefers-reduced-motion: reduce)');
 let settingsRouteTransition=null;
 let settingsRouteApplying=false;
 function isSettingsManagementView(name){return settingsManagementViews.includes(name)}
@@ -1258,7 +1257,7 @@ function setSettingsSidebarExpanded(expanded,focusToggle=false){
     });
   }
 }
-function viewTitles(){return {management:'设置',issues:'需求列表',observability:'统计台',projects:'项目配置',projectCredentials:'凭据管理',platform:'平台管理',runners:'执行机器',settings:'个人配置'}}
+function viewTitles(){return {management:'设置',issues:'需求列表',observability:'统计台',projects:'项目配置',platform:'平台管理',runners:'执行机器',settings:'个人配置'}}
 // 从流程模板打开的流程设计）按 data-nav-match 高亮它们所属的入口。
 function settingsNavMatches(btn,name){return btn.dataset.view===name||String(btn.dataset.navMatch||'').split(/\s+/).includes(name)}
 function activeViewName(){if(state.currentView)return state.currentView;const el=document.querySelector('.view.active');return el?el.id.replace(/View$/,''):''}
@@ -1296,7 +1295,6 @@ function switchView(name){
   const targetView=name;
   if(!titles[name]||!$(`#${targetView}View`)){name='issues'}
   const previous=activeViewName();
-  if(previous==='projectCredentials'&&name!=='projectCredentials')closeProjectCredentialsPage();
   if(name!=='settings')cancelCredentialFocus();
   if(previous==='settings'&&name!=='settings'){
     window.HuiPopover?.closeAll?.();
@@ -1356,7 +1354,6 @@ function switchView(name){
   if(name==='observability')refreshObs()
   if(name==='settings')renderPersonalSettings();
   if(name==='projects')renderProjectAdmin();
-  if(name==='projectCredentials')loadProjectCredentialsPage();
   if(name==='runners')refreshRunners();
 }
 function renderAll(){renderUserBadge();renderObservability();renderProjectSwitcher();renderIssues();renderSync();renderProjectAdmin();renderDashboard()}
