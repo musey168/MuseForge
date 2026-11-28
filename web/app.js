@@ -1060,7 +1060,7 @@ function bind(){
     if(state.currentView==='projectCredentials')loadProjectCredentialsPage();
     resetListPages();
     renderProjectSwitcher();renderIssues();renderSync();renderProjectAdmin();
-    renderObsTabs();
+    renderObservability();
     if($('#dashboardView').classList.contains('active'))renderDashboard();
     if($('#observabilityView').classList.contains('active'))refreshObs();
   };
@@ -1327,8 +1327,9 @@ function setSettingsSidebarExpanded(expanded,focusToggle=false){
     });
   }
 }
-function viewTitles(){return {management:'设置',issues:'需求列表',observability:'用量台',projects:'项目配置',projectCredentials:'凭据管理',platform:'平台管理',runners:'执行机器',settings:'个人配置',access:'访问密钥',guide:'访问密钥'}}
-// 从流程模板打开的流程设计）按 data-nav-match 高亮它们所属的入口。function settingsNavMatches(btn,name){return btn.dataset.view===name||String(btn.dataset.navMatch||'').split(/\s+/).includes(name)}
+function viewTitles(){return {management:'设置',issues:'需求列表',observability:'用量台',projects:'项目配置',projectCredentials:'凭据管理',platform:'平台管理',runners:'执行机器',settings:'个人配置'}}
+// 从流程模板打开的流程设计）按 data-nav-match 高亮它们所属的入口。
+function settingsNavMatches(btn,name){return btn.dataset.view===name||String(btn.dataset.navMatch||'').split(/\s+/).includes(name)}
 function activeViewName(){if(state.currentView)return state.currentView;const el=document.querySelector('.view.active');return el?el.id.replace(/View$/,''):''}
 function restoredView(){
   const titles=viewTitles();
@@ -1426,6 +1427,5 @@ function switchView(name){
   if(name==='projects')renderProjectAdmin();
   if(name==='projectCredentials')loadProjectCredentialsPage();
   if(name==='runners')refreshRunners();
-  if(name==='guide')renderGuide();
 }
-function renderAll(){renderUserBadge();renderPlatformNav();renderObsTabs();renderProjectSwitcher();renderIssues();renderSync();renderProjectAdmin();renderDashboard();renderGuide()}
+function renderAll(){renderUserBadge();renderObservability();renderProjectSwitcher();renderIssues();renderSync();renderProjectAdmin();renderDashboard()}
