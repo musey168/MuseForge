@@ -3,7 +3,6 @@ package repo
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"strings"
 	"testing"
 )
 
@@ -21,24 +20,5 @@ func TestHexSHA256KnownVectors(t *testing.T) {
 		if got := hexSHA256(in); got != want {
 			t.Fatalf("hexSHA256(%q) = %s, want %s", in, got, want)
 		}
-	}
-}
-
-func TestHashCallersKeepLegacyOutput(t *testing.T) {
-	if got, want := BotConversationID("bot", "group", "chat"), legacySHA256Hex("bot\x00group\x00chat"); got != want {
-		t.Fatalf("BotConversationID = %s, want %s", got, want)
-	}
-	if got, want := BotMessageID("bot", "msg"), legacySHA256Hex("bot\x00msg"); got != want {
-		t.Fatalf("BotMessageID = %s, want %s", got, want)
-	}
-	if got, want := botIdentityID("bot", "sender"), legacySHA256Hex("bot\x00sender"); got != want {
-		t.Fatalf("botIdentityID = %s, want %s", got, want)
-	}
-	long := strings.Repeat("r", 80)
-	if got, want := integrationLockName(long), "agentflow:integrate:"+legacySHA256Hex(long)[:40]; got != want {
-		t.Fatalf("integrationLockName(long) = %s, want %s", got, want)
-	}
-	if got := integrationLockName("repo-1"); got != "agentflow:integrate:repo-1" {
-		t.Fatalf("integrationLockName(short) = %s", got)
 	}
 }

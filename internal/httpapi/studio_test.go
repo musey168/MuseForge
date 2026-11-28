@@ -29,7 +29,6 @@ func TestStudioIndexStampsAssetsWithContentHash(t *testing.T) {
 	}
 	sum := sha256.Sum256(js)
 	want := hex.EncodeToString(sum[:8])
-	root := t.TempDir()
 	s, err := repo.OpenTest()
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +106,6 @@ func TestStudioVscodePageStampsAssetsWithContentHash(t *testing.T) {
 	}
 	sum := sha256.Sum256(js)
 	want := hex.EncodeToString(sum[:8])
-	root := t.TempDir()
 	s, err := repo.OpenTest()
 	if err != nil {
 		t.Fatal(err)
@@ -133,33 +131,6 @@ func TestStudioVscodePageStampsAssetsWithContentHash(t *testing.T) {
 	}
 	if !strings.Contains(rec.Header().Get("Content-Security-Policy"), "frame-ancestors 'self'") {
 		t.Fatalf("vscode.html CSP should allow same-origin framing, got %q", rec.Header().Get("Content-Security-Policy"))
-	}
-}
-
-func TestStudioIndexInjectsAppDomain(t *testing.T) {
-	t.Setenv("AGENTFLOW_APP_DOMAIN", "loopforge-test.example.com")
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	h := New(s, tracker.NewService(), "", "")
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != 200 {
-		t.Fatalf("GET /: %d", rec.Code)
-	}
-	body, _ := io.ReadAll(rec.Body)
-	html := string(body)
-	want := `<meta name="agentflow-app-domain" content="loopforge-test.example.com"></head>`
-	if !strings.Contains(html, want) {
-		t.Fatalf("expected injected domain meta %q, got snippet: %s", want, snippet(html, "agentflow-app-domain"))
-	}
-	// The CSP forbids inline scripts, so nothing may be injected as one.
-	if strings.Contains(html, "<script>") {
-		t.Fatalf("index.html carries an inline script the CSP would block: %s", snippet(html, "<script>"))
 	}
 }
 
@@ -238,7 +209,6 @@ func TestStudioPagesOmitUnsafeOrMissingBuildCommit(t *testing.T) {
 // The OAuth callback lands here in a separate tab; the page must render under
 // the global CSP, so its script is external and nothing secret is on it.
 func TestStudioServesGongfengOAuthDonePage(t *testing.T) {
-	root := t.TempDir()
 	s, err := repo.OpenTest()
 	if err != nil {
 		t.Fatal(err)
@@ -283,7 +253,6 @@ func TestStudioServesGongfengOAuthDonePage(t *testing.T) {
 }
 
 func TestStudioServesSiteIcons(t *testing.T) {
-	root := t.TempDir()
 	s, err := repo.OpenTest()
 	if err != nil {
 		t.Fatal(err)

@@ -15,10 +15,6 @@ func TestRepositoryURLRequiresAHostAndSupportsManagedGit(t *testing.T) {
 	if !ok || managed.Project != "group/repo" || managed.CloneURL != "https://git.review.test:8443/group/repo.git" {
 		t.Fatalf("managed reference = %+v, %v", managed, ok)
 	}
-	refs := ParseGongfengMRs("https://git.review.test:8443/group/repo/-/merge_requests/7 https://github.com/Tencent/LoopForge/pull/8")
-	if len(refs) != 2 || refs[0].URL != "https://git.review.test:8443/group/repo/-/merge_requests/7" || refs[1].Project != "github:Tencent/LoopForge" {
-		t.Fatalf("review links = %+v", refs)
-	}
 }
 
 func TestIsSafeGongfengProjectID(t *testing.T) {

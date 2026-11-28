@@ -95,9 +95,7 @@ func protectedAccessPath(path string) bool {
 		return false
 	}
 	switch path {
-	// gongfeng/start checks the session itself so a signed-out browser
-	// gets a page that says so, not a bare JSON 401.
-	case "/api/health", "/api/auth/password", "/api/auth/setup", "/api/auth/register", "/api/auth/current", "/api/auth/exchange", "/api/auth/logout", "/api/auth/local", "/api/auth/photo", "/api/auth/gongfeng/start", "/api/auth/gongfeng/callback":
+	case "/api/health", "/api/auth/password", "/api/auth/setup", "/api/auth/register", "/api/auth/current", "/api/auth/exchange", "/api/auth/logout", "/api/auth/local", "/api/auth/photo":
 		return false
 	default:
 		if strings.HasPrefix(path, "/api/auth/photo/") {

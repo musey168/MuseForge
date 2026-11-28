@@ -101,11 +101,6 @@ type UsersRepo struct {
 	keyring   *credcrypt.Keyring
 }
 
-// SyncRepo owns the tracker sync configuration — one row for the platform.
-type SyncRepo struct {
-	*deps
-}
-
 // RunnersRepo owns the CLI runner registry — the machine inventory.
 type RunnersRepo struct {
 	*deps
@@ -132,7 +127,6 @@ type Store struct {
 	*IssuesRepo
 	*UsersRepo
 	*RunnersRepo
-	*SyncRepo
 	*AnalyticsRepo
 	*InsightsRepo
 	*TrackerRepo
@@ -149,7 +143,6 @@ func newStore(db *gorm.DB) *Store {
 	s.RepositoriesRepo = &RepositoriesRepo{deps: d, projects: s.ProjectsRepo}
 	s.IssuesRepo = &IssuesRepo{deps: d, projects: s.ProjectsRepo, users: s.UsersRepo}
 	s.RunnersRepo = &RunnersRepo{deps: d, projects: s.ProjectsRepo}
-	s.SyncRepo = &SyncRepo{deps: d}
 	s.InsightsRepo = &InsightsRepo{deps: d}
 	s.AnalyticsRepo = &AnalyticsRepo{deps: d, issues: s.IssuesRepo, projects: s.ProjectsRepo, insights: s.InsightsRepo}
 	s.TrackerRepo = &TrackerRepo{deps: d}

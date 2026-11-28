@@ -14,8 +14,4 @@ func TestPublicRepositoryAndPullRequestIdentity(t *testing.T) {
 			t.Fatalf("invalid reference accepted: %s %+v", raw, got)
 		}
 	}
-	p, n, u, ok := ParseGongfengMR("Delivered https://github.com/Tencent/LoopForge/pull/123")
-	if !ok || p != "github:Tencent/LoopForge" || n != 123 || u != "https://github.com/Tencent/LoopForge/pull/123" {
-		t.Fatalf("PR: %s %d %s %v", p, n, u, ok)
-	}
 }

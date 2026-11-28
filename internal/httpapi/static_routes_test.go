@@ -15,7 +15,6 @@ import (
 // engine: the stamped index renders with an explicit 200 even though gin's
 // NoRoute preset is 404, and missing assets still return a real 404.
 func TestStaticRoutes(t *testing.T) {
-	root := t.TempDir()
 	s, err := repo.OpenTest()
 	if err != nil {
 		t.Fatal(err)

@@ -62,12 +62,6 @@ func TestMetricAndEffortRemainingBranches(t *testing.T) {
 	if ValidateAgentEffort("high", "unknown") == nil || ValidateAgentEffort("impossible", "codex") == nil {
 		t.Fatal("invalid effort accepted")
 	}
-	if NormalizeMetricCategory("需求") != MetricCategoryRequirement || NormalizeMetricCategory("bug修复") != MetricCategoryBugfix || NormalizeMetricCategory("") != MetricCategoryOther {
-		t.Fatal("metric category")
-	}
-	if analyticsPercentile(nil, 50) != 0 || analyticsPercentile([]int64{3, 1, 2}, 100) != 3 || analyticsPercentile([]int64{3, 1, 2}, 50) != 2 {
-		t.Fatal("analytics percentile")
-	}
 }
 
 func TestMCPValidationBranches(t *testing.T) {

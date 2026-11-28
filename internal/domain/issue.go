@@ -39,23 +39,14 @@ type Issue struct {
 	BaseBranch string `json:"baseBranch,omitempty"`
 	// RepositoryBranches selects existing work branches by repository ID. When
 	// provided, it replaces BaseBranch; an unlisted repository creates a new branch.
-	RepositoryBranches map[string]string `json:"repositoryBranches,omitempty"`
-	LatestTaskID       string            `json:"latestTaskId,omitempty"`
-	AutomationState    string            `json:"automationState,omitempty"` // ignored means scheduled LOOPs must not claim it
-	DeliveryState      string            `json:"deliveryState,omitempty"`   // merged, reopened
-	DeliveryMRURL      string            `json:"deliveryMrUrl,omitempty"`
-	DeliveryMRState    string            `json:"deliveryMrState,omitempty"` // merged (default branch), integrated (baseline), opened, closed, reopened, unknown
-	// DeliveryMRs lists one MR per delivered repository. DeliveryMRURL is its
-	// first entry and DeliveryMRState the aggregate (see SetDeliveryMRs).
-	DeliveryMRs       []DeliveryMR            `json:"deliveryMrs,omitempty"`
-	DeliveryUpdatedAt time.Time               `json:"deliveryUpdatedAt,omitempty"`
-	Kind              string                  `json:"kind,omitempty"` // requirement, issue
-	Clarification     ClarificationAssessment `json:"clarification"`
-	Source            string                  `json:"source,omitempty"` // local, gongfeng, tapd
-	// TapdID is an optional metrics-only link for a platform-created requirement.
-	// It does not create a tracker binding or authorize TAPD write-back.
-	TapdID      string       `json:"tapdId,omitempty"`
-	ExternalRef *ExternalRef `json:"externalRef,omitempty"`
+	RepositoryBranches map[string]string       `json:"repositoryBranches,omitempty"`
+	LatestTaskID       string                  `json:"latestTaskId,omitempty"`
+	AutomationState    string                  `json:"automationState,omitempty"` // ignored means scheduled LOOPs must not claim it
+	DeliveryState      string                  `json:"deliveryState,omitempty"`   // merged, reopened
+	Kind               string                  `json:"kind,omitempty"`            // requirement, issue
+	Clarification      ClarificationAssessment `json:"clarification"`
+	Source             string                  `json:"source,omitempty"` // local, github, gitlab
+	ExternalRef        *ExternalRef            `json:"externalRef,omitempty"`
 	// ConversationSessionID is the conversation that identified and created
 	// this requirement while changing code directly, without a LOOP.
 	ConversationSessionID string    `json:"conversationSessionId,omitempty"`
@@ -74,21 +65,6 @@ func (i Issue) Completed() bool {
 		return true
 	}
 	return false
-}
-
-// RequirementTAPDID returns the authoritative TAPD key for analytics.
-// Synced TAPD issues use their tracker identity; platform issues may opt in
-// with a metrics-only manual link and remain valid without one.
-func (i Issue) RequirementTAPDID() string {
-	if i.ExternalRef != nil && (strings.EqualFold(i.Source, "tapd") || strings.EqualFold(i.ExternalRef.Source, "tapd")) {
-		if id := strings.TrimSpace(i.ExternalRef.ExternalID); id != "" {
-			return id
-		}
-	}
-	if i.ExternalRef != nil || strings.EqualFold(i.Source, "gongfeng") {
-		return ""
-	}
-	return strings.TrimSpace(i.TapdID)
 }
 
 // IssueOperation is one user-visible action on a requirement.
@@ -173,9 +149,6 @@ type ClarificationAssessment struct {
 	// StartedAt is the first observed start of clarification, including
 	// pre-issue composer analysis when its server timestamp is carried over.
 	StartedAt time.Time `json:"startedAt,omitempty"`
-	// Gated is legacy: older TAPD imports were marked by it instead of
-	// ExternalRef.Imported. It is only read (tracker retention), never set.
-	Gated bool `json:"gated,omitempty"`
 }
 
 type ClarificationMessage struct {
@@ -191,33 +164,20 @@ type ClarificationQuestion struct {
 	FreeText    bool     `json:"freeText,omitempty"`
 }
 
-// ExternalRef links a local Issue to an external issue/story in Gongfeng or TAPD.
+// ExternalRef links a local Issue to an external issue in GitHub or GitLab.
 type ExternalRef struct {
 	// SourceContentHash records the last imported body so provider adapters can
 	// distinguish a remote edit from a locally clarified requirement.
 	SourceContentHash string    `json:"sourceContentHash,omitempty"`
-	Source            string    `json:"source"`        // gongfeng, tapd
-	ExternalID        string    `json:"externalId"`    // gongfeng issue id or tapd story id
-	ExternalIID       int       `json:"externalIid"`   // gongfeng issue iid (for URL)
+	Source            string    `json:"source"`        // github, gitlab
+	ExternalID        string    `json:"externalId"`    // provider issue id
+	ExternalIID       int       `json:"externalIid"`   // provider issue number
 	ExternalURL       string    `json:"externalUrl"`   // clickable URL
-	ExternalState     string    `json:"externalState"` // opened/closed for gongfeng, etc.
-	ExternalType      string    `json:"externalType"`  // issue, story
+	ExternalState     string    `json:"externalState"` // opened/closed on the provider
+	ExternalType      string    `json:"externalType"`  // issue, bug, task
 	SyncedAt          time.Time `json:"syncedAt"`
-	// Imported is set for 导入 TAPD / 新建 TAPD. Iteration sync must not
-	// delete these just because they are outside the current TAPD pool.
+	// Imported marks a requirement the platform created on the provider.
 	Imported bool `json:"imported,omitempty"`
-}
-
-// GongfengClosed reports whether this item is a Gongfeng issue already closed on Gongfeng.
-// Local status can lag after a failed sync, so dispatch must use ExternalState, not Status.
-func (i Issue) GongfengClosed() bool {
-	if !strings.EqualFold(strings.TrimSpace(i.Source), "gongfeng") {
-		return false
-	}
-	if i.ExternalRef == nil {
-		return false
-	}
-	return strings.EqualFold(strings.TrimSpace(i.ExternalRef.ExternalState), "closed")
 }
 
 // ManuallyClosed distinguishes an explicit local close from a tracker close.
@@ -230,50 +190,32 @@ func (i Issue) ManuallyClosed() bool {
 // TrackerClosed reads the tracker's raw state so a lagging local status cannot
 // make an externally closed work item executable.
 func (i Issue) TrackerClosed() bool {
-	if i.ExternalRef == nil || (i.Source != "gongfeng" && i.Source != "tapd" && i.Source != "github" && i.Source != "gitlab") {
+	if i.ExternalRef == nil || (i.Source != "github" && i.Source != "gitlab") {
 		return false
 	}
 	state := strings.ToLower(strings.TrimSpace(i.ExternalRef.ExternalState))
 	return state == "closed" || state == "已关闭"
 }
 
-// DeliveryLocked reports whether a merged MR or completed delivery has made this work item final.
+// DeliveryLocked reports whether a completed delivery has made this work item final.
 // A user can explicitly reopen it to allow a follow-up run.
 func (i Issue) DeliveryLocked() bool {
 	return strings.EqualFold(strings.TrimSpace(i.DeliveryState), "merged")
 }
 
 // DeliveryLockedLabel is the user-facing stage label for a delivery-locked issue.
-// MR wording requires a real MR link. Historical manual close stored
-// deliveryMrState=closed without a link, and that is not an MR.
 func (i Issue) DeliveryLockedLabel() string {
 	if i.ManuallyClosed() {
 		return "关闭"
 	}
-	state := strings.ToLower(strings.TrimSpace(i.DeliveryMRState))
-	if strings.TrimSpace(i.DeliveryMRURL) == "" {
-		if state == "closed" {
-			return "已关闭"
-		}
-		return "交付闭环"
-	}
-	switch state {
-	case "merged":
-		return "MR 已合入"
-	case "integrated":
-		return "已合入基线"
-	case "closed":
-		return "MR 已关闭"
-	default:
-		return "交付闭环"
-	}
+	return "交付闭环"
 }
 
 const issueIdentityMarker = "需求身份（平台权威，禁止忽略）"
 
-// IdentityBlock is the authoritative tracker identity injected into LOOP input
-// and the compiled task prompt. Agents must not guess a TAPD/Gongfeng ID from
-// branch names when this block is present.
+// IdentityBlock is the authoritative tracker identity injected into the task
+// prompt. Agents must not guess a tracker ID from branch names when this block
+// is present.
 func (i Issue) IdentityBlock() string {
 	id := strings.TrimSpace(i.ID)
 	if id == "" {
@@ -290,23 +232,17 @@ func (i Issue) IdentityBlock() string {
 	b.WriteString(id)
 	b.WriteString("\n- 来源：")
 	switch source {
-	case "tapd":
-		b.WriteString("TAPD")
-	case "gongfeng":
-		b.WriteString("工蜂")
+	case "github":
+		b.WriteString("GitHub")
+	case "gitlab":
+		b.WriteString("GitLab")
 	default:
 		b.WriteString("本地")
 	}
 	b.WriteByte('\n')
 	ref := i.ExternalRef
 	if ref == nil {
-		if tapdID := i.RequirementTAPDID(); tapdID != "" {
-			b.WriteString("- 统计关联 TAPD ID：")
-			b.WriteString(tapdID)
-			b.WriteString("（仅用于指标归集，不代表 TAPD 同步关系）\n")
-		} else {
-			b.WriteString("- 外部 ID：无\n")
-		}
+		b.WriteString("- 外部 ID：无\n")
 		return b.String()
 	}
 	if kind := strings.TrimSpace(ref.ExternalType); kind != "" {
@@ -354,18 +290,7 @@ func (i Issue) ExecutionBlockedReason() string {
 		return "外部工作项已关闭，请先在外部系统重新打开"
 	}
 	if i.DeliveryLocked() {
-		switch i.DeliveryLockedLabel() {
-		case "已关闭":
-			return "工作项已关闭，请先重新打开后再触发 LOOP"
-		case "MR 已合入":
-			return "关联 MR 已合入，请先重新打开工作项再触发 LOOP"
-		case "已合入基线":
-			return "已合入基线，请先重新打开工作项再触发 LOOP"
-		case "MR 已关闭":
-			return "关联 MR 已关闭，请先重新打开工作项再触发 LOOP"
-		default:
-			return "工作项已交付闭环，请先重新打开后再触发 LOOP"
-		}
+		return "工作项已交付闭环，请先重新打开后再触发 LOOP"
 	}
 	return ""
 }

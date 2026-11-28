@@ -14,7 +14,6 @@ import (
 	"agentflow/internal/auth"
 	"agentflow/internal/domain"
 	"agentflow/internal/repo"
-	"agentflow/internal/tracker"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,110 +34,6 @@ type issueListPage struct {
 // issuesHandlers 提供服务端的个人需求表。
 type issuesHandlers struct {
 	*deps
-}
-
-func (h issuesHandlers) importTAPD(c *gin.Context) {
-	var req struct {
-		ProjectID          string            `json:"projectId"`
-		URL                string            `json:"url"`
-		WorkflowID         string            `json:"workflowId"`
-		RepositoryID       string            `json:"repositoryId"`
-		RepositoryIDs      []string          `json:"repositoryIds"`
-		BaseBranch         *string           `json:"baseBranch"`
-		RepositoryBranches map[string]string `json:"repositoryBranches"`
-	}
-	if !decode(c, &req) {
-		return
-	}
-	if strings.TrimSpace(req.ProjectID) == "" || strings.TrimSpace(req.URL) == "" {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": "projectId and url are required"})
-		return
-	}
-	if _, err := tracker.ParseTAPDStoryURL(req.URL); err != nil {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	if _, ok := h.repo.Project(req.ProjectID); !ok {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": "project not found"})
-		return
-	}
-	ids := tapdImportRepositoryIDs(req.RepositoryID, req.RepositoryIDs)
-	if len(ids) == 0 {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": "请至少选择一个代码仓库"})
-		return
-	}
-	probe := domain.Issue{ProjectID: req.ProjectID, RepositoryIDs: ids, RepositoryID: ids[0], RepositoryBranches: req.RepositoryBranches}
-	if req.BaseBranch != nil {
-		probe.BaseBranch = *req.BaseBranch
-	}
-	if err := h.bindIssueRepositories(&probe); err != nil {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	if h.sync == nil {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": "TAPD 同步未配置"})
-		return
-	}
-	h.configureSync(h.repo.SyncConfig())
-	var fallbackUserID int64
-	if current, ok := h.requestUser(c.Request); ok {
-		fallbackUserID = current.ID
-	}
-	issue, err := h.sync.ImportTAPDStory(h.repo, req.ProjectID, req.URL, fallbackUserID)
-	if err != nil {
-		respond(c, err)
-		return
-	}
-	previous := issue
-	h.applyTAPDImportRepositories(&issue, previous, probe, req.BaseBranch != nil || req.RepositoryBranches != nil)
-	if err := h.bindIssueRepositories(&issue); err != nil {
-		c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	h.invalidateIssueClarifySessionOnRepositoryChange(&issue, previous)
-	if err := h.repo.PutIssue(issue); err != nil {
-		respond(c, err)
-		return
-	}
-	stored, _ := h.repo.Issue(issue.ID)
-	c.JSON(http.StatusOK, stored)
-}
-
-// tapdImportRepositoryIDs trims and deduplicates the requested repositories,
-// keeping their order. The legacy single repository goes first when it is not
-// already listed.
-func tapdImportRepositoryIDs(primary string, ids []string) []string {
-	out := make([]string, 0, len(ids)+1)
-	seen := map[string]bool{}
-	for _, id := range ids {
-		id = strings.TrimSpace(id)
-		if id == "" || seen[id] {
-			continue
-		}
-		seen[id] = true
-		out = append(out, id)
-	}
-	if id := strings.TrimSpace(primary); id != "" && !seen[id] {
-		out = append([]string{id}, out...)
-	}
-	return out
-}
-
-// applyTAPDImportRepositories writes the validated repository selection back
-// onto the imported issue. Explicit branches from the request win; otherwise
-// branches are inherited from the previously stored issue.
-func (h issuesHandlers) applyTAPDImportRepositories(issue *domain.Issue, previous, probe domain.Issue, explicitBranches bool) {
-	if explicitBranches || issue.RepositoryID != probe.RepositoryID {
-		issue.BaseBranch = probe.BaseBranch
-	}
-	issue.RepositoryIDs = probe.RepositoryIDs
-	issue.RepositoryID = probe.RepositoryID
-	if explicitBranches {
-		issue.RepositoryBranches = probe.RepositoryBranches
-	} else {
-		h.inheritIssueRepositoryBranches(issue, previous)
-		h.normalizeLegacyIssueBaseBranch(issue)
-	}
 }
 
 func (h issuesHandlers) issues(c *gin.Context) {
@@ -222,11 +117,6 @@ func (h issuesHandlers) issues(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, map[string]string{"error": "澄清开始时间不能晚于当前时间"})
 			return
 		}
-		if req.TapdID != nil {
-			v.TapdID = strings.TrimSpace(*req.TapdID)
-		} else if found {
-			v.TapdID = existing.TapdID
-		}
 		if found {
 			if !h.requireAccountWrite(c, v.ProjectID, existing.ProjectID) {
 				return
@@ -235,7 +125,7 @@ func (h issuesHandlers) issues(c *gin.Context) {
 		} else if !h.requireAccountWrite(c, v.ProjectID) {
 			return
 		}
-		if len(files) > 0 && (v.ID != "" || (req.SyncTarget != "" && !strings.EqualFold(req.SyncTarget, "local"))) {
+		if len(files) > 0 && v.ID != "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "图片只能随新需求一起保存到平台"})
 			return
 		}
@@ -292,13 +182,6 @@ func (h issuesHandlers) issues(c *gin.Context) {
 		if found {
 			h.invalidateIssueClarifySessionOnRepositoryChange(&v, existing)
 		}
-		if strings.EqualFold(req.SyncTarget, "tapd") && v.Kind == "" {
-			v.Kind = "requirement"
-		}
-		if err := validateManualTapdID(v, req.SyncTarget); err != nil {
-			respond(c, err)
-			return
-		}
 		// Clarification is optional: saving a ticket never scores it or starts
 		// a round. Binding LOOP or repositories must not invent a status.
 		if found {
@@ -309,35 +192,11 @@ func (h issuesHandlers) issues(c *gin.Context) {
 			keepExistingTrackerBinding(&v, domain.Issue{})
 		}
 		if !found && !repo.IssueBoundToTracker(v) {
-			target := strings.ToLower(strings.TrimSpace(req.SyncTarget))
-			switch target {
-			case "gongfeng", "tapd":
-				created, err := h.createIssueOnTracker(v, target)
-				if err != nil {
-					respond(c, err)
-					return
-				}
-				stored, _ := h.repo.Issue(created.ID)
-				if stored.ID != "" {
-					h.recordIssueOperation(c, &stored, "create", "创建需求")
-					if err := h.repo.PutIssue(stored); err != nil {
-						respond(c, err)
-						return
-					}
-					stored, _ = h.repo.Issue(stored.ID)
-				}
-				h.writeIssueView(c, 200, stored)
-				return
-			case "", "local":
-				if v.Kind == "" {
-					v.Kind = "requirement"
-				}
-				v.Source = "local"
-				v.ExternalRef = nil
-			default:
-				c.JSON(400, map[string]string{"error": "syncTarget 只能是 local、gongfeng 或 tapd"})
-				return
+			if v.Kind == "" {
+				v.Kind = "requirement"
 			}
+			v.Source = "local"
+			v.ExternalRef = nil
 		}
 		if v.ID == "" {
 			v.ID = fmt.Sprintf("issue-%d", time.Now().UnixNano())
@@ -422,23 +281,6 @@ func mergeIssueEdit(v, existing domain.Issue) domain.Issue {
 	}
 	v.Operations = append([]domain.IssueOperation(nil), existing.Operations...)
 	return v
-}
-
-// validateManualTapdID checks a hand-entered TAPD ID, which only applies to
-// platform-native issues.
-func validateManualTapdID(v domain.Issue, syncTarget string) error {
-	if v.TapdID == "" {
-		return nil
-	}
-	if v.ExternalRef != nil || strings.EqualFold(v.Source, "tapd") || strings.EqualFold(v.Source, "gongfeng") || strings.EqualFold(syncTarget, "tapd") || strings.EqualFold(syncTarget, "gongfeng") {
-		return HTTPError{Status: http.StatusBadRequest, Message: "手动 TAPD ID 仅用于平台需求；同步单请使用原始外部 ID"}
-	}
-	for _, digit := range v.TapdID {
-		if digit < '0' || digit > '9' {
-			return HTTPError{Status: http.StatusBadRequest, Message: "TAPD ID 只能包含数字"}
-		}
-	}
-	return nil
 }
 
 // issueRoute is one /api/issues/:id sub-resource. Routes are registered with
@@ -560,13 +402,6 @@ func issueChangeDetail(before, after domain.Issue) string {
 	if before.WorkflowID != after.WorkflowID && after.WorkflowID != "" {
 		parts = append(parts, "关联 LOOP")
 	}
-	if before.TapdID != after.TapdID {
-		if after.TapdID == "" {
-			parts = append(parts, "清除统计关联 TAPD ID")
-		} else {
-			parts = append(parts, "统计关联 TAPD ID "+after.TapdID)
-		}
-	}
 	if before.BaseBranch != after.BaseBranch {
 		if after.BaseBranch == "" {
 			parts = append(parts, "工作分支改为自动新建")
@@ -619,11 +454,6 @@ func appendClarificationDescription(description, summary string) string {
 
 func clarificationComment(issue domain.Issue, summary string) string {
 	source := "工作项"
-	if issue.Source == "gongfeng" {
-		source = "工蜂 Issue"
-	} else if issue.Source == "tapd" {
-		source = "TAPD 需求"
-	}
 	return fmt.Sprintf("%s\n\n%s\n\n---\n来源：%s `%s`，由 LoopForge 基于当前描述和用户回答生成。", clarificationHeading, strings.TrimSpace(summary), source, issue.ID)
 }
 
@@ -709,7 +539,7 @@ func issueMatchesAssignee(item domain.Issue, assignee string) bool {
 // issueMatchesQuery reports whether the lower-cased, trimmed needle appears in
 // the issue's searchable text or fuzzily matches its title.
 func issueMatchesQuery(item domain.Issue, needle string) bool {
-	hay := strings.ToLower(item.Title + " " + item.ID + " " + strconv.Itoa(item.Number) + " " + item.RequirementTAPDID())
+	hay := strings.ToLower(item.Title + " " + item.ID + " " + strconv.Itoa(item.Number))
 	if item.ExternalRef != nil {
 		hay += " " + strings.ToLower(item.ExternalRef.ExternalID)
 	}
@@ -802,20 +632,3 @@ func (h issuesHandlers) bindRequirementPlaybook(issue *domain.Issue) {
 	}
 }
 
-func (h issuesHandlers) createIssueOnTracker(v domain.Issue, target string) (domain.Issue, error) {
-	if v.ID == "" {
-		v.ID = fmt.Sprintf("issue-%d", time.Now().UnixNano())
-	}
-	h.configureSync(h.repo.SyncConfig())
-	switch target {
-	case "gongfeng":
-		if v.RepositoryID == "" {
-			return v, fmt.Errorf("同步到工蜂 Issue 需要先绑定代码仓库")
-		}
-		return h.sync.CreateGongfengIssue(h.repo, v)
-	case "tapd":
-		return h.sync.CreateTAPDStory(h.repo, v)
-	default:
-		return v, fmt.Errorf("syncTarget must be gongfeng or tapd")
-	}
-}

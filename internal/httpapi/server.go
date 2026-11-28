@@ -34,14 +34,6 @@ type deps struct {
 	passwordAttempts *passwordLimiter
 }
 
-// configureSync 是跨领域共享的依赖配置行为（mcp/issues/sync 都调用）。
-func (d deps) configureSync(cfg domain.SyncConfig) {
-	if d.sync == nil {
-		return
-	}
-	d.sync.ConfigureWithStore(cfg, d.repo)
-}
-
 // getAuthClient 挂 deps（token 鉴权与 auth 流程共用）。
 func (d deps) getAuthClient() *auth.Client {
 	if d.authClient == nil {
@@ -71,7 +63,9 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 	if trustGatewayIdentityHeaders() && strings.TrimSpace(os.Getenv("AGENTFLOW_IDENTITY_HEADER_SECRET")) == "" {
 		log.Printf("warning: AGENTFLOW_TRUST_IDENTITY_HEADERS is on without AGENTFLOW_IDENTITY_HEADER_SECRET; any loopback caller without forwarding headers, including a proxy that passes client headers through, can sign in as any user")
 	}
-	d.configureSync(s.SyncConfig())
+	if syncSvc != nil {
+		syncSvc.ConfigureWithStore(s)
+	}
 	runnerControls := newRunnerControlHub()
 	api := &Server{
 		deps:         d,
@@ -186,13 +180,6 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 	g.GET("/api/observability/spec", api.observabilitySpec)
 
 	// --- sync & tracker import ---
-	g.GET("/api/sync/config", api.syncAPI.syncConfig)
-	g.PUT("/api/sync/config", api.syncAPI.syncConfig)
-	g.POST("/api/sync/config", api.syncAPI.syncConfig)
-	g.POST("/api/sync/now", api.syncAPI.syncNow)
-	g.GET("/api/sync/logs", api.syncAPI.syncLogs)
-	g.GET("/api/sync/status", api.syncAPI.syncStatus)
-	g.POST("/api/sync/create", api.syncAPI.syncCreate)
 	g.GET("/api/tracker/import", api.syncAPI.trackerImport)
 	g.POST("/api/tracker/import", api.syncAPI.trackerImport)
 
@@ -280,19 +267,16 @@ func (s *Server) openAPI(c *gin.Context) {
 func (s *Server) bootstrap(c *gin.Context) {
 	var projects []domain.Project
 	var repositories []domain.Repository
-	var syncConfig domain.SyncConfig
 	var users []domain.User
 	var load stdsync.WaitGroup
-	load.Add(4)
+	load.Add(3)
 	go func() { defer load.Done(); projects = s.repo.Projects() }()
 	go func() { defer load.Done(); repositories = s.repo.Repositories() }()
-	go func() { defer load.Done(); syncConfig = s.repo.SyncConfig() }()
 	go func() { defer load.Done(); users = s.repo.Users() }()
 	load.Wait()
 	c.JSON(200, map[string]any{
 		"projects":     domain.PublicProjects(projects),
 		"repositories": domain.PublicRepositories(repositories),
-		"syncConfig":   syncConfig,
 		"users":        domain.PublicUsers(users),
 		"storage":      s.repo.StorageInfo(),
 	})

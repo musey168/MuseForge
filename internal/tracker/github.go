@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -50,36 +49,6 @@ func (s *Service) githubClient(project string) (*githubClient, error) {
 	return &githubClient{base: base, path: path, token: token, http: &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 
-// githubClientForRun authenticates as the run did: its push token when set,
-// else the Owner of the run's project when that project binds the repository.
-// It also names the identity it chose. Issue imports pass the importing
-// project and no token.
-func (s *Service) githubClientForRun(project, localProjectID, gitToken string) (*githubClient, string, error) {
-	g, err := s.githubClient(project)
-	if err != nil {
-		return nil, "", err
-	}
-	if token := strings.TrimSpace(gitToken); token != "" {
-		g.token = token
-		return g, "本轮责任人的 Git Token", nil
-	}
-	local := strings.TrimSpace(localProjectID)
-	if s.projectAuth == nil || local == "" {
-		return g, "首个绑定该仓库的项目 Owner 的 Git Token", nil
-	}
-	for _, repo := range s.projectAuth.Repositories() {
-		if repo.Provider != "github" || repo.GongfengProjectID != project || repo.ProjectID != local {
-			continue
-		}
-		g.token = ""
-		if p, found := s.projectAuth.Project(local); found {
-			g.token = s.githubTokenForUser(p.OwnerID)
-		}
-		return g, "项目 " + local + " Owner 的 Git Token", nil
-	}
-	return g, "首个绑定该仓库的项目 Owner 的 Git Token", nil
-}
-
 // githubClientWithToken builds the client of one repository with an explicit
 // credential. The import path resolves the credential itself, so the token
 // the client would pick on its own is replaced, not merged.
@@ -90,15 +59,6 @@ func (s *Service) githubClientWithToken(project, token string) (*githubClient, e
 	}
 	g.token = strings.TrimSpace(token)
 	return g, nil
-}
-
-func (s *Service) githubTokenForUser(userID int64) string {
-	if credentials, ok := s.projectAuth.(GitHTTPCredentialStore); ok {
-		if credential, ok := credentials.GitHTTPCredentialForHost(context.Background(), userID, "github.com"); ok {
-			return credential.Token
-		}
-	}
-	return ""
 }
 
 func (g *githubClient) request(method, suffix string, input, output any) error {
@@ -133,139 +93,6 @@ func (g *githubClient) request(method, suffix string, input, output any) error {
 		return err
 	}
 	return json.NewDecoder(io.LimitReader(res.Body, 8<<20)).Decode(output)
-}
-
-type githubPull struct {
-	Number   int        `json:"number"`
-	URL      string     `json:"html_url"`
-	State    string     `json:"state"`
-	Merged   bool       `json:"merged"`
-	MergedAt *time.Time `json:"merged_at"`
-	Head     struct {
-		Ref string `json:"ref"`
-		SHA string `json:"sha"`
-	} `json:"head"`
-	Base struct {
-		Ref string `json:"ref"`
-	} `json:"base"`
-}
-
-// merged reports whether GitHub considers the pull request merged; either
-// flag is enough because list responses may omit "merged".
-func (p githubPull) merged() bool { return p.Merged || p.MergedAt != nil }
-
-// ref is the "#N" reference returned to delivery callers.
-func (p githubPull) ref() string { return "#" + strconv.Itoa(p.Number) }
-
-func (p githubPull) delivery(project string) domain.DeliveryMR {
-	state := "opened"
-	if p.merged() {
-		state = "merged"
-	} else if p.State == "closed" {
-		state = "closed"
-	}
-	return domain.DeliveryMR{Project: project, IID: p.Number, URL: domain.GongfengMRURL(project, p.Number), State: state, GongfengState: state, TargetBranch: p.Base.Ref}
-}
-
-// mergedAt is GitHub's merged_at, never the poll time; zero until merged.
-func (p githubPull) mergedAt() time.Time {
-	if p.MergedAt == nil {
-		return time.Time{}
-	}
-	return p.MergedAt.UTC()
-}
-
-func (g *githubClient) findPull(branch, target string) (githubPull, bool, error) {
-	list, err := g.listPulls(branch, target)
-	if err != nil {
-		return githubPull{}, false, err
-	}
-	for _, p := range list {
-		if p.Head.Ref == branch && (target == "" || p.Base.Ref == target) {
-			return p, true, nil
-		}
-	}
-	return githubPull{}, false, nil
-}
-
-// listPulls returns the pulls from branch (and into target when set), most
-// recently updated first.
-func (g *githubClient) listPulls(branch, target string) ([]githubPull, error) {
-	q := url.Values{"state": {"all"}, "head": {strings.Split(g.path, "/")[0] + ":" + branch}, "per_page": {"100"}, "sort": {"updated"}, "direction": {"desc"}}
-	if target != "" {
-		q.Set("base", target)
-	}
-	var list []githubPull
-	if err := g.request("GET", "/pulls?"+q.Encode(), nil, &list); err != nil {
-		return nil, err
-	}
-	return list, nil
-}
-
-func githubPullsInto(pulls []githubPull, project, branch, target string) []domain.DeliveryMR {
-	var out []domain.DeliveryMR
-	for _, p := range pulls {
-		if p.Head.Ref != branch || p.Base.Ref != target {
-			continue
-		}
-		mr := p.delivery(project)
-		mr.HeadSHA = strings.TrimSpace(p.Head.SHA)
-		out = append(out, mr)
-	}
-	return out
-}
-
-func (s *Service) githubFindBranch(project, branch string) (domain.DeliveryMR, bool, error) {
-	g, err := s.githubClient(project)
-	if err != nil {
-		return domain.DeliveryMR{}, false, err
-	}
-	p, ok, err := g.findPull(branch, "")
-	if err != nil || !ok {
-		return domain.DeliveryMR{}, ok, err
-	}
-	return p.delivery(project), true, nil
-}
-
-func (s *Service) githubMergeBranch(project, branch, target, title, description string) (string, error) {
-	if branch == "" {
-		return "", fmt.Errorf("source branch is required")
-	}
-	if branch == target {
-		return "", nil
-	}
-	g, err := s.githubClient(project)
-	if err != nil {
-		return "", err
-	}
-	p, found, err := g.findPull(branch, target)
-	if err != nil {
-		return "", err
-	}
-	if found && p.merged() {
-		return p.ref(), nil
-	}
-	if !found || p.State == "closed" {
-		if target == "" {
-			return "", ErrNoOpenMR
-		}
-		if title == "" {
-			title = "LoopForge: " + branch + " → " + target
-		}
-		if err := g.request("POST", "/pulls", map[string]any{"head": branch, "base": target, "title": title, "body": description}, &p); err != nil {
-			return "", err
-		}
-	}
-	var result struct {
-		Merged bool `json:"merged"`
-	}
-	if err := g.request("PUT", "/pulls/"+strconv.Itoa(p.Number)+"/merge", map[string]any{"merge_method": "merge", "sha": p.Head.SHA}, &result); err != nil {
-		return "", err
-	}
-	if !result.Merged {
-		return "", fmt.Errorf("GitHub did not merge pull request #%d", p.Number)
-	}
-	return p.ref(), nil
 }
 
 // githubProvider adapts GitHub to the shared tracker import path.
@@ -336,17 +163,4 @@ func (p *githubProvider) ListIssues(ctx context.Context, repo domain.Repository,
 		}
 	}
 	return nil, fmt.Errorf("GitHub import exceeded 100 pages; narrow the repository scope")
-}
-
-func (s *Service) refreshGitHubDelivery(store MRDeliveryStore, project string, number int) error {
-	g, err := s.githubClient(project)
-	if err != nil {
-		return err
-	}
-	var p githubPull
-	if err := g.request("GET", "/pulls/"+strconv.Itoa(number), nil, &p); err != nil {
-		return err
-	}
-	d := p.delivery(project)
-	return store.UpdateMRDeliveryState(project, number, d.GongfengState, d.TargetBranch, p.mergedAt(), time.Now().UTC())
 }

@@ -19,7 +19,6 @@ import (
 // so gorm never auto-fills them; every writer sets them explicitly.
 
 const (
-	mysqlSyncConfigID = "default"
 	mysqlSeedMarkerID = -1
 )
 
@@ -198,14 +197,6 @@ type workflowRow struct {
 }
 
 func (workflowRow) TableName() string { return "workflows" }
-
-type syncConfigRow struct {
-	ID      string     `gorm:"column:id;primaryKey;size:32"`
-	Payload []byte     `gorm:"column:payload;type:json"`
-	Updated *time.Time `gorm:"column:updated_at"`
-}
-
-func (syncConfigRow) TableName() string { return "sync_config" }
 
 type scheduleJobRow struct {
 	ID      string     `gorm:"column:id;primaryKey;size:64"`
@@ -471,22 +462,6 @@ type previewBlobRow struct {
 
 func (previewBlobRow) TableName() string { return "preview_blobs" }
 
-type mrDeliveryStateRow struct {
-	MRProject    string     `gorm:"column:mr_project;primaryKey;size:255"`
-	MRIID        int        `gorm:"column:mr_iid;primaryKey"`
-	MRURL        string     `gorm:"column:mr_url;size:512"`
-	State        string     `gorm:"column:state;index:idx_mr_delivery_refresh;size:32"`
-	TargetBranch string     `gorm:"column:target_branch;size:255"`
-	IssueID      string     `gorm:"column:issue_id;index:idx_mr_delivery_issue;size:64"`
-	MergedAt     *time.Time `gorm:"column:merged_at;index:idx_mr_delivery_merged_at"`
-	CheckedAt    *time.Time `gorm:"column:checked_at"`
-	RegisteredBy *int64     `gorm:"column:registered_by"`
-	Created      *time.Time `gorm:"column:created_at"`
-	Updated      *time.Time `gorm:"column:updated_at"`
-}
-
-func (mrDeliveryStateRow) TableName() string { return "mr_delivery_states" }
-
 type definitionRevisionRow struct {
 	ID       string     `gorm:"column:id;primaryKey;size:128"`
 	Kind     string     `gorm:"column:kind;index:idx_rev_entity;size:32"`
@@ -735,7 +710,6 @@ func allModels() []any {
 	return []any{userRow{}, localAccountRow{}, userConfigRow{}, gitSSHKeyRow{}, gitHTTPCredentialRow{}, authIntegrationRow{},
 		insightSourceRow{}, insightExecutionRow{},
 		projectRow{}, projectCredentialRow{}, repositoryRow{},
-		syncConfigRow{},
 		issueRow{}, issueCommentRow{}, issueImageRow{},
 		runnerRow{}, userRunnerPrefRow{}, userProjectRunnerPrefRow{}, platformRunnerSettingsRow{},
 		trackerImportRunRow{},

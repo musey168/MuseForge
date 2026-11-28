@@ -19,7 +19,6 @@ func (h *projectsHandlers) projects(c *gin.Context) {
 	if r.Method == http.MethodPut || r.Method == http.MethodPost {
 		var body struct {
 			domain.Project
-			TAPDClear bool `json:"tapdClear"`
 		}
 		if !decode(c, &body) {
 			return
@@ -93,26 +92,6 @@ func (h *projectsHandlers) projects(c *gin.Context) {
 		}
 		if v.Key == "" {
 			v.Key = strings.ToUpper(v.ID)
-		}
-		v.TAPDWorkspaceID = strings.TrimSpace(v.TAPDWorkspaceID)
-		v.TAPDIterationID = strings.TrimSpace(v.TAPDIterationID)
-		if existing, ok := h.repo.Project(v.ID); ok {
-			if body.TAPDClear {
-				v.TAPDWorkspaceID = ""
-				v.TAPDIterationID = ""
-			} else {
-				if v.TAPDWorkspaceID == "" {
-					v.TAPDWorkspaceID = existing.TAPDWorkspaceID
-				}
-				if v.TAPDIterationID == "" {
-					v.TAPDIterationID = existing.TAPDIterationID
-				}
-			}
-		} else {
-			if body.TAPDClear {
-				v.TAPDWorkspaceID = ""
-				v.TAPDIterationID = ""
-			}
 		}
 		if existing, ok := h.repo.Project(v.ID); ok && v.RunEval.IsZero() {
 			v.RunEval = existing.RunEval

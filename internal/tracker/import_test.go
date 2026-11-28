@@ -35,7 +35,7 @@ func trackerImportFixture(t *testing.T, handler http.Handler) (*repo.Store, *Ser
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 	s := NewService()
-	s.ConfigureWithStore(domain.SyncConfig{}, st)
+	s.ConfigureWithStore(st)
 	s.githubAPIBase = srv.URL
 	return st, s, repository
 }
@@ -176,7 +176,7 @@ func TestTrackerImportRecordsEveryRepositoryOutcome(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	s := NewService()
-	s.ConfigureWithStore(domain.SyncConfig{}, st)
+	s.ConfigureWithStore(st)
 	s.githubAPIBase = srv.URL
 
 	run := s.ImportTracker(st, "github", "")

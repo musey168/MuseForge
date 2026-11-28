@@ -3,11 +3,9 @@ package httpapi
 import (
 	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"agentflow/internal/domain"
 	"agentflow/internal/gitwork"
 
 	"golang.org/x/crypto/ssh"
@@ -71,95 +68,6 @@ func TestPlatformSSHRevocationPreservesRunnerLocalPin(t *testing.T) {
 }
 
 
-
-func TestGitSSHRunnerClaimUsesTaskActorCredential(t *testing.T) {
-	f := cvBNewHTTPFixture(t)
-	actor := domain.User{LoginName: "ssh-delivery-actor"}
-	if err := f.s.PutUser(actor); err != nil {
-		t.Fatal(err)
-	}
-	actor, _ = f.s.UserByLoginName(actor.LoginName)
-	const key = "transient-other-host-identity"
-	const otherHostRepo = "git@git.example.org:team/app.git"
-	gitlabRepo, gitlabKey, bare, knownHosts := localSSHGit(t, nil)
-	expectedPin, err := os.ReadFile(knownHosts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, unrelatedKey := sshTestIdentity(t)
-	unrelatedPin := knownhosts.Line([]string{"unrelated.example.org:22"}, unrelatedKey) + "\n"
-	if err := os.WriteFile(knownHosts, append(expectedPin, unrelatedPin...), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv(gitwork.SSHKnownHostsEnv, knownHosts)
-	if err := f.s.SaveGitSSHKey(actor.ID, "", otherHostRepo, "Other Git host", key); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.s.SaveGitSSHKey(actor.ID, "", gitlabRepo, "GitLab", gitlabKey); err != nil {
-		t.Fatal(err)
-	}
-	runnerID, session := registerTestRunner(t, f.h)
-	registered, _ := f.s.Runner(runnerID)
-	now := time.Now().UTC()
-	if err := f.s.RunnerHeartbeat(runnerID, registered.Runtimes, domain.RunnerVersionGitSSHKnownHosts, false, now, now.Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
-	task := domain.RunnerTask{ID: "ssh-task", RunnerID: runnerID, Provider: "mock", Status: domain.RunnerTaskQueued, MaxAttempts: 1, Invocation: &domain.RunnerInvocation{
-		GitSSHUserID: actor.ID,
-		Repositories: []domain.RunnerRepository{{CloneURL: gitlabRepo, UseSSH: true}, {CloneURL: otherHostRepo, UseSSH: true}},
-	}}
-	if err := f.s.PutRunnerTask(task); err != nil {
-		t.Fatal(err)
-	}
-	auth := map[string]string{"Authorization": "Bearer " + session}
-	resp := requestWithHeaders(t, f.h, http.MethodPost, "/api/runners/tasks/claim", map[string]any{
-		"availableRuntimes":        []string{"mock"},
-		"noWait":                   true,
-		"supportsGitSshKnownHosts": true,
-	}, auth)
-	var result struct{ Task domain.RunnerTask }
-	if err := json.Unmarshal(resp.Body.Bytes(), &result); err != nil || resp.Code != http.StatusOK || result.Task.ID != task.ID || result.Task.Invocation == nil || result.Task.Invocation.GitSSHKeys[gitlabRepo] != gitlabKey || result.Task.Invocation.GitSSHKeys[otherHostRepo] != key || result.Task.Invocation.GitSSHUserID != 0 {
-		t.Fatalf("authenticated claim did not hydrate the task actor's keys (HTTP %d)", resp.Code)
-	}
-	pins := result.Task.GitSSHKnownHosts
-	if pins == nil || pins.Entries != string(expectedPin) || pins.ReadFailed || resp.Header().Get("Cache-Control") != "no-store" {
-		t.Fatal("claim did not return just the requested platform host pin with no-store")
-	}
-	stored, _ := f.s.RunnerTask(task.ID)
-	if stored.Invocation == nil || len(stored.Invocation.GitSSHKeys) != 0 || stored.GitSSHKnownHosts != nil {
-		t.Fatal("claimed Git credentials or host pins were persisted")
-	}
-	if resp := requestWithHeaders(t, f.h, http.MethodGet, "/api/runners/tasks/"+task.ID, nil, auth); resp.Code != http.StatusOK || strings.Contains(resp.Body.String(), "gitSsh") || strings.Contains(resp.Body.String(), key) {
-		t.Fatalf("runner status response must omit credential fields (HTTP %d)", resp.Code)
-	}
-
-	// A claim from an older client carries no capability flag, even if the
-	// persisted runner version was reported by a different process.
-	task.ID = "legacy-ssh-task"
-	if err := f.s.PutRunnerTask(task); err != nil {
-		t.Fatal(err)
-	}
-	legacy := requestWithHeaders(t, f.h, http.MethodPost, "/api/runners/tasks/claim", map[string]any{
-		"availableRuntimes": []string{"mock"},
-		"noWait":            true,
-	}, auth)
-	var legacyResult struct{ Task domain.RunnerTask }
-	if err := json.Unmarshal(legacy.Body.Bytes(), &legacyResult); err != nil || legacy.Code != http.StatusOK || legacyResult.Task.ID != task.ID ||
-		legacyResult.Task.GitSSHKnownHosts != nil || legacyResult.Task.Invocation == nil || legacyResult.Task.Invocation.GitSSHKeys[gitlabRepo] != gitlabKey {
-		t.Fatalf("legacy claim did not preserve the existing SSH payload (HTTP %d)", legacy.Code)
-	}
-
-	t.Setenv(gitwork.SSHKnownHostsEnv, "")
-	ctx := gitwork.WithSSHKnownHosts(t.Context(), pins)
-	ctx = gitwork.WithSSHRemote(gitwork.WithSSHKeys(ctx, result.Task.Invocation.GitSSHKeys), gitlabRepo)
-	checkout := t.TempDir()
-	if _, err := gitwork.Run(ctx, checkout, "clone", "--", gitlabRepo, "."); err != nil {
-		t.Fatalf("clone with the claim's pins and no runner configuration: %v", err)
-	}
-	if got, want := sshTestGit(t, checkout, "rev-parse", "HEAD"), sshTestGit(t, bare, "--git-dir=.", "rev-parse", "HEAD"); got != want {
-		t.Fatalf("cloned HEAD = %s, want %s", got, want)
-	}
-}
 
 func sshTestGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
@@ -298,21 +206,3 @@ func serveSSHGit(raw net.Conn, config *ssh.ServerConfig, bare string, expected m
 
 // GitHub SSH-style addresses keep the GitHub provider (HTTPS + token and
 // automatic pull requests); only an explicit provider "ssh" switches transport.
-func TestExplicitGitHubSSHAddressKeepsSSHTransport(t *testing.T) {
-	f := cvBNewHTTPFixture(t)
-	for _, address := range []string{"git@github.com:octo/widgets.git", "ssh://git@github.com/octo/widgets.git", "git clone git@github.com:octo/widgets.git"} {
-		resp := cvBRequest(t, f, http.MethodPost, "/api/repositories", map[string]string{"projectId": "platform", "repoUrl": address}, true)
-		var repository domain.Repository
-		if err := json.Unmarshal(resp.Body.Bytes(), &repository); err != nil || resp.Code != http.StatusOK {
-			t.Fatalf("%s: HTTP %d, %s", address, resp.Code, resp.Body.String())
-		}
-		if repository.Provider != domain.RepositoryProviderSSH || repository.GongfengProjectID != "" || !gitwork.IsSSHReference(repository.CloneURL) {
-			t.Fatalf("%s saved as provider=%q id=%q clone=%q", address, repository.Provider, repository.GongfengProjectID, repository.CloneURL)
-		}
-	}
-	resp := cvBRequest(t, f, http.MethodPost, "/api/repositories", map[string]string{"projectId": "platform", "provider": domain.RepositoryProviderSSH, "repoUrl": "git@github.com:octo/gadgets.git"}, true)
-	var explicit domain.Repository
-	if err := json.Unmarshal(resp.Body.Bytes(), &explicit); err != nil || resp.Code != http.StatusOK || explicit.Provider != domain.RepositoryProviderSSH || explicit.CloneURL != "git@github.com:octo/gadgets.git" {
-		t.Fatalf("explicit SSH provider: HTTP %d, %s", resp.Code, resp.Body.String())
-	}
-}

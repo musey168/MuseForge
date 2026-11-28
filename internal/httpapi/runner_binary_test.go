@@ -13,9 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func init() { gin.SetMode(gin.TestMode) }
-
-// serveRunnerBinaryViaGin routes the request through a minimal gin engine.
 func serveRunnerBinaryViaGin(t *testing.T, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	g := gin.New()
