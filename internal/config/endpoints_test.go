@@ -19,7 +19,7 @@ func TestLoopbackURL(t *testing.T) {
 
 func TestLoadEndpointsAPIFollowsListenAddr(t *testing.T) {
 	clearEndpointEnv(t)
-	ep, err := LoadEndpoints("api", "127.0.0.1:18090")
+	ep, err := LoadEndpoints("127.0.0.1:18090")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,37 +29,19 @@ func TestLoadEndpointsAPIFollowsListenAddr(t *testing.T) {
 		t.Fatalf("endpoints = %#v", ep)
 	}
 	t.Setenv("AGENTFLOW_HTTP_PORT", "9090")
-	if ep, _ = LoadEndpoints("all", ""); ep.ListenAddr != "127.0.0.1:9090" || ep.APIBase != "http://127.0.0.1:9090" {
+	if ep, _ = LoadEndpoints(""); ep.ListenAddr != "127.0.0.1:9090" || ep.APIBase != "http://127.0.0.1:9090" {
 		t.Fatalf("port from env: %#v", ep)
 	}
 	t.Setenv("AGENTFLOW_HTTP_PORT", "nope")
-	if _, err := LoadEndpoints("all", ""); err == nil {
+	if _, err := LoadEndpoints(""); err == nil {
 		t.Fatal("expected invalid AGENTFLOW_HTTP_PORT error")
-	}
-}
-
-func TestLoadEndpointsWorker(t *testing.T) {
-	clearEndpointEnv(t)
-	ep, err := LoadEndpoints("worker", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ep.ListenAddr != ":8081" || ep.ControlURL != "http://127.0.0.1:8081" || ep.PlatformBase != "" || ep.CollectorBase != "http://127.0.0.1:8080" {
-		t.Fatalf("worker defaults = %#v", ep)
-	}
-	t.Setenv("AGENTFLOW_CONTROL_URL", "http://10.0.0.2:8081/")
-	t.Setenv("AGENTFLOW_PLATFORM_MCP_URL", "http://10.0.0.2:8080/")
-	t.Setenv("AGENTFLOW_PLATFORM_MCP_TOKEN", " tok ")
-	ep, _ = LoadEndpoints("worker", ":8099")
-	if ep.ListenAddr != ":8099" || ep.ControlURL != "http://10.0.0.2:8081" || ep.PlatformBase != "http://10.0.0.2:8080" || ep.PlatformMCPToken != "tok" || ep.CollectorBase != "http://10.0.0.2:8080" {
-		t.Fatalf("worker configured = %#v", ep)
 	}
 }
 
 func TestLoadEndpointsAPIURLFallback(t *testing.T) {
 	clearEndpointEnv(t)
 	t.Setenv("AGENTFLOW_API_URL", "http://api.internal:8080/")
-	ep, _ := LoadEndpoints("worker", "")
+	ep, _ := LoadEndpoints("")
 	if ep.PlatformBase != "http://api.internal:8080" || ep.APIBase != "http://api.internal:8080" {
 		t.Fatalf("API URL fallback = %#v", ep)
 	}
@@ -83,7 +65,7 @@ func TestCurrentDefaultsAndOverride(t *testing.T) {
 
 func TestPrivateAgentToolGatewayUnlessOverridden(t *testing.T) {
 	clearEndpointEnv(t)
-	ep, err := LoadEndpoints("api", "127.0.0.1:18090")
+	ep, err := LoadEndpoints("127.0.0.1:18090")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +76,7 @@ func TestPrivateAgentToolGatewayUnlessOverridden(t *testing.T) {
 		t.Fatalf("private gateway = %#v", private)
 	}
 	t.Setenv("AGENTFLOW_AGENT_TOOL_GATEWAY_URL", "http://gateway.internal:9000")
-	ep, _ = LoadEndpoints("api", "127.0.0.1:18090")
+	ep, _ = LoadEndpoints("127.0.0.1:18090")
 	if got := ep.WithPrivateAgentToolGateway("http://127.0.0.1:41234").AgentToolGateway; got != "http://gateway.internal:9000" {
 		t.Fatalf("explicit override lost: %s", got)
 	}
@@ -104,7 +86,7 @@ func TestPrivateAgentToolGatewayUnlessOverridden(t *testing.T) {
 // unauthenticated API, so it binds to the loopback interface and refuses
 // anything else.
 func TestRequireLoopbackListenAddr(t *testing.T) {
-	t.Setenv("AGENTFLOW_ALLOW_PUBLIC_BIND", "")
+	t.Setenv("AGENTFLOW_CONTAINER_BIND", "")
 	for _, tc := range []struct {
 		addr    string
 		wantErr bool
@@ -130,16 +112,16 @@ func TestRequireLoopbackListenAddr(t *testing.T) {
 // loopback interface and that a public address is refused.
 func TestLoadEndpointsBindsLoopbackOnly(t *testing.T) {
 	clearEndpointEnv(t)
-	t.Setenv("AGENTFLOW_ALLOW_PUBLIC_BIND", "")
+	t.Setenv("AGENTFLOW_CONTAINER_BIND", "")
 	t.Setenv("AGENTFLOW_HTTP_PORT", "18099")
-	ep, err := LoadEndpoints("api", "")
+	ep, err := LoadEndpoints("")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ep.ListenAddr != "127.0.0.1:18099" {
 		t.Fatalf("default listen address = %q, want the loopback interface", ep.ListenAddr)
 	}
-	if _, err := LoadEndpoints("api", "0.0.0.0:18099"); err == nil {
+	if _, err := LoadEndpoints("0.0.0.0:18099"); err == nil {
 		t.Fatal("a public listen address must be refused")
 	}
 }
@@ -149,9 +131,9 @@ func TestLoadEndpointsBindsLoopbackOnly(t *testing.T) {
 // the host exposes.
 func TestLoadEndpointsAllowsTheContainerOptIn(t *testing.T) {
 	clearEndpointEnv(t)
-	t.Setenv("AGENTFLOW_ALLOW_PUBLIC_BIND", "1")
+	t.Setenv("AGENTFLOW_CONTAINER_BIND", "1")
 	t.Setenv("AGENTFLOW_HTTP_PORT", "18099")
-	if _, err := LoadEndpoints("api", "0.0.0.0:18099"); err != nil {
+	if _, err := LoadEndpoints("0.0.0.0:18099"); err != nil {
 		t.Fatalf("the container opt-in must be honoured: %v", err)
 	}
 }

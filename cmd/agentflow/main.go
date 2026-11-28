@@ -99,7 +99,7 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Printf("storage driver=%v database=%v", s.StorageInfo()["driver"], s.StorageInfo()["database"])
-	endpoints, err := config.LoadEndpoints("api", strings.TrimSpace(*addr))
+	endpoints, err := config.LoadEndpoints(strings.TrimSpace(*addr))
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -39,8 +39,9 @@ services:
       AGENTFLOW_HTTP_PORT: 8080
       # Inside the container's own network namespace the wildcard reaches
       # nothing but the container; the published port bounds what the host
-      # exposes, and it is published on the loopback interface.
-      AGENTFLOW_ALLOW_PUBLIC_BIND: "1"
+      # exposes, and it is published on the loopback interface. A host
+      # deployment never sets this: there the refusal is unconditional.
+      AGENTFLOW_CONTAINER_BIND: "1"
       # The datasource: one SQLite file by default, no database server needed.
       # An empty value falls back to AGENTFLOW_MYSQL_DSN (the MySQL profile).
       AGENTFLOW_DATASOURCE_DSN: ${AGENTFLOW_DATASOURCE_DSN:-}

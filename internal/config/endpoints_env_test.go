@@ -35,7 +35,7 @@ func TestHTTPPortFromEnv(t *testing.T) {
 func TestLoadEndpointsRejectsInvalidPort(t *testing.T) {
 	clearEndpointEnv(t)
 	t.Setenv("AGENTFLOW_HTTP_PORT", "70000")
-	if _, err := LoadEndpoints("api", ""); err == nil {
+	if _, err := LoadEndpoints(""); err == nil {
 		t.Fatal("LoadEndpoints accepted an out-of-range AGENTFLOW_HTTP_PORT")
 	}
 }

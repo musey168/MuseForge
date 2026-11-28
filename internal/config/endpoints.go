@@ -12,63 +12,39 @@ import (
 )
 
 // Endpoints is every address this process listens on or hands to others.
-// Keeping them together makes the api/worker/all differences explicit: a
-// worker serves no API plane, so it only knows platform addresses that the
-// deployment configures.
 type Endpoints struct {
-	Role string
 	// ListenAddr is this process's own HTTP listener.
 	ListenAddr string
 	// APIBase reaches the API plane from the same host (loopback by default).
 	APIBase string
-	// PlatformBase reaches the API plane from agent sandboxes. Empty when the
-	// deployment did not configure one for a worker; see AGENTFLOW_PLATFORM_MCP_URL.
+	// PlatformBase reaches the API plane from the MCP mount. Empty when the
+	// deployment did not configure one; see AGENTFLOW_PLATFORM_MCP_URL.
 	PlatformBase     string
 	PlatformMCPToken string
-	// ControlURL is where the API plane reaches this worker to interrupt runs.
-	ControlURL        string
-	ControlToken      string
-	WorkerFallbackURL string
-	// AgentToolGateway is the base the assistant's host-side CLI uses for
-	// native agent tools.
+	// AgentToolGateway is the base a host-side CLI uses for native tools.
 	AgentToolGateway string
 	// CollectorBase receives OTLP telemetry from agent CLIs.
 	CollectorBase string
 }
 
-const (
-	defaultAPIPort    = "8080"
-	defaultWorkerAddr = ":8081"
-)
+const defaultAPIPort = "8080"
 
-// LoadEndpoints resolves Endpoints for role from the -addr flag and env.
-func LoadEndpoints(role, addrFlag string) (Endpoints, error) {
-	ep := Endpoints{
-		Role:              role,
-		PlatformMCPToken:  env("AGENTFLOW_PLATFORM_MCP_TOKEN"),
-		ControlToken:      env("AGENTFLOW_CONTROL_TOKEN"),
-		WorkerFallbackURL: envURL("AGENTFLOW_WORKER_URL"),
-	}
+// LoadEndpoints resolves Endpoints from the -addr flag and the environment.
+func LoadEndpoints(addrFlag string) (Endpoints, error) {
+	ep := Endpoints{PlatformMCPToken: env("AGENTFLOW_PLATFORM_MCP_TOKEN")}
 	httpPort, err := httpPortFromEnv()
 	if err != nil {
 		return Endpoints{}, err
 	}
 	configuredAPI := envURL("AGENTFLOW_API_URL")
-	if role == "worker" {
-		ep.ListenAddr = firstNonEmpty(addrFlag, defaultWorkerAddr)
-		ep.ControlURL = firstNonEmpty(envURL("AGENTFLOW_CONTROL_URL"), LoopbackURL(ep.ListenAddr))
-		ep.APIBase = firstNonEmpty(configuredAPI, "http://127.0.0.1:"+httpPort)
-		ep.PlatformBase = firstNonEmpty(envURL("AGENTFLOW_PLATFORM_MCP_URL"), configuredAPI)
-	} else {
-		// The personal build serves an unauthenticated API, so it listens on
-		// the loopback interface only.
-		ep.ListenAddr = firstNonEmpty(addrFlag, "127.0.0.1:"+httpPort)
-		if err := RequireLoopbackListenAddr(ep.ListenAddr); err != nil {
-			return Endpoints{}, err
-		}
-		ep.APIBase = firstNonEmpty(configuredAPI, LoopbackURL(ep.ListenAddr))
-		ep.PlatformBase = firstNonEmpty(envURL("AGENTFLOW_PLATFORM_MCP_URL"), ep.APIBase)
+	// The personal build serves an unauthenticated API, so it listens on the
+	// loopback interface only.
+	ep.ListenAddr = firstNonEmpty(addrFlag, "127.0.0.1:"+httpPort)
+	if err := RequireLoopbackListenAddr(ep.ListenAddr); err != nil {
+		return Endpoints{}, err
 	}
+	ep.APIBase = firstNonEmpty(configuredAPI, LoopbackURL(ep.ListenAddr))
+	ep.PlatformBase = firstNonEmpty(envURL("AGENTFLOW_PLATFORM_MCP_URL"), ep.APIBase)
 	ep.AgentToolGateway = firstNonEmpty(envURL("AGENTFLOW_AGENT_TOOL_GATEWAY_URL"), ep.APIBase)
 	ep.CollectorBase = firstNonEmpty(ep.PlatformBase, ep.APIBase)
 	return ep, nil
@@ -82,12 +58,12 @@ func LoadEndpoints(role, addrFlag string) (Endpoints, error) {
 // An address with no host ("8080", ":8080") means the wildcard, which is not
 // loopback and is refused.
 //
-// A container deployment opts in with AGENTFLOW_ALLOW_PUBLIC_BIND=1: inside the
+// A container deployment opts in with AGENTFLOW_CONTAINER_BIND=1: inside the
 // container's own network namespace the wildcard reaches nothing but the
-// container, and the published port bounds what the host exposes. A host
-// deployment must not set it.
+// container, and the published port — bound to the host's loopback interface —
+// bounds what the host exposes. A host deployment never sets it.
 func RequireLoopbackListenAddr(addr string) error {
-	if env("AGENTFLOW_ALLOW_PUBLIC_BIND") == "1" {
+	if env("AGENTFLOW_CONTAINER_BIND") == "1" {
 		return nil
 	}
 	host, _, err := net.SplitHostPort(strings.TrimSpace(addr))
@@ -164,10 +140,10 @@ func Current() Endpoints {
 	if ep != nil {
 		return *ep
 	}
-	fallback, err := LoadEndpoints("all", "")
+	fallback, err := LoadEndpoints("")
 	if err != nil {
 		base := "http://127.0.0.1:" + defaultAPIPort
-		return Endpoints{Role: "all", ListenAddr: ":" + defaultAPIPort, APIBase: base, PlatformBase: base, AgentToolGateway: base, CollectorBase: base}
+		return Endpoints{ListenAddr: "127.0.0.1:" + defaultAPIPort, APIBase: base, PlatformBase: base, AgentToolGateway: base, CollectorBase: base}
 	}
 	return fallback
 }

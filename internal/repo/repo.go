@@ -96,7 +96,7 @@ type IssuesRepo struct {
 // UsersRepo owns users and their saved credentials.
 type UsersRepo struct {
 	*deps
-	// keyring seals Bot credentials; installed by SetCredentialKeyring.
+	// keyring seals the Git and model credentials.
 	keyringMu sync.RWMutex
 	keyring   *credcrypt.Keyring
 }
@@ -104,17 +104,6 @@ type UsersRepo struct {
 // RunnersRepo owns the CLI runner registry — the machine inventory.
 type RunnersRepo struct {
 	*deps
-	projects *ProjectsRepo
-}
-
-// AnalyticsRepo owns the read-only operational analytics view. It aggregates
-// from the reported executions, not from internal runs — the platform does not
-// run anything itself.
-type AnalyticsRepo struct {
-	*deps
-	issues   *IssuesRepo
-	projects *ProjectsRepo
-	insights *InsightsRepo
 }
 
 // Store 组合各领域 Repo。领域 Repo 以匿名指针嵌入（未导出类型）：包外仅能
@@ -127,7 +116,6 @@ type Store struct {
 	*IssuesRepo
 	*UsersRepo
 	*RunnersRepo
-	*AnalyticsRepo
 	*InsightsRepo
 	*TrackerRepo
 }
@@ -142,9 +130,8 @@ func newStore(db *gorm.DB) *Store {
 	s.UsersRepo = &UsersRepo{deps: d}
 	s.RepositoriesRepo = &RepositoriesRepo{deps: d, projects: s.ProjectsRepo}
 	s.IssuesRepo = &IssuesRepo{deps: d, projects: s.ProjectsRepo, users: s.UsersRepo}
-	s.RunnersRepo = &RunnersRepo{deps: d, projects: s.ProjectsRepo}
+	s.RunnersRepo = &RunnersRepo{deps: d}
 	s.InsightsRepo = &InsightsRepo{deps: d}
-	s.AnalyticsRepo = &AnalyticsRepo{deps: d, issues: s.IssuesRepo, projects: s.ProjectsRepo, insights: s.InsightsRepo}
 	s.TrackerRepo = &TrackerRepo{deps: d}
 	return s
 }
@@ -351,12 +338,12 @@ func (s *Store) StorageInfo() map[string]any {
 	if s.DB != nil {
 		driver = s.DB.Dialector.Name()
 	}
-	note := "所有状态都直接读写数据源：项目、需求、运行记录、助手对话和定时任务都在同一个库里。"
+	note := "所有状态都直接读写数据源：项目、需求、代码仓库、凭据和上报的执行记录都在同一个库里。"
 	switch driver {
 	case datasourceSQLite:
-		note = "所有状态都在 SQLite 文件里：项目、需求、运行记录、助手对话和定时任务都直接读写这个文件。"
+		note = "所有状态都在 SQLite 文件里：项目、需求、代码仓库、凭据和上报的执行记录都直接读写这个文件。"
 	case datasourceMySQL:
-		note = "所有状态都在 MySQL 里：项目、需求、运行记录、助手对话和定时任务都直接读写数据库。"
+		note = "所有状态都在 MySQL 里：项目、需求、代码仓库、凭据和上报的执行记录都直接读写数据库。"
 	}
 	return map[string]any{
 		"driver":   driver,
@@ -436,39 +423,6 @@ func parseStoredGongfengIssueID(id string) (repo string, iid int) {
 	return body[:i], n
 }
 
-func cloneRunNodes(nodes map[string]*domain.NodeRun) map[string]*domain.NodeRun {
-	if len(nodes) == 0 {
-		return nil
-	}
-	out := make(map[string]*domain.NodeRun, len(nodes))
-	for id, node := range nodes {
-		if node == nil {
-			continue
-		}
-		cp := *node
-		out[id] = &cp
-	}
-	return out
-}
-
-func cloneRun(run domain.Run) domain.Run {
-	run.Nodes = cloneRunNodes(run.Nodes)
-	run.Events = append([]domain.RunEvent(nil), run.Events...)
-	run.Telemetry = append([]domain.TelemetryEvent(nil), run.Telemetry...)
-	run.Logs = append([]domain.LogRecord(nil), run.Logs...)
-	run.Artifacts = append([]domain.Artifact(nil), run.Artifacts...)
-	return run
-}
-
-func normalizeRefs(values []string, prefix string) []string {
-	out := make([]string, 0, len(values))
-	for _, v := range values {
-		v = strings.TrimPrefix(v, prefix)
-		v = strings.TrimSuffix(v, ".md")
-		out = append(out, v)
-	}
-	return out
-}
 
 func sortSlice[T any](values []T, less func(a, b T) bool) {
 	sort.Slice(values, func(i, j int) bool { return less(values[i], values[j]) })

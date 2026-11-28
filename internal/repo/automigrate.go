@@ -16,9 +16,9 @@ import (
 // ever ADDS what is absent, so a production schema migrated by the master
 // binary is left untouched except for genuinely missing objects.
 //
-// The runs.repositories / run_artifacts.repository_dir / runs.pause_requested
-// / runs.human_context / runs.cancel_requested / runs.sandbox_id additions
-// from the master migrations are all covered here, which removes any
+// Every table and column the running database is missing comes from the
+// current model manifest: allModels() is the single list, so a new model
+// reaches every datasource without a separate migration step and without a
 // dependency on schema_migrations marker IDs.
 func autoMigrateIncremental(db *gorm.DB) error {
 	m := db.Migrator()
