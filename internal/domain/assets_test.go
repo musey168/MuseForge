@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"reflect"
 	"testing"
 )
 
@@ -31,34 +30,6 @@ func TestValidateSandboxAssets(t *testing.T) {
 		if err := ValidateSandboxAssets(tc.profile); (err == nil) != tc.valid {
 			t.Errorf("%s: err = %v, want valid %v", tc.name, err, tc.valid)
 		}
-	}
-}
-
-func TestRunnerSandboxNamesTheRecipeAfterTheSandbox(t *testing.T) {
-	spec := RunnerSandbox(SandboxProfile{ID: "go", Name: "Go", ProjectID: "p", Driver: SandboxDriverDocker, Dockerfile: &SandboxDockerfile{Content: "FROM golang", Files: map[string]string{"a": "b"}}})
-	if spec.Dockerfile == nil || spec.Dockerfile.ID != "go" || spec.Dockerfile.Name != "Go" || spec.Dockerfile.Content != "FROM golang" || spec.Dockerfile.Files["a"] != "b" || spec.Profile.DockerfileID != "go" {
-		t.Fatalf("docker spec = %+v", spec)
-	}
-	if spec.Profile.Dockerfile != nil {
-		t.Fatalf("the spec profile must not carry the embedded recipe: %+v", spec.Profile)
-	}
-	if spec := RunnerSandbox(SandboxProfile{ID: "bare", Driver: SandboxDriverNative, Environment: map[string]string{"A": "1"}}); spec.Dockerfile != nil || spec.Profile.Environment["A"] != "1" {
-		t.Fatalf("a native sandbox = %+v", spec)
-	}
-}
-
-func TestRunnerSandboxLeavesCatalogDescriptionBehind(t *testing.T) {
-	profile := SandboxProfile{ID: "go", Name: "Go", Description: "团队 Go 构建环境", Driver: SandboxDriverNative}
-	spec := RunnerSandbox(profile)
-	if spec.Profile.Description != "" {
-		t.Fatalf("the runner spec must not carry catalog copy: %+v", spec.Profile)
-	}
-	if profile.Description != "团队 Go 构建环境" {
-		t.Fatalf("RunnerSandbox must not mutate the stored profile: %+v", profile)
-	}
-	plain := RunnerSandbox(SandboxProfile{ID: "go", Name: "Go", Driver: SandboxDriverNative})
-	if !reflect.DeepEqual(spec, plain) {
-		t.Fatalf("editing a description changed the execution spec:\n%+v\n%+v", spec, plain)
 	}
 }
 

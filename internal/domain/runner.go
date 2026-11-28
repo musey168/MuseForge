@@ -1,12 +1,6 @@
 package domain
 
 import (
-	"encoding/json"
-	"errors"
-	"fmt"
-	"maps"
-	"path"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -14,313 +8,48 @@ import (
 
 // Runner connection model (docs: cli-connect.md).
 //
-// A Runner is a long-lived daemon on a user machine or CVM that connects to
-// the control plane over outbound HTTPS only. The platform never opens an
+// A Runner is a long-lived daemon on a user machine that connects to the
+// control plane over outbound HTTPS only. The platform never opens an
 // inbound port to the machine. A RunnerRuntime is one Agent CLI (claude,
-// codex, codebuddy, ...) discovered on that machine. RunnerTask is a durable
-// execution unit persisted by the control plane; a connection drop never
-// loses a task.
+// codex, codebuddy, ...) discovered on that machine. The machine is an
+// inventory: it registers, heartbeats and reports its CLIs. It never
+// receives work.
 
 const (
 	RunnerStatusOnline  = "online"
 	RunnerStatusOffline = "offline"
-
-	RunnerSelectionModeAuto     = "auto"
-	RunnerSelectionModePlatform = "platform"
-	PlatformRunnerName          = "平台执行机器（云端）"
 )
-
-// DefaultRunnerRunLimit is the initial LOOP run limit for each execution machine.
-const DefaultRunnerRunLimit = 10
-
-type RunnerLoad struct {
-	OccupiedRuns int `json:"occupiedRuns"`
-	RunningRuns  int `json:"runningRuns"`
-	QueuedRuns   int `json:"queuedRuns"`
-}
-
-type PlatformRunnerStatus struct {
-	Name            string      `json:"name"`
-	Status          string      `json:"status"`
-	RunLimit        int         `json:"runLimit"`
-	CanEditLimit    bool        `json:"canEditLimit"`
-	CloudPool       bool        `json:"cloudPool"`
-	CloudPoolOnline int         `json:"cloudPoolOnline"`
-	Load            *RunnerLoad `json:"load"`
-
-	AllowPrivilegedSandbox bool `json:"allowPrivilegedSandbox"`
-}
-
-// RunnerTask states. LEASED sits between QUEUED and RUNNING so a claim that
-// never starts is still recoverable through lease expiry.
-const (
-	RunnerTaskQueued   = "queued"
-	RunnerTaskLeased   = "leased"
-	RunnerTaskRunning  = "running"
-	RunnerTaskSuccess  = "success"
-	RunnerTaskFailed   = "failed"
-	RunnerTaskCanceled = "canceled"
-)
-
-// RunnerTaskDesiredState is carried on lease renewal responses so a cancel
-// reaches the runner without an extra polling channel.
-const (
-	RunnerTaskDesiredCancel        = "cancel"
-	RunnerTaskActionCleanupRun     = "cleanup_run"
-	RunnerTaskActionArchivePreview = "archive_preview"
-	RunnerTaskActionPullWorkBranch = "pull_work_branch"
-	RunnerTaskActionPushWorkBranch = "push_work_branch"
-	RunnerTaskActionIntegrate      = "integrate"
-	RunnerTaskActionAlignBaseline  = "align_baseline"
-)
-
-// RunnerVersionWorkBranchSync is the first runner version that executes the
-// pull/push work-branch actions. Older runners would misread them as an Agent
-// invocation, so the engine must not queue them there.
-const RunnerVersionWorkBranchSync = "0.2.0"
-
-// RunnerVersionReportedOutputs is the first runner version that writes
-// Invocation.Inputs, clears the gate result before each invocation, and
-// reports RunnerTask.Outputs. The engine validates and registers artifacts
-// from those outputs instead of a control-plane copy of the workspace.
-const RunnerVersionReportedOutputs = "0.3.0"
-
-// RunnerVersionIntegrate is the first runner version that executes the
-// integrate action: merge the latest integration branch into the work branch
-// in the run's checkout and push it (and, when asked, the integration branch).
-const RunnerVersionIntegrate = "0.4.0"
-
-// RunnerVersionAlignBaseline is the first runner version that executes the
-// align_baseline action: merge a repository's default branch into its
-// integration branch in a throwaway clone and push it, or report conflicts.
-const RunnerVersionAlignBaseline = "0.5.0"
-
-// RunnerVersionWorkspacePreparation is the first runner that prepares restored
-// workspaces and binds interactive terminals to the frozen run sandbox.
-const RunnerVersionWorkspacePreparation = "0.6.0"
-
-// RunnerVersionWorkspaceOwnerPreparation supports a child run's prepared
-// sandbox in its parent's checkout and keeps readiness receipts run-scoped.
-const RunnerVersionWorkspaceOwnerPreparation = "0.7.1"
-
-const RunnerVersionConversationWorkspace = "0.8.0"
-
-// Conversation CLI execution includes cancellation of preemptible workspace
-// exports and addressable startup cancellation, so stopping cannot strand a
-// queued CLI or block a following turn behind a previous background save.
-const RunnerVersionConversationCLI = "0.10.1"
 
 // RunnerVersionCLISettings adds chat account login, CLI tests, model discovery
 // and updates from the machine card.
 const RunnerVersionCLISettings = "0.10.2"
 
+// SupportsCLISettings reports whether the machine offers the account login
+// and model catalogue the inventory page shows.
 func (r Runner) SupportsCLISettings() bool {
 	return versionAtLeast(r.RunnerVersion, RunnerVersionCLISettings)
 }
 
-func (r Runner) SupportsConversationCLI() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionConversationCLI)
-}
-
-// SupportsNativeSandbox checks the isolation driver against the Runner's OS
-// and its reported ability to start a native sandbox.
-func (r Runner) SupportsNativeSandbox(driver string) bool {
-	if !r.NativeSandboxAvailable {
-		return false
-	}
-	os := strings.ToLower(strings.TrimSpace(r.OS))
-	resolved, err := ResolveSandboxDriver(driver, os)
-	return err == nil && (resolved == SandboxDriverSeatbelt && os == "darwin" ||
-		resolved == SandboxDriverBwrap && os == "linux")
-}
-
-func (r Runner) SupportsConversationWorkspace() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionConversationWorkspace)
-}
-
-// RunnerVersionDefaultSelection is the oldest runner a user may pick as the
-// default execution machine. Older daemons cannot open conversation
-// workspaces, so new tasks routed to them would fail.
-const RunnerVersionDefaultSelection = RunnerVersionConversationWorkspace
-
-// DefaultSelectionBlocker explains why the runner cannot become a user's
-// default execution machine, or returns "" when it can. The runners page
-// disables「设为默认」with the same rules.
-func (r Runner) DefaultSelectionBlocker() string {
-	if r.Status != RunnerStatusOnline {
-		return "机器离线，不能设为默认执行机器，请先在该机器上启动执行机器服务"
-	}
-	if !versionAtLeast(r.RunnerVersion, RunnerVersionDefaultSelection) {
-		version := strings.TrimSpace(r.RunnerVersion)
-		if version == "" {
-			version = "未知"
-		}
-		return fmt.Sprintf("执行机器版本 %s 过低，需升级至 %s 及以上才能设为默认", version, RunnerVersionDefaultSelection)
-	}
-	return ""
-}
-
-// RunnerVersionSharedPush is the first runner that merges the work branch into
-// an existing shared branch (preview/test) in a throwaway worktree and pushes
-// it directly, without a Gongfeng MR.
-const RunnerVersionSharedPush = "0.9.0"
-
-const RunnerVersionGitSSH = "0.9.3"
-
-func (r Runner) SupportsGitSSH() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionGitSSH)
-}
-
-// RunnerVersionGitHTTP is the first runner whose workspace helper answers
-// Git credential and gh/glab requests through the session gateway.
-const RunnerVersionGitHTTP = "0.11.0"
-
-func (r Runner) SupportsGitHTTP() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionGitHTTP)
-}
-
-// RunnerVersionGitSSHKnownHosts is the first runner to accept platform SSH pins.
-const RunnerVersionGitSSHKnownHosts = "0.11.1"
-
-// Older runners would ignore the custom endpoint and use the official one.
-const RunnerVersionCodeBuddyBaseURL = "0.11.2"
-
-func (r Runner) SupportsCodeBuddyBaseURL() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionCodeBuddyBaseURL)
-}
-
-// RunnerVersionRepositoryCache is the first runner that reuses a host cache
-// when checking out repositories for a native workspace. Older runners clone fully.
-const RunnerVersionRepositoryCache = "0.12.0"
-
-// RunnerVersionGitPlainHTTP is the first runner that can supply credentials
-// for an authorized plaintext Git instance.
-const RunnerVersionGitPlainHTTP = "0.12.4"
-
-func (r Runner) SupportsGitPlainHTTP() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionGitPlainHTTP)
-}
-
-const RunnerGitPlainHTTPUpgradeMessage = "Git HTTP 仓库需要 Runner " + RunnerVersionGitPlainHTTP + " 或更新版本，请先升级执行机器"
-
-// RunnerVersionPrivilegedSandbox is the minimum version that enforces the
-// execution machine's saved permission for privileged Docker sandboxes.
-const RunnerVersionPrivilegedSandbox = "0.13.2"
-
-const RunnerPrivilegedSandboxHeader = "X-AgentFlow-Privileged-Sandbox-Settings"
-const RunnerPrivilegedSandboxUpgradeMessage = "特权 Docker 沙箱需要 Runner " + RunnerVersionPrivilegedSandbox + " 或更新版本，请先升级执行机器"
-
-func (r Runner) ValidatePrivilegedSandboxVersion(profile SandboxProfile) error {
-	if profile.Privileged && !r.SupportsPrivilegedSandboxSettings() {
-		return errors.New(RunnerPrivilegedSandboxUpgradeMessage)
-	}
-	return nil
-}
-
-func (r Runner) SupportsPrivilegedSandboxSettings() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionPrivilegedSandbox)
-}
-
-const RunnerVersionDockerSandboxLimits = "0.12.6"
-
-const RunnerDockerSandboxLimitsUpgradeMessage = "配置了 CPU 或内存上限的 Docker 沙箱需要 Runner " + RunnerVersionDockerSandboxLimits + " 或更新版本，请先升级执行机器"
-
-const RunnerDockerSandboxLimitsHeader = "X-AgentFlow-Docker-Sandbox-Limits"
-
-func (r Runner) SupportsDockerSandboxLimits() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionDockerSandboxLimits)
-}
-
-// FilterGitHTTPCredentials limits a credential snapshot to the transports the
-// runner supports. The caller's map may also be used by local execution.
-func (r Runner) FilterGitHTTPCredentials(credentials map[string]GitHTTPExecutionCredential) map[string]GitHTTPExecutionCredential {
-	if r.SupportsGitPlainHTTP() {
-		return credentials
-	}
-	filtered := maps.Clone(credentials)
-	maps.DeleteFunc(filtered, func(scope string, _ GitHTTPExecutionCredential) bool {
-		return strings.HasPrefix(scope, "http://")
-	})
-	return filtered
-}
-
-// RunnerVersionProjectCredentials adds in-memory project environment values
-// to authenticated LOOP task claims and conversation process starts.
-const RunnerVersionProjectCredentials = "0.12.1"
-
-func (r Runner) SupportsProjectCredentials() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionProjectCredentials)
-}
-
-// RunnerVersionArtifactTransfer introduced task-scoped streaming for SOP files.
-const RunnerVersionArtifactTransfer = "0.13.0"
-
-// RunnerVersionEvolutionReplay is the first runner version that honors
-// RunnerInvocation.DisableBrowser during isolated evolution replays.
-const RunnerVersionEvolutionReplay = "0.13.1"
-
-const RunnerResultReportError = "执行结果回传失败"
-
-func (r Runner) SupportsArtifactTransfer() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionArtifactTransfer)
-}
-
-func (r Runner) SupportsEvolutionReplayDisableBrowser() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionEvolutionReplay)
-}
-
-// RunnerVersionConversationSOPWorkspace discovers nested conversation checkouts
-// and prepares them inside the LOOP sandbox while preserving local work.
-const RunnerVersionConversationSOPWorkspace = "0.12.3"
-
-func (r Runner) SupportsConversationSOPWorkspace() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionConversationSOPWorkspace)
-}
-
-func (r Runner) SupportsSharedPush() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionSharedPush)
-}
-
-// RunnerVersionExistingWorkBranch is the first runner that refuses to create
-// a missing branch when the caller explicitly continues an existing branch.
-const RunnerVersionExistingWorkBranch = "0.7.0"
-
-// RunnerVersionCreateNewWorkBranch is the first runner that refuses a
-// same-named remote branch when the caller asked for a newly created branch.
-// Older daemons ignore CreateNewWorkBranch and would quietly check the existing
-// branch out instead.
-const RunnerVersionCreateNewWorkBranch = "0.9.1"
-
+// Runner is one registered execution machine.
 type Runner struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
-	OS             string   `json:"os"`
-	Arch           string   `json:"arch"`
-	RunnerVersion  string   `json:"runnerVersion"`
-	Labels         []string `json:"labels,omitempty"`
-	MaxConcurrency int      `json:"maxConcurrency"`
-	// NativeSandboxAvailable is reported by the daemon. Older Runners leave it
-	// false so the platform does not choose native automatically for them.
-	NativeSandboxAvailable bool `json:"nativeSandboxAvailable"`
-	// RunLimit caps concurrently admitted top-level LOOP runs on a personal
-	// machine, counted like the project limit. 0 means unlimited.
-	RunLimit   int             `json:"runLimit"`
-	Status     string          `json:"status"`
-	Runtimes   []RunnerRuntime `json:"runtimes,omitempty"`
-	LastSeenAt *time.Time      `json:"lastSeenAt,omitempty"`
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	OS            string          `json:"os"`
+	Arch          string          `json:"arch"`
+	RunnerVersion string          `json:"runnerVersion"`
+	Labels        []string        `json:"labels,omitempty"`
+	Status        string          `json:"status"`
+	Runtimes      []RunnerRuntime `json:"runtimes,omitempty"`
+	LastSeenAt    *time.Time      `json:"lastSeenAt,omitempty"`
 	// OwnerUserID is the user who bound this machine via bind-cli.sh; the
 	// personal 执行器 page lists machines by owner.
 	OwnerUserID int64 `json:"ownerUserId,omitempty"`
-	// SharedProjectIDs holds the projects granted use of this machine by its owner.
-	SharedProjectIDs []string `json:"sharedProjectIds,omitempty"`
 	// LoginModels contains the machine owner's saved account-login catalogs by CLI.
 	LoginModels      map[string][]CLIModel `json:"loginModels,omitempty"`
 	SessionTokenHash string                `json:"-"`
 	SessionExpiresAt *time.Time            `json:"-"`
 	CreatedAt        time.Time             `json:"createdAt"`
 	UpdatedAt        time.Time             `json:"updatedAt"`
-
-	AllowPrivilegedSandbox bool `json:"allowPrivilegedSandbox"`
 }
 
 // PublicRunner strips credential material before returning runner data to
@@ -331,62 +60,13 @@ func PublicRunner(r Runner) Runner {
 	return r
 }
 
+// PublicRunners strips credential material from a list of machines.
 func PublicRunners(items []Runner) []Runner {
 	out := make([]Runner, len(items))
 	for i, r := range items {
 		out[i] = PublicRunner(r)
 	}
 	return out
-}
-
-func (r Runner) SharedWithProject(projectID string) bool {
-	return r.OwnerUserID > 0 && projectID != "" && slices.Contains(r.SharedProjectIDs, projectID)
-}
-
-// SupportsExistingWorkBranch guards strict checkout and synchronization;
-// older daemons silently create a new branch when the remote head is missing.
-func (r Runner) SupportsExistingWorkBranch() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionExistingWorkBranch)
-}
-
-// SupportsCreateNewWorkBranch guards the create mode: only a daemon that knows
-// CreateNewWorkBranch can refuse an existing same-named branch.
-func (r Runner) SupportsCreateNewWorkBranch() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionCreateNewWorkBranch)
-}
-
-// SupportsWorkspacePreparation guards the transient control protocol: older
-// daemons ignore the sandbox fields and must never receive a terminal open.
-func (r Runner) SupportsWorkspacePreparation() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionWorkspacePreparation)
-}
-
-// SupportsWorkspaceOwnerPreparation prevents older runners from ignoring the
-// checkout owner and preparing a child run in the wrong directory.
-func (r Runner) SupportsWorkspaceOwnerPreparation() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionWorkspaceOwnerPreparation)
-}
-
-// SupportsAlignBaseline reports whether the runner executes align_baseline.
-func (r Runner) SupportsAlignBaseline() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionAlignBaseline)
-}
-
-// SupportsIntegrate reports whether the runner executes the integrate action.
-func (r Runner) SupportsIntegrate() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionIntegrate)
-}
-
-// SupportsWorkBranchSync reports whether the runner last reported a version
-// that understands the pull/push work-branch actions.
-func (r Runner) SupportsWorkBranchSync() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionWorkBranchSync)
-}
-
-// SupportsReportedOutputs reports whether the runner returns node outputs
-// (files, repository patches, workspace facts) with its task completion.
-func (r Runner) SupportsReportedOutputs() bool {
-	return versionAtLeast(r.RunnerVersion, RunnerVersionReportedOutputs)
 }
 
 // versionAtLeast compares dotted numeric versions; malformed input is older.
@@ -408,7 +88,7 @@ func versionAtLeast(have, want string) bool {
 		return false
 	}
 	w, _ := parse(want)
-	for i := 0; i < len(w); i++ {
+	for i := range len(w) {
 		hv := 0
 		if i < len(h) {
 			hv = h[i]
@@ -421,8 +101,7 @@ func versionAtLeast(have, want string) bool {
 }
 
 // SupportsProvider reports whether the runner last reported a runtime for the
-// provider. A runner with no runtimes still accepts tasks only when the task
-// does not target it explicitly.
+// provider.
 func (r Runner) SupportsProvider(provider string) bool {
 	provider = strings.TrimSpace(provider)
 	if provider == "" {
@@ -461,14 +140,8 @@ func (r Runner) RuntimeAuthMode(provider string) string {
 	return RuntimeAuthLocal
 }
 
-// RuntimeAuthModeForUser keeps a user-bound machine's account login with its owner.
-func (r Runner) RuntimeAuthModeForUser(provider string, userID int64) string {
-	if r.OwnerUserID > 0 && r.OwnerUserID != userID && SupportsRunnerLogin(provider) {
-		return RuntimeAuthPersonal
-	}
-	return r.RuntimeAuthMode(provider)
-}
-
+// SupportsRunnerLogin reports whether the provider can use a login state kept
+// on the machine itself.
 func SupportsRunnerLogin(provider string) bool {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
 	case "codex", "claude-code", "agy":
@@ -488,6 +161,7 @@ const (
 	RuntimeCapabilityNativeUpdate  = "native_update"
 )
 
+// SupportsCLIUpdate reports whether the machine can update this CLI itself.
 func (rt RunnerRuntime) SupportsCLIUpdate() bool {
 	for _, capability := range rt.Capabilities {
 		if capability == RuntimeCapabilityManagedUpdate || capability == RuntimeCapabilityNativeUpdate {
@@ -509,397 +183,4 @@ type RunnerRuntime struct {
 	// AuthMode is controlled by the platform. "local" uses the CLI login
 	// state on this machine; "personal" injects task-scoped user credentials.
 	AuthMode string `json:"authMode,omitempty"`
-}
-
-type RunnerTask struct {
-	ID           string     `json:"id"`
-	RunnerID     string     `json:"runnerId,omitempty"` // empty = any compatible runner
-	Provider     string     `json:"provider"`
-	Prompt       string     `json:"prompt"`
-	Workspace    string     `json:"workspace,omitempty"` // relative to the runner workspace root, or an absolute path
-	Args         []string   `json:"args,omitempty"`      // optional extra CLI args before the prompt
-	Status       string     `json:"status"`
-	DesiredState string     `json:"desiredState,omitempty"`
-	LeaseOwner   string     `json:"leaseOwner,omitempty"`
-	LeaseUntil   *time.Time `json:"leaseUntil,omitempty"`
-	Attempt      int        `json:"attempt"`
-	MaxAttempts  int        `json:"maxAttempts"`
-	ExitCode     *int       `json:"exitCode,omitempty"`
-	Result       string     `json:"result,omitempty"`
-	Error        string     `json:"error,omitempty"`
-	StartedAt    *time.Time `json:"startedAt,omitempty"`
-	CompletedAt  *time.Time `json:"completedAt,omitempty"`
-	CreatedAt    time.Time  `json:"createdAt"`
-	UpdatedAt    time.Time  `json:"updatedAt"`
-	// RunID/NodeID link a task to a workflow execution. Runner events for a
-	// linked task are bridged into the run timeline (adapter runner-v1).
-	RunID      string            `json:"runId,omitempty"`
-	NodeID     string            `json:"nodeId,omitempty"`
-	Invocation *RunnerInvocation `json:"invocation,omitempty"`
-	// GitSSHKnownHosts is attached on authenticated claim and is never queued.
-	GitSSHKnownHosts     *GitSSHKnownHosts `json:"gitSshKnownHosts,omitempty"`
-	ProjectCredentialIDs []string          `json:"projectCredentialIds,omitempty"`
-	// ProjectCredentialEnv is filled after an authenticated claim. It is not
-	// part of the persisted runner task payload.
-	ProjectCredentialEnv map[string]string `json:"projectCredentialEnv,omitempty"`
-	// Sandbox is the workflow sandbox definition resolved by the control
-	// plane. The runner creates it locally so Docker/seatbelt/bwrap isolation
-	// lives on the same machine that executes the Agent CLI.
-	Sandbox *RunnerSandboxSpec `json:"sandbox,omitempty"`
-	// Command is a terminal task: the runner executes it with
-	// `sh -lc <command>` in the task workspace. Used for workflow scripts and
-	// verification gates; never for Agent CLI invocations.
-	Command string `json:"command,omitempty"`
-	// Action identifies a built-in daemon operation that must not be executed
-	// through a shell. cleanup_run removes the finished run's runner-side
-	// sandbox resources and workspace after all Agent/gate tasks complete.
-	// archive_preview packs a declared static directory and streams it to the
-	// control-plane preview store. pull_work_branch / push_work_branch bring
-	// the checkouts of Invocation.Repositories flagged SyncWorkBranch up to,
-	// or onto, their remote work branch; Result is a JSON []RunnerWorkBranchHead.
-	// integrate merges the latest IntegrateBranch into the work branch of
-	// each Invocation.Repositories entry that names one and pushes it; Result
-	// is a JSON []RunnerIntegrationResult. align_baseline merges the
-	// DefaultBranch of the single Invocation.Repositories entry into its
-	// IntegrateBranch in a throwaway clone; Result is a JSON RunnerAlignResult.
-	Action string `json:"action,omitempty"`
-	// WorkBranchMessage is the commit message for push_work_branch.
-	WorkBranchMessage string `json:"workBranchMessage,omitempty"`
-	// IntegrationLabel names the run in integrate commit messages.
-	IntegrationLabel string `json:"integrationLabel,omitempty"`
-	// Artifacts is the artifact content uploaded by the runner at completion
-	// (name → file content). The engine writes it into the run workspace.
-	Artifacts map[string]string `json:"artifacts,omitempty"`
-	// Outputs is reported by runners >= RunnerVersionReportedOutputs for
-	// tasks whose invocation asks for it, on success and on failure.
-	Outputs *RunnerTaskOutputs `json:"outputs,omitempty"`
-	// PreviewArchive is set on archive_preview tasks. Upload tokens are
-	// stripped from management responses.
-	PreviewArchive *RunnerPreviewArchiveSpec `json:"previewArchive,omitempty"`
-}
-
-// RunnerSandboxRequirements freezes the union needed by every run node, so
-// interactive terminals and script/agent tasks use the same sandbox identity.
-type RunnerSandboxRequirements struct {
-	CLIStates        []RunnerCLIStateRequirement `json:"cliStates,omitempty"`
-	PrivateHome      bool                        `json:"privateHome,omitempty"`
-	BunFS            bool                        `json:"bunFS,omitempty"`
-	RunnerLoginRelay bool                        `json:"runnerLoginRelay,omitempty"`
-}
-type RunnerCLIStateRequirement struct {
-	Directory string   `json:"directory"`
-	Files     []string `json:"files,omitempty"`
-}
-
-type RunnerSandboxSpec struct {
-	Requirements *RunnerSandboxRequirements `json:"requirements,omitempty"`
-	Profile      SandboxProfile             `json:"profile"`
-	Dockerfile   *DockerfileDefinition      `json:"dockerfile,omitempty"`
-}
-
-// UnmarshalJSON carries ordinary variables forward from frozen environment
-// assets on historical runs and queued tasks. Asset installation paths no
-// longer exist, and inline values retain their precedence.
-func (s *RunnerSandboxSpec) UnmarshalJSON(raw []byte) error {
-	type frozenSpec RunnerSandboxSpec
-	var payload struct {
-		frozenSpec
-		Environment struct {
-			ID        string            `json:"id"`
-			Variables map[string]string `json:"variables"`
-		} `json:"environment"`
-	}
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		return err
-	}
-	*s = RunnerSandboxSpec(payload.frozenSpec)
-	driver := strings.TrimSpace(s.Profile.Driver)
-	if !ConversationSandboxDriver(driver) || driver == SandboxDriverDocker || strings.TrimSpace(payload.Environment.ID) == "" {
-		return nil
-	}
-	for key, value := range payload.Environment.Variables {
-		if key == "PATH" || strings.Contains(value, "$PREFIX") || strings.Contains(value, "${PREFIX}") ||
-			strings.Contains(value, "$AGENTFLOW_ENVIRONMENT_ROOT") || strings.Contains(value, "${AGENTFLOW_ENVIRONMENT_ROOT}") {
-			continue
-		}
-		if _, exists := s.Profile.Environment[key]; exists {
-			continue
-		}
-		if s.Profile.Environment == nil {
-			s.Profile.Environment = make(map[string]string)
-		}
-		s.Profile.Environment[key] = value
-	}
-	return nil
-}
-
-// PublicRunnerTask strips task-scoped credentials from management responses.
-// The authenticated claiming runner receives the original task payload.
-func PublicRunnerTask(task RunnerTask) RunnerTask {
-	task.GitSSHKnownHosts = nil
-	if task.PreviewArchive != nil {
-		copySpec := *task.PreviewArchive
-		copySpec.UploadToken = ""
-		task.PreviewArchive = &copySpec
-	}
-	if task.Invocation == nil {
-		return task
-	}
-	copyInvocation := *task.Invocation
-	copyInvocation.CodeBuddyAPIKey = ""
-	copyInvocation.CodeBuddyBaseURL = ""
-	copyInvocation.CodeBuddyInternetEnvironment = ""
-	copyInvocation.CodexAPIKey = ""
-	copyInvocation.CodexBaseURL = ""
-	copyInvocation.ClaudeCodeAPIKey = ""
-	copyInvocation.ClaudeCodeBaseURL = ""
-	copyInvocation.AgentCLIAPIKey = ""
-	copyInvocation.AgentCLIBaseURL = ""
-	copyInvocation.AgentCLIProtocol = ""
-	copyInvocation.AgentCLIModels = nil
-	copyInvocation.GitSSHUserID = 0
-	copyInvocation.GitSSHKeys = nil
-	copyInvocation.GitHTTPUserID = 0
-	copyInvocation.GitHTTPCredentials = nil
-	if copyInvocation.Repository != nil {
-		copyRepository := publicRunnerRepository(*copyInvocation.Repository)
-		copyInvocation.Repository = &copyRepository
-	}
-	if len(copyInvocation.Repositories) > 0 {
-		copyRepositories := make([]RunnerRepository, len(copyInvocation.Repositories))
-		for i, repository := range copyInvocation.Repositories {
-			copyRepositories[i] = publicRunnerRepository(repository)
-		}
-		copyInvocation.Repositories = copyRepositories
-	}
-	task.Invocation = &copyInvocation
-	return task
-}
-
-// publicRunnerRepository returns a copy of one checkout spec with its Git
-// credentials removed: the token field and any userinfo in the clone URL.
-func publicRunnerRepository(repository RunnerRepository) RunnerRepository {
-	repository.GitToken = ""
-	repository.CloneURL = StripURLCredentials(repository.CloneURL)
-	return repository
-}
-
-// RunnerInvocation is the self-contained package a runner daemon needs to
-// reconstruct one Agent node invocation in its own task workspace. Provider
-// credentials are included only when the runtime selects personal credentials
-// and are scrubbed from durable storage when the task finishes.
-type RunnerInvocation struct {
-	ArchivedFiles   []WorkspaceArtifactFile `json:"archivedFiles,omitempty"`
-	RunID           string                  `json:"runId,omitempty"`
-	NodeID          string                  `json:"nodeId,omitempty"`
-	InvocationID    string                  `json:"invocationId,omitempty"`
-	ResumeSessionID string                  `json:"resumeSessionId,omitempty"`
-	GateResultPath  string                  `json:"gateResultPath,omitempty"`
-	DisableBrowser  bool                    `json:"disableBrowser,omitempty"`
-	Executor        ExecutorDefinition      `json:"executor"`
-	Agent           AgentDefinition         `json:"agent"`
-	Assets          AgentAssetBundle        `json:"assets"`
-	// Artifacts are the node's artifact contracts: the runner uploads the
-	// content of each declared path when it completes, and the engine writes
-	// them into the run workspace so verification and handoff keep working.
-	Artifacts         []ArtifactContract `json:"artifacts,omitempty"`
-	ArtifactDirectory string             `json:"artifactDirectory,omitempty"`
-	// Inputs are upstream artifacts the runner writes read-only into the
-	// task workspace before the invocation (paths under .agentflow/inputs).
-	Inputs []RunnerInputFile `json:"inputs,omitempty"`
-	// ReportOutputs asks the runner to return RunnerTask.Outputs: the
-	// OutputFiles that exist, the repository-patch inventory of every
-	// checkout, and workspace facts. OutputFiles are workspace-relative
-	// paths resolved by the control plane. RecoverOutputs lets the runner
-	// move a missing output file found elsewhere in the workspace into
-	// place, as the control plane does for its own sandboxes.
-	ReportOutputs                bool     `json:"reportOutputs,omitempty"`
-	ArtifactTransfer             bool     `json:"artifactTransfer,omitempty"`
-	OutputFiles                  []string `json:"outputFiles,omitempty"`
-	RecoverOutputs               bool     `json:"recoverOutputs,omitempty"`
-	HumanContext                 string   `json:"humanContext,omitempty"`
-	CredentialSource             string   `json:"credentialSource,omitempty"`
-	CodeBuddyAPIKey              string   `json:"codebuddyApiKey,omitempty"`
-	CodeBuddyBaseURL             string   `json:"codebuddyBaseUrl,omitempty"`
-	CodeBuddyInternetEnvironment string   `json:"codebuddyInternetEnvironment,omitempty"`
-	CodexAPIKey                  string   `json:"codexApiKey,omitempty"`
-	CodexBaseURL                 string   `json:"codexBaseUrl,omitempty"`
-	ClaudeCodeAPIKey             string   `json:"claudeCodeApiKey,omitempty"`
-	ClaudeCodeBaseURL            string   `json:"claudeCodeBaseUrl,omitempty"`
-	AgentCLIAPIKey               string   `json:"agentCliApiKey,omitempty"`
-	AgentCLIBaseURL              string   `json:"agentCliBaseUrl,omitempty"`
-	AgentCLIProtocol             string   `json:"agentCliProtocol,omitempty"`
-	// AgentCLIModels is the responsible user's saved catalog for the agent
-	// CLI; Cursor resolves the model's effort to an ID from it.
-	AgentCLIModels []CLIModel `json:"agentCliModels,omitempty"`
-	// MCPCallServers is the project/personal HTTP MCP set for `agentflow mcp call`
-	// in scripts, verification gates, and Agent hooks. It is unbound; personal
-	// credentials are applied in memory on the runner. Agent Assets stay
-	// allowlist-scoped.
-	MCPCallServers []MCPServerDefinition `json:"mcpCallServers,omitempty"`
-	// GitUserName and GitUserEmail are the frozen requirement owner's commit
-	// identity. The runner applies them to each checkout with --local scope.
-	GitUserName  string `json:"gitUserName,omitempty"`
-	GitUserEmail string `json:"gitUserEmail,omitempty"`
-	// Repository makes the runner machine check out the run's code base into
-	// the task workspace, so the sandbox and workspace live on that machine.
-	// Legacy single-repository field; Repositories is authoritative when set.
-	Repository *RunnerRepository `json:"repository,omitempty"`
-	// Only the user reference is stored in the queue. GitSSHKeys is filled on
-	// authenticated claim or on the outbound workspace control connection.
-	GitSSHUserID int64             `json:"gitSshUserId,omitempty"`
-	GitSSHKeys   map[string]string `json:"gitSshKeys,omitempty"` // clone URL to private key
-	// Only the responsible user id is queued; HTTPS secrets are hydrated on
-	// authenticated claim/control dispatch and never persisted in the task.
-	GitHTTPUserID      int64                                 `json:"gitHttpUserId,omitempty"`
-	GitHTTPCredentials map[string]GitHTTPExecutionCredential `json:"gitHttpCredentials,omitempty"`
-	// The first LOOP Agent may recover a failed automatic checkout. The runner
-	// validates the frozen repository and branch before reporting success.
-	RepositoryPreparationFallback bool `json:"repositoryPreparationFallback,omitempty"`
-	// Repositories lists every repository the run touches (multi-repository
-	// support). Each entry checks out into its Dir under the task workspace.
-	Repositories []RunnerRepository `json:"repositories,omitempty"`
-}
-
-// RunnerRepository describes the checkout a runner machine should create.
-// GitToken is only set for private remotes and is cleared from the stored
-// payload once the task completes.
-type RunnerRepository struct {
-	RepositoryID string `json:"repositoryId,omitempty"`
-	Name         string `json:"name,omitempty"`
-	CloneURL     string `json:"cloneUrl,omitempty"`
-	Ref          string `json:"ref,omitempty"`
-	WorkBranch   string `json:"workBranch,omitempty"`
-	GitToken     string `json:"gitToken,omitempty"`
-	UseSSH       bool   `json:"useSsh,omitempty"`
-	// RequireExistingWorkBranch keeps explicit continuation on an existing
-	// remote head. Missing/deleted heads are errors, never branch creation.
-	RequireExistingWorkBranch bool `json:"requireExistingWorkBranch,omitempty"`
-	// CreateNewWorkBranch creates WorkBranch from the base ref and fails when a
-	// same-named remote head already exists.
-	CreateNewWorkBranch bool `json:"createNewWorkBranch,omitempty"`
-	// PreserveCheckout starts a generated LOOP branch at the existing local
-	// HEAD when the checkout was supplied by a conversation.
-	PreserveCheckout bool `json:"preserveCheckout,omitempty"`
-	// Dir is the workspace-relative checkout directory. Empty selects the
-	// workspace root for an existing checkout.
-	Dir string `json:"dir,omitempty"`
-	// SyncWorkBranch is the control plane's decision that WorkBranch may
-	// receive intermediate node commits (it is not a shared base/integration
-	// branch). Only such repositories are touched by the work-branch actions.
-	SyncWorkBranch bool `json:"syncWorkBranch,omitempty"`
-	// IntegrateBranch is set only on integrate actions: the branch whose
-	// latest state is merged into WorkBranch. PushIntegrate additionally
-	// pushes the merged result to it (no Gongfeng MR is used).
-	IntegrateBranch string `json:"integrateBranch,omitempty"`
-	PushIntegrate   bool   `json:"pushIntegrate,omitempty"`
-	// SharedPushTarget is set on a work-branch push action when the caller asked
-	// to merge the work branch into that existing shared branch and push it
-	// directly (no Gongfeng MR). It is empty for ordinary pushes.
-	SharedPushTarget string `json:"sharedPushTarget,omitempty"`
-	// DefaultBranch is set only on align_baseline: the branch merged into
-	// IntegrateBranch.
-	DefaultBranch string `json:"defaultBranch,omitempty"`
-}
-
-func (inv *RunnerInvocation) GitSSHRemotes() []string {
-	var remotes []string
-	if inv != nil {
-		for _, repository := range inv.Repositories {
-			if repository.UseSSH {
-				remotes = append(remotes, repository.CloneURL)
-			}
-		}
-		if len(inv.Repositories) == 0 && inv.Repository != nil && inv.Repository.UseSSH {
-			remotes = append(remotes, inv.Repository.CloneURL)
-		}
-	}
-	return remotes
-}
-
-// RunnerInputFile is one file written into the task workspace before a run.
-type RunnerInputFile struct {
-	Path       string `json:"path"`
-	Content    string `json:"content,omitempty"`
-	ArtifactID string `json:"artifactId,omitempty"`
-	SHA256     string `json:"sha256,omitempty"`
-	Restore    bool   `json:"restore,omitempty"`
-}
-
-// RunnerTaskOutputs is what a runner reports about the task workspace after
-// an invocation or script.
-type RunnerTaskOutputs struct {
-	// Files maps a workspace-relative OutputFiles path to its content. Missing
-	// files and non-regular files are absent; oversized ones are in TooLarge.
-	Files      map[string]string       `json:"files,omitempty"`
-	TooLarge   []string                `json:"tooLarge,omitempty"`
-	FileBlobs  map[string]ArtifactBlob `json:"fileBlobs,omitempty"`
-	FileErrors map[string]string       `json:"fileErrors,omitempty"`
-	// Patches maps a repository checkout dir ("" is the workspace root) to
-	// its repository-patch inventory. Unchanged checkouts are absent.
-	Patches map[string]string `json:"patches,omitempty"`
-	// Recovered lists "path ← source" moves made for RecoverOutputs.
-	Recovered []string              `json:"recovered,omitempty"`
-	Facts     *RunnerWorkspaceFacts `json:"facts,omitempty"`
-}
-
-// RunnerWorkspaceFacts are workspace properties the control plane used to
-// read from its own copy of the workspace.
-type RunnerWorkspaceFacts struct {
-	Frontend         bool   `json:"frontend"`
-	FrontendEvidence string `json:"frontendEvidence,omitempty"`
-}
-
-// RunnerWorkBranchHead reports a work branch that a pull/push action moved.
-// RunnerIntegrationResult is the outcome of an integrate action for one
-// repository. Conflicts lists files left conflicted; the merge then stays in
-// progress in the checkout for a repair node to finish.
-type RunnerIntegrationResult struct {
-	RepositoryID    string   `json:"repositoryId,omitempty"`
-	Name            string   `json:"name,omitempty"`
-	WorkBranch      string   `json:"workBranch"`
-	IntegrateBranch string   `json:"integrateBranch"`
-	Head            string   `json:"head,omitempty"`
-	Conflicts       []string `json:"conflicts,omitempty"`
-	PushedIntegrate bool     `json:"pushedIntegrate,omitempty"`
-}
-
-// RunnerAlignResult is the outcome of align_baseline. With Conflicts the
-// merge was aborted and nothing was pushed.
-type RunnerAlignResult struct {
-	Head      string          `json:"head,omitempty"`
-	Conflicts []string        `json:"conflicts,omitempty"`
-	Blocks    []ConflictBlock `json:"blocks,omitempty"`
-}
-
-type RunnerWorkBranchHead struct {
-	RepositoryID string `json:"repositoryId,omitempty"`
-	Name         string `json:"name,omitempty"`
-	WorkBranch   string `json:"workBranch"`
-	Head         string `json:"head"`
-	// SharedBranch and SharedHead report an extra direct push of the work
-	// branch into a shared branch; an empty SharedHead means the shared
-	// branch already contained the work branch.
-	SharedBranch string `json:"sharedBranch,omitempty"`
-	SharedHead   string `json:"sharedHead,omitempty"`
-}
-
-// RunnerTaskEvent is one batched output record reported by the runner. Seq is
-// assigned by the runner and used with the task id for idempotency, so an
-// HTTP retry never duplicates log data.
-type RunnerTaskEvent struct {
-	Seq  int64     `json:"seq"`
-	Type string    `json:"type"` // stdout, stderr, system, observation
-	Data string    `json:"data"`
-	Ts   time.Time `json:"ts"`
-}
-
-// SafeWorkspaceRelPath reports whether p is a clean, slash-separated path
-// inside a workspace (not absolute, not the root, no parent segments).
-func SafeWorkspaceRelPath(p string) bool {
-	if p == "" || strings.Contains(p, "\\") || strings.HasPrefix(p, "/") {
-		return false
-	}
-	clean := path.Clean(p)
-	return clean == p && clean != "." && clean != ".." && !strings.HasPrefix(clean, "../")
 }
