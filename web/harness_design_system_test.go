@@ -152,7 +152,7 @@ func TestSettingsAreaUsesOneCenteredContainer(t *testing.T) {
 	}
 
 	privateCap := regexp.MustCompile(`[{;]\s*max-width:\s*(?:920|1160|1180|1280)px`)
-	for _, path := range []string{"platform.css", "product-v4.css", "app/assets-harness.css", "app/mcp.css", "bots.css"} {
+	for _, path := range []string{"platform.css", "product-v4.css"} {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)

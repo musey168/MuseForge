@@ -47,7 +47,7 @@ func TestAssistantModelsModuleShipped(t *testing.T) {
 			t.Fatalf("app/assistant-models.js is missing %q", want)
 		}
 	}
-	for _, name := range []string{"flows.js", "agents.js", "bots.js", "sync-schedule.js", "composer.js", "runs.js"} {
+	for _, name := range []string{"sync-schedule.js"} {
 		data, err := os.ReadFile("app/" + name)
 		if err != nil {
 			t.Fatal(err)

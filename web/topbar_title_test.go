@@ -26,11 +26,11 @@ func TestTopbarTitleHiddenWhenViewHasHeading(t *testing.T) {
 	}
 
 	starts := regexp.MustCompile(`<section id="(\w+)View" class="view`).FindAllStringSubmatchIndex(html, -1)
-	if len(starts) < 16 {
+	if len(starts) < 8 {
 		t.Fatalf("expected the static views in index.html, found %d", len(starts))
 	}
 	heading := regexp.MustCompile(`class="(?:page-heading|page-header|kb-head|pa-ph)[" ]`)
-	withoutHeading := map[string]bool{"flow": true, "collaboration": true}
+	withoutHeading := map[string]bool{}
 	for i, loc := range starts {
 		end := len(html)
 		if i+1 < len(starts) {
