@@ -229,8 +229,8 @@ func (h *repositoriesHandlers) repositories(c *gin.Context) {
 			if !parsedOK {
 				parsed, parsedOK = info, true
 			}
-		} else if !strings.HasPrefix(v.GongfengProjectID, "github:") && !domain.IsSafeGongfengProjectID(v.GongfengProjectID) {
-			c.JSON(400, map[string]string{"error": "仓库链接无法识别：请提供有效的 GitHub 仓库地址"})
+		} else if !strings.HasPrefix(v.GongfengProjectID, "github:") && !strings.HasPrefix(v.GongfengProjectID, domain.MRProjectGitLab) && !domain.IsSafeGongfengProjectID(v.GongfengProjectID) {
+			c.JSON(400, map[string]string{"error": "仓库链接无法识别：请提供有效的 GitHub 或 GitLab 仓库地址"})
 			return
 		}
 	}
@@ -248,7 +248,25 @@ func (h *repositoriesHandlers) repositories(c *gin.Context) {
 			v.Name = parsed.Name
 		}
 	}
-	if v.GongfengProjectID != "" {
+	if strings.HasPrefix(v.GongfengProjectID, domain.MRProjectGitLab) {
+		// A GitLab project key is "gitlab:<host>/<group>/<repo>". The web and
+		// clone addresses name the same host, so the tracker import can reach
+		// the project's issues.
+		_, host, path, ok := domain.ExternalMRProject(v.GongfengProjectID)
+		if !ok {
+			c.JSON(400, map[string]string{"error": "GitLab 项目地址无法识别：请提供 gitlab:<主机>/<分组>/<仓库>"})
+			return
+		}
+		if v.WebURL == "" {
+			v.WebURL = "https://" + host + "/" + path
+		}
+		if v.CloneURL == "" {
+			v.CloneURL = v.WebURL + ".git"
+		}
+		if v.Name == "" {
+			v.Name = path[strings.LastIndex(path, "/")+1:]
+		}
+	} else if v.GongfengProjectID != "" {
 		if v.WebURL == "" {
 			v.WebURL = "https://" + domain.GongfengRepositoryHost() + "/" + v.GongfengProjectID
 		}
@@ -269,11 +287,19 @@ func (h *repositoriesHandlers) repositories(c *gin.Context) {
 			v.DefaultBranch = "main"
 		}
 	}
+	if strings.HasPrefix(v.GongfengProjectID, domain.MRProjectGitLab) {
+		// A GitLab project key names the host and the group path, so the
+		// tracker import can find the project's issues.
+		v.Provider = "gitlab"
+		if v.DefaultBranch == "" {
+			v.DefaultBranch = "main"
+		}
+	}
 	if v.Provider == "" {
 		v.Provider = "gongfeng"
 	}
-	if v.Provider != "gongfeng" && v.Provider != "github" {
-		c.JSON(400, map[string]string{"error": "provider must be github or gongfeng"})
+	if v.Provider != "gongfeng" && v.Provider != "github" && v.Provider != "gitlab" {
+		c.JSON(400, map[string]string{"error": "provider must be github, gitlab or gongfeng"})
 		return
 	}
 	if v.DefaultBranch == "" {
