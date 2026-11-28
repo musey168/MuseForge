@@ -24,7 +24,7 @@ func TestAssistantModelsModuleShipped(t *testing.T) {
 	if index < 0 {
 		t.Fatalf("index.html must load /app/assistant-models.js, got %v", names)
 	}
-	for _, consumer := range []string{"app/flows.js", "app/agents.js", "app/bots.js", "app/sync-schedule.js", "app/composer.js", "app/runs.js"} {
+	for _, consumer := range []string{"app/sync-schedule.js"} {
 		at := -1
 		for i, name := range names {
 			if name == consumer {

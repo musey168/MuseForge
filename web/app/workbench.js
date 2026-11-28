@@ -134,7 +134,7 @@ const CREDENTIAL_CATALOG_MAX=100;
 let credentialEffortCatalogs,credentialEffortCatalogRequest;
 async function loadCredentialEffortCatalogs(){
   if(credentialEffortCatalogs)return;
-  if(!credentialEffortCatalogRequest)credentialEffortCatalogRequest=Promise.resolve().then(()=>{credentialEffortCatalogs={};}).finally(()=>{credentialEffortCatalogRequest=null});
+  if(!credentialEffortCatalogRequest)credentialEffortCatalogRequest=api('/api/executor-models?builtin=1',{silent:true}).then(data=>{credentialEffortCatalogs=data||{}}).catch(()=>{credentialEffortCatalogs={};}).finally(()=>{credentialEffortCatalogRequest=null});
   await credentialEffortCatalogRequest;
 }
 function credentialCatalogModels(value){

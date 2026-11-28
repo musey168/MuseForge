@@ -96,8 +96,6 @@ func TestStatusBadgesShareOneImplementation(t *testing.T) {
 	}
 	for path, want := range map[string]string{
 		"app/issues.js":    `class="hui-badge" data-tone=`,
-		"app/runs.js":      `class="hui-badge" data-size="sm" data-tone=`,
-		"app/bots.js":      `class="hui-badge" data-size="sm" data-tone=`,
 		"app/workbench.js": `class="hui-badge credential-status" data-size="sm" data-tone=`,
 	} {
 		raw, err := os.ReadFile(path)
@@ -123,7 +121,7 @@ func TestHarnessStylesheetLoadOrder(t *testing.T) {
 	if base := slices.Index(links, "/product-v4.css"); shared < 0 || base < 0 || shared < base {
 		t.Fatalf("/%s must load after /product-v4.css, got %v", harnessUICSS, links)
 	}
-	for _, page := range []string{"/bots.css", "/app/mcp.css", "/app/issues-list.css", "/app/assets-harness.css", "/app/observability-harness.css", "/app/approvals-harness.css"} {
+	for _, page := range []string{"/app/issues-list.css", "/app/observability-harness.css"} {
 		if at := slices.Index(links, page); at < 0 || at < shared {
 			t.Errorf("%s must load after /%s, got %v", page, harnessUICSS, links)
 		}

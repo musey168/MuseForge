@@ -4,13 +4,14 @@ import { loadApp, settle } from '../lib/load-app.mjs';
 
 const SURVIVING_VIEWS = [
   'issues', 'observability', 'settings', 'projects', 'projectCredentials',
-  'platform', 'runners', 'guide',
+  'runners',
 ];
 
 const REMOVED_VIEWS = [
   'collaboration', 'runs', 'approvals', 'sops', 'flow', 'agents', 'mcp',
   'rules', 'skills', 'sandboxes', 'knowledge', 'bots', 'aiSchedules', 'evolution',
   'metrics', 'businessDomains', 'businessDomainManagement',
+  'guide', 'platform',
 ];
 
 test('boots with platform-shaped data and renders every routed view', async (t) => {
@@ -25,7 +26,7 @@ test('boots with platform-shaped data and renders every routed view', async (t) 
   }
   assert.ok(app.router.calls.some((call) => call.path === '/api/bootstrap'));
   assert.ok(app.document.querySelectorAll('.view').length > 5);
-  assert.equal(app.document.querySelector('#pageTitle').textContent, '访问密钥');
+  assert.equal(app.document.querySelector('#pageTitle').textContent, '执行机器');
   for (const removed of REMOVED_VIEWS) {    assert.equal(app.document.querySelector(`#${removed}View`), null, `${removed} was retired`);
     assert.equal(app.document.querySelector(`[data-view="${removed}"]`), null, `${removed} has no nav entry`);
   }

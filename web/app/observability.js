@@ -318,6 +318,19 @@ function obsUsageCachePanel(){
     {label:'执行数',value:String(Number(s.executions||0)),foot:`${Number(s.reportedExecutions||0)} 次有上报费用 · ${Number(s.estimatedExecutions||0)} 次估算`},
   ]);
 }
+function obsUsageExecutionPanel(){
+  const s=obsUsageSummary();
+  const executions=Number(s.executions||0);
+  const reported=Number(s.reportedExecutions||0),estimated=Number(s.estimatedExecutions||0);
+  const unknown=Number(s.unknownCostExecutions||0);
+  const malformed=Number(s.malformedReports||0),skipped=Number(s.skippedExecutions||0);
+  return obsKpiGroup('上报执行',[
+    {label:'上报执行数',value:String(executions),foot:`${reported} 次有上报费用 · ${estimated} 次按价格表估算`},
+    {label:'无法确定费用',value:String(unknown),foot:unknown?'这些执行不计入已上报':'无',missing:unknown>0},
+    {label:'被拒绝的上报',value:String(malformed),foot:'格式非法，已跳过',missing:malformed>0},
+    {label:'无法读取的上报',value:String(skipped),foot:'已跳过，不影响其余统计',missing:skipped>0},
+  ]);
+}
 function obsUsageTrendPoints(){
   const currency=obsUsageCurrency();
   return (state.usage?.trend||[]).map(p=>({...p,cost:obsUsageAmount(p,currency)}));
