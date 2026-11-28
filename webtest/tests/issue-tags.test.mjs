@@ -1,6 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { loadApp, settle } from '../lib/load-app.mjs';
+import { loadApp, settle, chooseOption } from '../lib/load-app.mjs';
+
+
+test('choosing a tag in the list filter narrows the requirement list', async (t) => {
+  const app = await loadApp();
+  t.after(app.close);
+  await settle(3);
+  app.evaluate(`state.data.issues=[
+    {id:'a',projectId:'project-1',title:'一',status:'backlog',tags:['bug']},
+    {id:'b',projectId:'project-1',title:'二',status:'backlog'}
+  ];
+  state.projectFilter='project-1';state.issueTagFilter='';renderIssues();`);
+  chooseOption(app.document.querySelector('#issueTagFilter'), 'bug');
+  await settle(2);
+  assert.equal(app.evaluate('state.issueTagFilter'), 'bug');
+  assert.deepEqual([...app.evaluate(`[...document.querySelectorAll('.issue-table-row[data-id]')].map(r=>r.dataset.id)`)], ['a']);
+});
 
 
 test('the requirement form takes tags and the requirement keeps them', async (t) => {
