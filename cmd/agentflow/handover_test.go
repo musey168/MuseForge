@@ -19,7 +19,14 @@ import (
 )
 
 func TestSDNotifySendsReadyAndMainPID(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "notify.sock")
+	// A unix socket name is limited to 104 bytes; t.TempDir() on macOS can
+	// exceed it, so the socket lives in a short directory.
+	dir, err := os.MkdirTemp("", "sd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	path := filepath.Join(dir, "notify.sock")
 	conn, err := net.ListenUnixgram("unixgram", &net.UnixAddr{Name: path, Net: "unixgram"})
 	if err != nil {
 		t.Fatal(err)

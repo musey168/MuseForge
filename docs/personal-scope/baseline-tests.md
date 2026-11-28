@@ -49,3 +49,19 @@ GOCACHE=/tmp/agentflow-gocache go test ./internal/... ./cmd/... -count=1 -timeou
 
 **判定标准不变**：每一阶段裁剪后，失败集合必须是上表的子集，且不得出现上表之外的
 任何新失败。逐阶段比较时用集合包含关系，而不是个数相等。
+
+## 终态（2026-11-28，`feature/personal-build`）
+
+裁剪完成后，本机 `go test ./internal/... ./cmd/... ./web/ -count=1 -timeout=900s`
+**0 失败**。上表的失败分两类：
+
+- **随着裁剪一起消失**：LOOP 引擎、运行租约、浏览器/流、仓库缓存、seatbelt 沙箱和
+  profile 噪音相关的用例，所在的包已被删除，或包内已不含这些用例。
+- **留下来、按契约修正的 2 个**（修正断言的前提，不放宽断言本身）：
+  - `TestGitDiscoveryStopsBeforeParentRepository`：git 返回真实路径，而 macOS 的
+    `t.TempDir()` 在 `/var` → `/private/var` 符号链接下。断言改为比较
+    `filepath.EvalSymlinks` 后的路径；「父仓库必须无法被发现」那条断言不变。
+  - `TestSDNotifySendsReadyAndMainPID`：`unixgram` 的 `sun_path` 上限 104 字节，
+    macOS 的 `t.TempDir()` 会超出（`bind: invalid argument`）。socket 改在短目录里
+    创建；payload 断言不变。
+

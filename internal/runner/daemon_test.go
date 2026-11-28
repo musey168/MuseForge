@@ -206,8 +206,8 @@ func TestDaemonReregistersAfterRejectedSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go d.heartbeatLoop(ctx)
+	done := make(chan struct{})
+	go func() { defer close(done); d.heartbeatLoop(ctx) }()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		mu.Lock()
@@ -227,6 +227,8 @@ func TestDaemonReregistersAfterRejectedSession(t *testing.T) {
 	if d.runnerID() != "runner-new" || d.clientSession() != "token-new" {
 		t.Fatalf("state = %+v", d.state)
 	}
+	cancel()
+	<-done // the loop's last state write must land before the temp dir is removed
 }
 
 // The session file survives a renewal, so a restart keeps the same identity.
