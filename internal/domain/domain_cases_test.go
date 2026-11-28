@@ -169,23 +169,7 @@ func TestRunEvalRunnerAndSpaceBranches(t *testing.T) {
 }
 
 func TestScheduleLaneAndVerificationBranches(t *testing.T) {
-	job := ScheduleJob{WorkflowID: "default", UseIssueWorkflow: true}
-	if job.ResolveWorkflow(Issue{WorkflowID: " issue "}) != "issue" || !job.DispatchesSOP() || job.DispatchLimit() != MaxScheduleDispatch {
-		t.Fatal("job defaults")
-	}
-	job.IssueStatuses = []string{" IN_REVIEW ", "bad", "todo"}
-	if got := job.TriggerIssueStatuses(); len(got) != 2 || got[0] != "todo" {
-		t.Fatalf("statuses = %#v", got)
-	}
-	for _, source := range []string{"", "all", "both", "github", "gitlab"} {
-		if _, err := NormalizeScheduleSource(source); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := NormalizeScheduleSource("bad"); err == nil {
-		t.Fatal("bad source accepted")
-	}
-	for _, lane := range []string{"product", "front", "back", "uiux", "bugfix", "other"} {
+	for _, lane := range []string{"product", "front", "uiux", "bugfix", "other"} {
 		if SOPLaneLabel(lane) == "" {
 			t.Fatal(lane)
 		}
@@ -217,24 +201,9 @@ func TestScheduleLaneAndVerificationBranches(t *testing.T) {
 }
 
 func TestSOPBindingInheritanceBranches(t *testing.T) {
-	issue := Issue{WorkflowID: " legacy ", AssigneeUserID: 7}
-	if got := issue.EffectiveSOPBindings(); len(got) != 1 || got[0].WorkflowID != "legacy" || got[0].AssigneeUserID != 7 {
-		t.Fatalf("legacy bindings = %#v", got)
-	}
-	explicit := []IssueSOPBinding{{WorkflowID: "b", Order: 2}, {WorkflowID: "a", Order: 1, DependsOn: []string{"missing", "sop-b"}}}
-	issue.SOPBindings = explicit
-	if got := issue.EffectiveSOPBindings(); len(got) != 2 || got[0].WorkflowID != "a" {
-		t.Fatalf("explicit bindings = %#v", got)
-	}
 	project := Project{WorkflowID: "project-wf"}
 	if got := project.EffectiveSOPBindings(); len(got) != 1 || got[0].WorkflowID != "project-wf" {
 		t.Fatalf("project bindings = %#v", got)
-	}
-	if binding, ok := ResolveSOPBinding(issue, project, "b"); !ok || binding.WorkflowID != "b" {
-		t.Fatalf("resolved binding = %#v, %v", binding, ok)
-	}
-	if _, ok := ResolveSOPBinding(issue, project, ""); ok {
-		t.Fatal("empty workflow resolved")
 	}
 	books := NormalizeSOPPlaybooks([]SOPPlaybook{{Name: ""}, {ID: "x", Default: true}, {ID: "x", Default: true}})
 	if len(books) != 2 || !books[1].Default || books[0].Name == "" {

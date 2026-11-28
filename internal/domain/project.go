@@ -84,6 +84,17 @@ func GitOnlyRepositoryProvider(provider string) bool {
 	return provider == RepositoryProviderSSH || provider == RepositoryProviderHTTPS || provider == RepositoryProviderHTTP
 }
 
+// DefaultIntegrateBranch is the conventional branch a repository merges its
+// baseline into.
+const DefaultIntegrateBranch = "agentflow/integration"
+
+// NormalizeIntegrateBranch trims the configured integrate branch. Empty means
+// the repository does not use an integration baseline: scheduled LOOPs skip
+// default→integrate align and post-run merge into a shared branch.
+func NormalizeIntegrateBranch(name string) string {
+	return strings.TrimSpace(name)
+}
+
 type Repository struct {
 	ID                         string    `json:"id"`
 	ProjectID                  string    `json:"projectId"`

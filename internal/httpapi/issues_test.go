@@ -71,17 +71,6 @@ func TestGzipJSONResponses(t *testing.T) {
 	}
 }
 
-func TestAppendClarificationDescriptionReplacesPreviousBlock(t *testing.T) {
-	got := appendClarificationDescription("原描述", "第一轮结论")
-	if !strings.Contains(got, "原描述") || !strings.Contains(got, "第一轮结论") {
-		t.Fatalf("got %q", got)
-	}
-	got = appendClarificationDescription(got, "第二轮结论")
-	if strings.Count(got, "## LoopForge 澄清结论") != 1 || strings.Contains(got, "第一轮结论") || !strings.Contains(got, "第二轮结论") {
-		t.Fatalf("replace failed: %q", got)
-	}
-}
-
 func requestJSON[T any](t *testing.T, h http.Handler, method, path string, body any, wantStatus int) T {
 	t.Helper()
 	raw, err := json.Marshal(body)

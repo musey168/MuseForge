@@ -2,8 +2,6 @@ package httpapi
 
 import (
 	"fmt"
-	"maps"
-	"slices"
 	"strings"
 
 	"agentflow/internal/domain"
@@ -132,23 +130,4 @@ func (h issuesHandlers) normalizeLegacyIssueBaseBranch(issue *domain.Issue) {
 			issue.BaseBranch = ""
 		}
 	}
-}
-
-// A CLI session remembers code from its original checkout. Keep the business
-// answers and history, but start a fresh session when its repository changes.
-func (h issuesHandlers) invalidateIssueClarifySessionOnRepositoryChange(issue *domain.Issue, previous domain.Issue) {
-	ids := func(v domain.Issue) []string {
-		out := v.EffectiveRepositoryIDs()
-		if len(out) == 0 {
-			if project, ok := h.repo.Project(v.ProjectID); ok && strings.TrimSpace(project.DefaultRepositoryID) != "" {
-				out = []string{strings.TrimSpace(project.DefaultRepositoryID)}
-			}
-		}
-		return out
-	}
-	if issue.ProjectID == previous.ProjectID && strings.TrimSpace(issue.BaseBranch) == strings.TrimSpace(previous.BaseBranch) && maps.Equal(issue.RepositoryBranches, previous.RepositoryBranches) && slices.Equal(ids(*issue), ids(previous)) {
-		return
-	}
-	issue.Clarification.SessionID = ""
-	issue.Clarification.SessionUserID = 0
 }

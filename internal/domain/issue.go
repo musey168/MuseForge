@@ -6,57 +6,87 @@ import (
 	"time"
 )
 
+// Issue is one requirement in the personal to-do list. It carries what a
+// requirement is — a title, a description, a status, a priority, the project
+// it belongs to, its tags and its links — and nothing that only made sense
+// while the platform could run things.
 type Issue struct {
-	ID             string `json:"id"`
-	ProjectID      string `json:"projectId"`
-	Number         int    `json:"number"`
-	Title          string `json:"title"`
-	Description    string `json:"description"`
-	Status         string `json:"status"`                // backlog, todo, in_progress, in_review, done, closed, blocked, cancelled
-	CloseSource    string `json:"closeSource,omitempty"` // manual, external; empty on older manually closed issues
-	Priority       string `json:"priority"`
-	AssigneeType   string `json:"assigneeType,omitempty"` // member, agent
-	AssigneeID     string `json:"assigneeId,omitempty"`
-	AssigneeUserID int64  `json:"assigneeUserId,omitempty"`
-	WorkflowID     string `json:"workflowId,omitempty"`
-	// PlaybookID is which named project combo this requirement uses.
-	PlaybookID string `json:"playbookId,omitempty"`
-	// SOPBindings is an optional per-issue override of the chosen playbook.
-	// Nil means inherit that playbook's steps. AssigneeUserID on the issue
-	// stays the overall owner / TAPD 跟进人.
-	SOPBindings []IssueSOPBinding `json:"sopBindings,omitempty"`
-	// SOPMode "none" delivers the requirement without a LOOP (clarified and
-	// changed in conversations): no LOOP is bound by default and scheduled LOOPs
-	// never claim it. Empty on writes keeps the stored mode; "sop" clears it.
-	SOPMode      string `json:"sopMode,omitempty"`
+	ID          string `json:"id"`
+	ProjectID   string `json:"projectId"`
+	Number      int    `json:"number"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Status      string `json:"status"`                // backlog, todo, in_progress, in_review, done, closed, blocked, cancelled
+	CloseSource string `json:"closeSource,omitempty"` // manual, external; empty on older manually closed issues
+	Priority    string `json:"priority"`
+	// Tags are the requirement's own labels. The list filters by them.
+	Tags []string `json:"tags,omitempty"`
+	// RepositoryID is the legacy single-repository field (kept in sync with
+	// the first entry of RepositoryIDs for display and external sync).
 	RepositoryID string `json:"repositoryId,omitempty"`
-	// RepositoryIDs lists every repository the issue touches. RepositoryID
-	// stays the legacy single-repository field (kept in sync with the first
-	// entry for display and external sync).
+	// RepositoryIDs lists every repository the requirement touches.
 	RepositoryIDs []string `json:"repositoryIds,omitempty"`
 	// BaseBranch is the legacy API key for an existing work branch to continue.
 	// Empty creates a new work branch from the repository configured main branch.
 	BaseBranch string `json:"baseBranch,omitempty"`
 	// RepositoryBranches selects existing work branches by repository ID. When
 	// provided, it replaces BaseBranch; an unlisted repository creates a new branch.
-	RepositoryBranches map[string]string       `json:"repositoryBranches,omitempty"`
-	LatestTaskID       string                  `json:"latestTaskId,omitempty"`
-	AutomationState    string                  `json:"automationState,omitempty"` // ignored means scheduled LOOPs must not claim it
-	DeliveryState      string                  `json:"deliveryState,omitempty"`   // merged, reopened
-	Kind               string                  `json:"kind,omitempty"`            // requirement, issue
-	Clarification      ClarificationAssessment `json:"clarification"`
-	Source             string                  `json:"source,omitempty"` // local, github, gitlab
-	ExternalRef        *ExternalRef            `json:"externalRef,omitempty"`
-	// ConversationSessionID is the conversation that identified and created
-	// this requirement while changing code directly, without a LOOP.
-	ConversationSessionID string    `json:"conversationSessionId,omitempty"`
-	CreatedAt             time.Time `json:"createdAt"`
-	UpdatedAt             time.Time `json:"updatedAt"`
+	RepositoryBranches map[string]string `json:"repositoryBranches,omitempty"`
+	Kind               string            `json:"kind,omitempty"`   // requirement, issue
+	Source             string            `json:"source,omitempty"` // local, github, gitlab
+	ExternalRef        *ExternalRef      `json:"externalRef,omitempty"`
+	CreatedAt          time.Time         `json:"createdAt"`
+	UpdatedAt          time.Time         `json:"updatedAt"`
 	// CompletedAt records an observed transition to done/closed, independent of
-	// later edits and MR polling. Older completed issues may have no timestamp.
+	// later edits. Older completed requirements may have no timestamp.
 	CompletedAt time.Time `json:"completedAt,omitempty"`
-	// Operations is the requirement's own audit trail: create, edit, close, reopen, dispatch.
+	// Operations is the requirement's own audit trail: create, edit, close, reopen.
 	Operations []IssueOperation `json:"operations,omitempty"`
+}
+
+// MaxIssueTags is how many labels one requirement carries.
+const MaxIssueTags = 12
+
+// MaxIssueTagLength is how long a single label may be.
+const MaxIssueTagLength = 40
+
+// NormalizeTags trims the labels, drops the empty and the duplicate ones and
+// caps the list, so a requirement always carries a short, stable set.
+func NormalizeTags(in []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(in))
+	for _, raw := range in {
+		tag := strings.TrimSpace(raw)
+		if tag == "" || seen[tag] {
+			continue
+		}
+		if runes := []rune(tag); len(runes) > MaxIssueTagLength {
+			tag = string(runes[:MaxIssueTagLength])
+		}
+		seen[tag] = true
+		out = append(out, tag)
+		if len(out) == MaxIssueTags {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// HasTag reports whether the requirement carries the label.
+func (i Issue) HasTag(tag string) bool {
+	tag = strings.TrimSpace(tag)
+	if tag == "" {
+		return false
+	}
+	for _, own := range i.Tags {
+		if own == tag {
+			return true
+		}
+	}
+	return false
 }
 
 func (i Issue) Completed() bool {
@@ -106,7 +136,7 @@ func (i *Issue) AppendOperation(op IssueOperation) {
 }
 
 // EffectiveRepositoryIDs returns the deduplicated, non-empty list of
-// repositories bound to the issue. RepositoryIDs is authoritative;
+// repositories bound to the requirement. RepositoryIDs is authoritative;
 // RepositoryID (the legacy single-repository field) is appended as fallback.
 func (i Issue) EffectiveRepositoryIDs() []string {
 	seen := map[string]bool{}
@@ -135,36 +165,7 @@ func (i Issue) WorkBranchForRepository(repositoryID string) string {
 	return ""
 }
 
-type ClarificationAssessment struct {
-	Summary              string                  `json:"summary,omitempty"`
-	Status               string                  `json:"status,omitempty"` // analyzing, in_progress, ready, needs_user
-	History              []ClarificationMessage  `json:"history,omitempty"`
-	Questions            []ClarificationQuestion `json:"questions,omitempty"`
-	SessionID            string                  `json:"sessionId,omitempty"`
-	SessionUserID        int64                   `json:"sessionUserId,omitempty"`
-	WriteBackStatus      string                  `json:"writeBackStatus,omitempty"` // pending, succeeded, failed, skipped
-	WriteBackError       string                  `json:"writeBackError,omitempty"`
-	WriteBackFingerprint string                  `json:"writeBackFingerprint,omitempty"`
-	WriteBackAt          time.Time               `json:"writeBackAt,omitempty"`
-	// StartedAt is the first observed start of clarification, including
-	// pre-issue composer analysis when its server timestamp is carried over.
-	StartedAt time.Time `json:"startedAt,omitempty"`
-}
-
-type ClarificationMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type ClarificationQuestion struct {
-	ID          string   `json:"id"`
-	Question    string   `json:"question"`
-	Options     []string `json:"options,omitempty"`
-	MultiSelect bool     `json:"multiSelect,omitempty"`
-	FreeText    bool     `json:"freeText,omitempty"`
-}
-
-// ExternalRef links a local Issue to an external issue in GitHub or GitLab.
+// ExternalRef links a local requirement to an external issue in GitHub or GitLab.
 type ExternalRef struct {
 	// SourceContentHash records the last imported body so provider adapters can
 	// distinguish a remote edit from a locally clarified requirement.
@@ -197,25 +198,9 @@ func (i Issue) TrackerClosed() bool {
 	return state == "closed" || state == "已关闭"
 }
 
-// DeliveryLocked reports whether a completed delivery has made this work item final.
-// A user can explicitly reopen it to allow a follow-up run.
-func (i Issue) DeliveryLocked() bool {
-	return strings.EqualFold(strings.TrimSpace(i.DeliveryState), "merged")
-}
-
-// DeliveryLockedLabel is the user-facing stage label for a delivery-locked issue.
-func (i Issue) DeliveryLockedLabel() string {
-	if i.ManuallyClosed() {
-		return "关闭"
-	}
-	return "交付闭环"
-}
-
 const issueIdentityMarker = "需求身份（平台权威，禁止忽略）"
 
-// IdentityBlock is the authoritative tracker identity injected into the task
-// prompt. Agents must not guess a tracker ID from branch names when this block
-// is present.
+// IdentityBlock is the authoritative tracker identity of the requirement.
 func (i Issue) IdentityBlock() string {
 	id := strings.TrimSpace(i.ID)
 	if id == "" {
@@ -272,29 +257,6 @@ func (i Issue) HasIdentityBlock(text string) bool {
 	return strings.Contains(text, issueIdentityMarker)
 }
 
-const (
-	IssueSOPNone = "none"
-	IssueSOPUse  = "sop"
-)
-
-// WithoutSOP reports whether the requirement opted out of LOOP delivery.
-func (i Issue) WithoutSOP() bool {
-	return strings.EqualFold(strings.TrimSpace(i.SOPMode), IssueSOPNone)
-}
-
-func (i Issue) ExecutionBlockedReason() string {
-	if i.ManuallyClosed() {
-		return "工作项已关闭，请先重新打开后再触发 LOOP"
-	}
-	if i.TrackerClosed() || (i.Status == "closed" && i.CloseSource == "external") {
-		return "外部工作项已关闭，请先在外部系统重新打开"
-	}
-	if i.DeliveryLocked() {
-		return "工作项已交付闭环，请先重新打开后再触发 LOOP"
-	}
-	return ""
-}
-
 type IssueComment struct {
 	ID         string    `json:"id"`
 	IssueID    string    `json:"issueId"`
@@ -317,7 +279,7 @@ type RejectRequest struct {
 type HumanDecision struct {
 	Expected *NodeDecisionExpectation `json:"expected,omitempty"`
 	NodeID   string                   `json:"nodeId"`
-	Reason   string                   `json:"reason,omitempty"`
+	Reason   string                   `json:"reason"`
 	Context  string                   `json:"context,omitempty"`
 }
 

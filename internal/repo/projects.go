@@ -160,25 +160,6 @@ func (r *ProjectsRepo) writeProject(v domain.Project) error {
 		}); err != nil {
 			return err
 		}
-		if v.OwnerID > 0 {
-			// Backfill issue responsibility for issues that have no assignee.
-			var issueRows []issueRow
-			if err := tx.Where("project_id = ? AND assignee_user_id IS NULL", v.ID).Find(&issueRows).Error; err != nil {
-				return err
-			}
-			for _, row := range issueRows {
-				var issue domain.Issue
-				if jsonUnmarshal(row.Payload, &issue) != nil {
-					continue
-				}
-				issue.AssigneeUserID = v.OwnerID
-				if err := tx.Model(&issueRow{}).Where("id = ?", row.ID).Updates(map[string]any{
-					"assignee_user_id": v.OwnerID, "payload": mustJSON(issue),
-				}).Error; err != nil {
-					return err
-				}
-			}
-		}
 		return nil
 	})
 }

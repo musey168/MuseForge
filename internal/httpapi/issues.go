@@ -43,8 +43,8 @@ func (h issuesHandlers) issues(c *gin.Context) {
 			ProjectID: strings.TrimSpace(c.Query("projectId")),
 			Status:    strings.TrimSpace(c.Query("status")),
 			Source:    strings.TrimSpace(c.Query("source")),
+			Tag:       strings.TrimSpace(c.Query("tag")),
 			Q:         strings.TrimSpace(c.Query("q")),
-			Assignee:  strings.TrimSpace(c.Query("assignee")),
 		})
 		if _, ok := c.GetQuery("limit"); !ok {
 			views, err := h.issueDeletionViews(items)
@@ -106,17 +106,6 @@ func (h issuesHandlers) issues(c *gin.Context) {
 		v := req.Issue
 		branchesProvided := v.RepositoryBranches != nil
 		existing, found := h.repo.Issue(v.ID)
-		// Only a conversation workspace records which conversation created a
-		// requirement, and deleting that conversation may delete the
-		// requirement with it, so a client cannot set or move it.
-		v.ConversationSessionID = ""
-		if found {
-			v.ConversationSessionID = existing.ConversationSessionID
-		}
-		if !v.Clarification.StartedAt.IsZero() && v.Clarification.StartedAt.After(time.Now().UTC().Add(time.Minute)) {
-			c.JSON(http.StatusBadRequest, map[string]string{"error": "澄清开始时间不能晚于当前时间"})
-			return
-		}
 		if found {
 			if !h.requireAccountWrite(c, v.ProjectID, existing.ProjectID) {
 				return
@@ -149,11 +138,6 @@ func (h issuesHandlers) issues(c *gin.Context) {
 		if found && req.BaseBranch == nil {
 			h.normalizeLegacyIssueBaseBranch(&v)
 		}
-		if !found && v.AssigneeUserID == 0 {
-			if current, ok := h.requestUser(c.Request); ok && current != nil && current.ID > 0 {
-				v.AssigneeUserID = current.ID
-			}
-		}
 		if v.ProjectID == "" || v.Title == "" {
 			c.JSON(400, map[string]string{"error": "projectId and title are required"})
 			return
@@ -168,22 +152,10 @@ func (h issuesHandlers) issues(c *gin.Context) {
 			c.JSON(400, map[string]string{"error": "project not found"})
 			return
 		}
-		h.bindRequirementPlaybook(&v)
-		if v.AssigneeUserID > 0 {
-			if _, ok := h.repo.User(v.AssigneeUserID); !ok {
-				c.JSON(400, map[string]string{"error": "assignee must reference an existing user"})
-				return
-			}
-		}
 		if err := h.bindIssueRepositories(&v); err != nil {
 			c.JSON(400, map[string]string{"error": err.Error()})
 			return
 		}
-		if found {
-			h.invalidateIssueClarifySessionOnRepositoryChange(&v, existing)
-		}
-		// Clarification is optional: saving a ticket never scores it or starts
-		// a round. Binding LOOP or repositories must not invent a status.
 		if found {
 			keepExistingTrackerBinding(&v, existing)
 		} else {
@@ -236,9 +208,6 @@ func mergeIssueEdit(v, existing domain.Issue) domain.Issue {
 	if v.Title == "" {
 		v.Title = existing.Title
 	}
-	if v.LatestTaskID == "" {
-		v.LatestTaskID = existing.LatestTaskID
-	}
 	if v.Source == "" {
 		v.Source = existing.Source
 	}
@@ -254,30 +223,6 @@ func mergeIssueEdit(v, existing domain.Issue) domain.Issue {
 	}
 	if v.Kind == "" {
 		v.Kind = existing.Kind
-	}
-	if strings.TrimSpace(v.SOPMode) == "" {
-		v.SOPMode = existing.SOPMode
-	}
-	if v.AssigneeID == "" {
-		v.AssigneeID = existing.AssigneeID
-	}
-	if v.AssigneeType == "" {
-		v.AssigneeType = existing.AssigneeType
-	}
-	if v.AssigneeUserID == 0 {
-		v.AssigneeUserID = existing.AssigneeUserID
-	}
-	if v.WorkflowID == "" {
-		v.WorkflowID = existing.WorkflowID
-	}
-	if v.SOPBindings == nil && existing.SOPBindings != nil {
-		v.SOPBindings = existing.SOPBindings
-	}
-	if v.PlaybookID == "" {
-		v.PlaybookID = existing.PlaybookID
-	}
-	if v.Clarification.Status == "" && strings.TrimSpace(v.Clarification.Summary) == "" && len(v.Clarification.History) == 0 {
-		v.Clarification = existing.Clarification
 	}
 	v.Operations = append([]domain.IssueOperation(nil), existing.Operations...)
 	return v
@@ -295,6 +240,7 @@ var issueRoutes = map[string]issueRoute{
 	"/api/issues/:id/images/:imageId": {handle: issuesHandlers.issueImage, methods: []string{http.MethodGet}},
 	"/api/issues/:id/comments":        {handle: issuesHandlers.addIssueComment, methods: []string{http.MethodPost}},
 	"/api/issues/:id/close":           {handle: issuesHandlers.closeIssue, methods: []string{http.MethodPost}},
+	"/api/issues/:id/reopen":          {handle: issuesHandlers.reopenIssue, methods: []string{http.MethodPost}},
 }
 
 func (h issuesHandlers) issue(c *gin.Context) {
@@ -396,12 +342,6 @@ func issueChangeDetail(before, after domain.Issue) string {
 	if strings.TrimSpace(before.Description) != strings.TrimSpace(after.Description) {
 		parts = append(parts, "描述")
 	}
-	if before.AssigneeUserID != after.AssigneeUserID || before.AssigneeID != after.AssigneeID {
-		parts = append(parts, "责任人")
-	}
-	if before.WorkflowID != after.WorkflowID && after.WorkflowID != "" {
-		parts = append(parts, "关联 LOOP")
-	}
 	if before.BaseBranch != after.BaseBranch {
 		if after.BaseBranch == "" {
 			parts = append(parts, "工作分支改为自动新建")
@@ -415,46 +355,10 @@ func issueChangeDetail(before, after domain.Issue) string {
 	if before.Priority != after.Priority && after.Priority != "" {
 		parts = append(parts, "优先级")
 	}
+	if !slices.Equal(before.Tags, after.Tags) {
+		parts = append(parts, "标签")
+	}
 	return strings.Join(parts, "、")
-}
-
-// promoteClarifiedIssueTodo 澄清完成后，把尚未进入业务流转的需求归入「待处理」（todo）。
-// 已在执行链路中的状态（todo/in_progress/in_review/blocked/done/closed 等）不做降级改写。
-func promoteClarifiedIssueTodo(issue *domain.Issue) {
-	switch strings.ToLower(strings.TrimSpace(issue.Status)) {
-	case "", "backlog":
-		issue.Status = "todo"
-	}
-}
-
-const (
-	clarificationHeading       = "## LoopForge 澄清结论"
-	legacyClarificationHeading = "## AgentFlow 澄清结论"
-)
-
-func appendClarificationDescription(description, summary string) string {
-	summary = strings.TrimSpace(summary)
-	if summary == "" {
-		return description
-	}
-	block := clarificationHeading + "\n\n" + summary
-	desc := strings.TrimRight(description, " \t\n")
-	// Descriptions written before the rename still carry the old heading; replace
-	// that block too so a re-clarified issue keeps a single conclusion.
-	for _, heading := range []string{clarificationHeading, legacyClarificationHeading} {
-		if i := strings.Index(desc, heading); i >= 0 {
-			desc = strings.TrimRight(desc[:i], " \t\n")
-		}
-	}
-	if desc == "" {
-		return block
-	}
-	return desc + "\n\n" + block
-}
-
-func clarificationComment(issue domain.Issue, summary string) string {
-	source := "工作项"
-	return fmt.Sprintf("%s\n\n%s\n\n---\n来源：%s `%s`，由 LoopForge 基于当前描述和用户回答生成。", clarificationHeading, strings.TrimSpace(summary), source, issue.ID)
 }
 
 func (h issuesHandlers) bindIssueRepositories(v *domain.Issue) error {
@@ -486,8 +390,8 @@ type issueListQuery struct {
 	ProjectID string
 	Status    string
 	Source    string
+	Tag       string
 	Q         string
-	Assignee  string
 }
 
 func filterIssues(items []domain.Issue, q issueListQuery) []domain.Issue {
@@ -503,7 +407,7 @@ func filterIssues(items []domain.Issue, q issueListQuery) []domain.Issue {
 		if !csvContainsFold(q.Source, item.Source) {
 			continue
 		}
-		if q.Assignee != "" && !issueMatchesAssignee(item, q.Assignee) {
+		if tag := strings.TrimSpace(q.Tag); tag != "" && !item.HasTag(tag) {
 			continue
 		}
 		if q.Q != "" && !issueMatchesQuery(item, needle) {
@@ -521,19 +425,6 @@ func filterIssues(items []domain.Issue, q issueListQuery) []domain.Issue {
 		return out[i].ID > out[j].ID
 	})
 	return out
-}
-
-// issueMatchesAssignee reports whether item matches a non-empty assignee
-// filter: "unassigned" (case-insensitive) selects issues with no assignee,
-// otherwise the value matches the numeric user ID or the AssigneeID.
-func issueMatchesAssignee(item domain.Issue, assignee string) bool {
-	if strings.EqualFold(assignee, "unassigned") {
-		return item.AssigneeUserID == 0 && strings.TrimSpace(item.AssigneeID) == ""
-	}
-	if item.AssigneeUserID > 0 && strconv.FormatInt(item.AssigneeUserID, 10) == assignee {
-		return true
-	}
-	return strings.EqualFold(item.AssigneeID, assignee)
 }
 
 // issueMatchesQuery reports whether the lower-cased, trimmed needle appears in
@@ -600,34 +491,4 @@ func parseIssueListInt(raw string, defaultVal int) (int, error) {
 
 func keepExistingTrackerBinding(v *domain.Issue, existing domain.Issue) {
 	repo.RestoreTrackerBinding(v, existing)
-}
-
-func (h issuesHandlers) bindRequirementPlaybook(issue *domain.Issue) {
-	if issue == nil || !domain.IsRequirementWorkItem(*issue) || issue.WithoutSOP() {
-		return
-	}
-	project, ok := h.repo.Project(issue.ProjectID)
-	if !ok {
-		return
-	}
-	if id := strings.TrimSpace(issue.PlaybookID); id != "" {
-		if _, found := project.Playbook(id); !found {
-			issue.PlaybookID = ""
-		}
-	}
-	if strings.TrimSpace(issue.PlaybookID) == "" {
-		if book, found := project.DefaultPlaybook(); found {
-			issue.PlaybookID = book.ID
-		}
-	}
-	book, found := project.Playbook(issue.PlaybookID)
-	if !found {
-		book, found = project.DefaultPlaybook()
-	}
-	if !found || len(book.Bindings) == 0 {
-		return
-	}
-	if strings.TrimSpace(issue.WorkflowID) == "" {
-		issue.WorkflowID = book.Bindings[0].WorkflowID
-	}
 }

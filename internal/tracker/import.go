@@ -233,9 +233,8 @@ func (s *Service) writeTrackerIssue(store IssueStoreAdapter, provider IssueProvi
 // tracker.
 func mergeTrackerIssue(provider IssueProvider, dst *domain.Issue, existing domain.Issue) {
 	applyExistingIssue(dst, existing)
-	// A description the user edited survives, and so does one a running
-	// clarification is about to rewrite.
-	if existing.Clarification.Status != "" || existing.DescriptionEdited() {
+	// A description the user edited survives the import.
+	if existing.DescriptionEdited() {
 		dst.Description = existing.Description
 	}
 	if !trackerOwnsStatus(provider, existing) {

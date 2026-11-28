@@ -8,6 +8,15 @@ import (
 	"unicode/utf8"
 )
 
+// ConflictBlock is one conflicted hunk extracted from a failed
+// default→integrate merge attempt. Ours carries the integrate-branch side,
+// Theirs the default-branch side; both are clipped for UI/prompt use.
+type ConflictBlock struct {
+	File   string `json:"file"`
+	Ours   string `json:"ours,omitempty"`
+	Theirs string `json:"theirs,omitempty"`
+}
+
 // Extraction limits keep blockers and prompts bounded on nasty merges.
 const (
 	maxBlocksPerFile  = 4

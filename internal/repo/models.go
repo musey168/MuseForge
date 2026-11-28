@@ -260,19 +260,18 @@ type sharedScheduleVersionRow struct {
 func (sharedScheduleVersionRow) TableName() string { return "shared_schedule_versions" }
 
 type issueRow struct {
-	ID             string     `gorm:"column:id;primaryKey;size:64"`
-	ProjectID      string     `gorm:"column:project_id;index:idx_issues_project_status;size:64"`
-	Number         int        `gorm:"column:number"`
-	Title          string     `gorm:"column:title;size:512"`
-	Status         string     `gorm:"column:status;index:idx_issues_project_status,priority:2;size:32"`
-	Kind           string     `gorm:"column:kind;size:32"`
-	Source         string     `gorm:"column:source;index:idx_issues_source_ext;size:32"`
-	WorkflowID     string     `gorm:"column:workflow_id;size:64"`
-	AssigneeUserID *int64     `gorm:"column:assignee_user_id;index:idx_issues_assignee_user"`
-	ExternalID     string     `gorm:"column:external_id;index:idx_issues_source_ext,priority:2;size:128"`
-	Payload        []byte     `gorm:"column:payload;type:json"`
-	Created        *time.Time `gorm:"column:created_at"`
-	Updated        *time.Time `gorm:"column:updated_at"`
+	ID         string     `gorm:"column:id;primaryKey;size:64"`
+	ProjectID  string     `gorm:"column:project_id;index:idx_issues_project_status;size:64"`
+	Number     int        `gorm:"column:number"`
+	Title      string     `gorm:"column:title;size:512"`
+	Status     string     `gorm:"column:status;index:idx_issues_project_status,priority:2;size:32"`
+	Kind       string     `gorm:"column:kind;size:32"`
+	Source     string     `gorm:"column:source;index:idx_issues_source_ext;size:32"`
+	Tags       string     `gorm:"column:tags;type:text"`
+	ExternalID string     `gorm:"column:external_id;index:idx_issues_source_ext,priority:2;size:128"`
+	Payload    []byte     `gorm:"column:payload;type:json"`
+	Created    *time.Time `gorm:"column:created_at"`
+	Updated    *time.Time `gorm:"column:updated_at"`
 }
 
 func (issueRow) TableName() string { return "issues" }
