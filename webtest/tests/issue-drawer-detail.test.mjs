@@ -21,8 +21,8 @@ test('the requirement drawer loads the surviving tabs only', async (t) => {
   await app.evaluate(`openIssueDetail('issue-1')`);
   await settle(4);
   const tabs = [...app.document.querySelectorAll('#issueDetailTabs .drawer-tab')].map(b => b.dataset.dtab);
-  assert.deepEqual(tabs, ['overview', 'delivery', 'activity', 'operations']);
-  for (const removed of ['clarify', 'sop', 'artifacts', 'conversations', 'acceptance']) {
+  assert.deepEqual(tabs, ['overview', 'activity', 'operations']);
+  for (const removed of ['delivery', 'clarify', 'sop', 'artifacts', 'conversations', 'acceptance']) {
     assert.equal(tabs.includes(removed), false, `${removed} tab is gone`);
   }
 });

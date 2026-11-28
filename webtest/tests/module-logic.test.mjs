@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadApp, settle } from '../lib/load-app.mjs';
 
-test('issue drawer panes render the requirement, its delivery, and its activity', async (t) => {
+test('issue drawer panes render the requirement and its activity', async (t) => {
   const app = await loadApp();
   t.after(app.close);
   const rendered = app.evaluate(`
@@ -14,7 +14,7 @@ test('issue drawer panes render the requirement, its delivery, and its activity'
       const data={issue,repositories:state.data.repositories};
       state.issueDetailData=data;
       return [
-        overviewPane(issue,data), deliveryPane(issue,data),
+        overviewPane(issue,data),
         operationsPane(issue), activityPane(issue,data),
         issueProgressActionsHTML(issue,{includeIssueActions:true})
       ].join('');
@@ -24,6 +24,7 @@ test('issue drawer panes render the requirement, its delivery, and its activity'
   assert.equal(typeof sopPane, 'undefined');
   assert.equal(typeof artifactsPane, 'undefined');
   assert.equal(typeof acceptancePane, 'undefined');
+  assert.equal(typeof deliveryPane, 'undefined');
 });
 
 test('the requirement list and detail no longer expose engine helpers', async (t) => {

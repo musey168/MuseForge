@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>LoopForge · Agent 编排平台</title>
+  <title>MuseForge · 个人项目工作台</title>
   <script src="/boot-theme.js?v=20261031boot1"></script>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png?v=2">
@@ -111,8 +111,8 @@
       <p>项目</p>
       <button class="nav" data-view="projects"><span class="nav-icon"><svg class="agent-icon harness-icon" data-icon="users" data-icon-motion="idle" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><g class="team-front"><circle cx="9" cy="8" r="3"/><path d="M3 20v-1a6 6 0 0 1 12 0v1"/></g><g class="team-back"><path d="M16 5a3 3 0 0 1 0 6M17 14a5 5 0 0 1 4 5v1"/></g></svg></span><span class="nav-label">项目配置</span></button>
       <button class="nav" data-view="projectCredentials"><span class="nav-icon"><svg class="agent-icon harness-icon" data-icon="key" data-icon-motion="idle" width="15" height="15" aria-hidden="true"></svg></span><span class="nav-label">凭据管理</span></button>
-      <p>运行环境</p>
-      <button class="nav" data-view="runners"><span class="nav-icon"><svg class="agent-icon harness-icon" data-icon="server" data-icon-motion="idle" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01"/><path d="M7 17.5h.01"/></svg></span><span class="nav-label">执行机器</span></button>
+      <p>机器</p>
+      <button class="nav" data-view="runners"><span class="nav-icon"><svg class="agent-icon harness-icon" data-icon="server" data-icon-motion="idle" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01"/><path d="M7 17.5h.01"/></svg></span><span class="nav-label">我的机器</span></button>
       </div>
     </nav>
 
@@ -123,7 +123,7 @@
   <!-- 顶栏：页面上下文 + 全局项目切换 + 关键操作 -->
   <header class="topbar">
     <button type="button" id="settingsSidebarExpand" class="settings-navigation-toggle settings-navigation-reopen" aria-label="展开设置导航" title="展开设置导航" aria-controls="settingsSidebar" aria-expanded="false" hidden><svg class="agent-icon harness-icon" data-icon="panel-left" data-icon-motion="idle" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="m13 9 3 3-3 3"/></svg></button>
-    <div class="page-context"><b id="pageTitle">需求列表</b><span>／ Agent 原生研发协作平台</span></div>
+    <div class="page-context"><b id="pageTitle">需求列表</b><span>／ 个人项目工作台</span></div>
     <button id="commandPaletteTrigger" class="command-trigger" type="button"><span><svg class="agent-icon harness-icon" data-icon="search" data-icon-motion="idle" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span><b>搜索需求或页面</b><kbd>⌘K</kbd></button>
     <div class="topbar-spacer"></div>
     <div class="topbar-project">
@@ -160,7 +160,6 @@
         <div><p class="eyebrow">日常入口</p><h1>工作总览</h1><p>先处理失败和待确认的需求，再看进行中的和最近结果。</p></div>
         <div class="heading-actions">
           <button id="refreshDashboard" class="button ghost">↻ 刷新</button>
-          <button id="dashImportTAPD" class="button ghost" type="button" data-legacy-tracker hidden>导入 TAPD</button>
           <button id="dashNewRequirement" class="button primary">＋ 新建需求</button>
           <button id="dashNewRun" class="button ghost">打开需求列表</button>
         </div>
@@ -168,39 +167,27 @@
       <div id="dashStats" class="stat-grid"></div>
       <div class="dash-grid">
         <div class="sh-card dash-col-left">
-          <div class="sh-card-title"><span class="sh-card-icon amber">!</span>需要我处理<span class="sub" data-issue-filter="attention">全部 →</span></div>
+          <div class="sh-card-title"><span class="sh-card-icon amber">!</span>已阻塞<span class="sub" data-issue-filter="blocked">全部 →</span></div>
           <div id="dashAttention" class="dash-list"></div>
         </div>
         <div class="sh-card dash-col-mid">
-          <div class="sh-card-title"><span class="sh-card-icon blue">◷</span>正在推进<span class="sub" data-issue-filter="active">全部 →</span></div>
+          <div class="sh-card-title"><span class="sh-card-icon blue">◷</span>进行中<span class="sub" data-issue-filter="progress">全部 →</span></div>
           <div id="dashActive" class="dash-list"></div>
         </div>
         <div class="sh-card dash-col-right">
-          <div class="sh-card-title"><span class="sh-card-icon green">✓</span>最近结果</div>
+          <div class="sh-card-title"><span class="sh-card-icon green">✓</span>最近完成</div>
           <div id="dashResults" class="dash-list"></div>
         </div>
-      </div>
-      <div class="sh-card dash-feed-card">
-        <div class="sh-card-title"><span class="sh-card-icon blue">⟳</span>外部同步与活动<span class="sub" id="dashFeedHint">Activity Feed</span></div>
-        <div id="dashFeed" class="dash-feed"></div>
       </div>
     </section>
 
     <!-- 需求与 Issue -->
     <section id="issuesView" class="view page-view">
       <div class="page-heading issue-heading">
-        <div><p class="eyebrow">需求与缺陷</p><h1>需求列表</h1><p>查看每条需求的执行结果。失败的点进去看卡在哪，再决定重试或修改。</p></div>
+        <div><p class="eyebrow">需求与缺陷</p><h1>需求列表</h1><p>你要做的事都在这里：写下需求、标注状态，做完就把它关掉。</p></div>
         <div class="heading-actions issue-heading-actions">
           <button id="refreshIssues" class="button ghost hui-icon-button" type="button" aria-label="刷新" title="刷新"><svg class="agent-icon harness-icon" data-icon="refresh" width="16" height="16" aria-hidden="true" focusable="false"></svg></button>
-          <div class="hui-menu-anchor">
-            <button id="issueHeadingMore" class="button ghost" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="issueHeadingMenu">更多<svg class="agent-icon harness-icon hui-menu-chevron" data-icon="chevron-down" width="14" height="14" aria-hidden="true" focusable="false"></svg><i class="hui-alert-dot" aria-hidden="true"></i></button>
-            <div id="issueHeadingMenu" class="hui-menu" role="menu" aria-labelledby="issueHeadingMore" inert>
-              <button id="openSyncModal" class="hui-menu-item" type="button" role="menuitem" tabindex="-1"><svg class="agent-icon harness-icon" data-icon="swap" width="16" height="16" aria-hidden="true" focusable="false"></svg><span class="hui-menu-label">外部同步</span><span class="hui-menu-meta"><span id="syncBadge" class="sync-badge live">未配置</span></span></button>
-              <span class="hui-menu-sep" role="separator"></span>
-              <button id="importGitHubIssues" class="hui-menu-item" type="button" role="menuitem" tabindex="-1"><svg class="agent-icon harness-icon" data-icon="download" width="16" height="16" aria-hidden="true" focusable="false"></svg><span class="hui-menu-label">同步 GitHub</span></button>
-              <button id="importTAPDIssue" class="hui-menu-item" type="button" role="menuitem" tabindex="-1" data-legacy-tracker hidden><svg class="agent-icon harness-icon" data-icon="download" width="16" height="16" aria-hidden="true" focusable="false"></svg><span class="hui-menu-label">导入 TAPD</span></button>
-            </div>
-          </div>
+          <button id="openSyncModal" class="button ghost" type="button"><svg class="agent-icon harness-icon" data-icon="download" width="16" height="16" aria-hidden="true" focusable="false"></svg>导入需求</button>
           <button id="newIssue" class="button primary" type="button"><svg class="agent-icon harness-icon" data-icon="plus" width="16" height="16" aria-hidden="true" focusable="false"></svg>新建需求</button>
         </div>
       </div>
@@ -275,10 +262,10 @@
       <div id="projectCredentialsContent" class="project-credential-shell" aria-live="polite"></div>
     </section>
 
-    <!-- 执行机器：本机 / CVM 执行环境 -->
+    <!-- 我的机器：本机 / 云主机清单 -->
     <section id="runnersView" class="view page-view">
       <div class="page-heading">
-        <div><h1>执行机器</h1><p>连接电脑或 CVM，可将机器共享给多个项目。</p></div>
+        <div><h1>我的机器</h1><p>登记你自己的电脑或云主机，一台机器只属于你一个人。</p></div>
         <div class="heading-actions"><button id="refreshRunners" class="button ghost" type="button">刷新</button></div>
       </div>
 
@@ -330,7 +317,6 @@
       </header>
       <div class="drawer-tabs" id="issueDetailTabs">
         <button class="drawer-tab active" data-dtab="overview">概览</button>
-        <button class="drawer-tab" data-dtab="delivery">代码交付</button>
         <button class="drawer-tab" data-dtab="activity">活动</button>
         <button class="drawer-tab" data-dtab="operations">操作日志</button>
       </div>
@@ -372,15 +358,6 @@
               <span id="reqCharCount" class="req-count"></span>
             </div>
           </div>
-          <div class="req-form">
-            <div class="req-field req-wide">
-              <div class="req-f-label" id="reqTargetLabel">建到哪里</div>
-              <div id="reqTarget" class="req-dest" role="radiogroup" aria-labelledby="reqTargetLabel">
-                <button type="button" class="req-choice" role="radio" aria-checked="true" data-req-target="local"><span class="req-choice-ind" aria-hidden="true"></span><span class="req-choice-body"><b>平台需求</b><span>在本平台建单</span></span></button>
-                <button type="button" class="req-choice" role="radio" aria-checked="false" data-req-target="tapd"><span class="req-choice-ind" aria-hidden="true"></span><span class="req-choice-body"><b>TAPD 需求</b><span id="reqTargetTAPDHint">先在平台建单，再同步到 TAPD</span></span></button>
-              </div>
-            </div>
-          </div>
         </section>
       </div>
       <footer id="reqFooter" class="req-wizard-foot">
@@ -390,11 +367,7 @@
     </div>
   </div>
 
-  <div id="importTAPDModal" class="modal"><form id="importTAPDForm" class="modal-card"><button type="button" class="modal-close import-tapd-close">×</button><p class="eyebrow">外部需求</p><h2>导入 TAPD 工作项</h2><p class="modal-hint">支持 TAPD 需求、缺陷或任务链接，也可以粘贴「标题 + 链接」。导入时将读取 TAPD 最新标题和描述并写入当前项目。</p><label for="importTAPDURL">TAPD 链接或分享文本</label><textarea id="importTAPDURL" class="input" required rows="3" placeholder="【工作项标题】&#10;https://www.tapd.cn/tapd_fe/…/story/detail/…"></textarea><label>代码仓库（可多选）</label><div id="importTAPDRepository" class="repo-picker"></div><p class="modal-hint">从下拉框添加仓库，点击标签可移除。导入前必须至少选择一个仓库。</p><label for="importTAPDBaseBranch">继续开发分支（可选）</label><input id="importTAPDBaseBranch" class="input" placeholder="留空从配置主分支新建工作分支" aria-describedby="importTAPDBaseBranchHint" autocomplete="off"><div id="importTAPDRepositoryBranches" class="repository-branches" hidden></div><p id="importTAPDBaseBranchHint" class="modal-hint">留空从配置主分支新建工作分支；填写时直接继续该已有分支，不新建。</p><div class="modal-actions"><button type="button" class="button ghost import-tapd-close">取消</button><button id="confirmImportTAPD" type="submit" class="button primary">导入</button></div></form></div>
-
-
-
-  <div id="issueModal" class="modal"><form id="issueForm" class="modal-card issue-modal-card"><button type="button" class="modal-close issue-close">×</button><p class="eyebrow">需求</p><h2 id="issueModalTitle">新建 Issue</h2><input type="hidden" name="id"><div class="form-grid"><div><label>项目</label><select name="projectId" class="select"></select></div><div><label>优先级</label><select name="priority" class="select"><option value="urgent">Urgent</option><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select></div><div><label>责任人</label><div id="issueAssigneePicker"></div></div></div><label>标题</label><input name="title" required><label for="issueTags">标签</label><input id="issueTags" name="tags" placeholder="用逗号分隔，例如 bug, ui" autocomplete="off"><label>说明（Markdown）</label><textarea name="description" rows="7"></textarea><div id="issueSyncTargetBox" class="sync-target-box"><span>创建方式</span><label><input type="radio" name="syncTarget" value="local"> 平台需求</label><p>平台需求不需要同步外部系统，也可以进入效能统计。</p></div><div id="issueBoundNote" class="sync-target-box" hidden><span>外部单据</span><p id="issueBoundNoteText">保存只改本平台记录，不会回写外部系统。</p></div><div id="issueManualTapdBinding" hidden><label>关联 TAPD ID（可选，仅统计）</label><input name="tapdId" inputmode="numeric" pattern="[0-9]*" placeholder="不填写也会按平台需求统计"><small>不会自动同步或回写 TAPD；以后可以补填或清空。</small></div><div class="form-grid"><div><label>代码仓库（可多选）</label><div id="issueRepoChecks" class="repo-checks"></div><small>默认全选；可调整本次需求涉及的仓库。留空时各仓库从配置主分支新建工作分支。</small></div><div><label for="issueBaseBranch">继续开发分支（可选）</label><input id="issueBaseBranch" name="baseBranch" placeholder="留空从配置主分支新建工作分支" aria-describedby="issueBaseBranchHint" autocomplete="off"><div id="issueRepositoryBranches" class="repository-branches" hidden></div><small id="issueBaseBranchHint"></small></div></div><div class="form-grid"><div><label>状态</label><select name="status" class="select"><option value="backlog">待规划</option><option value="todo">待处理</option><option value="in_progress">进行中</option><option value="in_review">评审中</option><option value="done">已完成</option><option value="blocked">已阻塞</option><option value="cancelled">已取消</option></select></div></div><div class="modal-actions"><button type="button" class="button ghost issue-close">取消</button><button id="reopenDeliveredIssue" type="button" class="button ghost" hidden>重新打开</button><button type="submit" class="button primary">保存</button></div></form></div>
+  <div id="issueModal" class="modal"><form id="issueForm" class="modal-card issue-modal-card"><button type="button" class="modal-close issue-close">×</button><p class="eyebrow">需求</p><h2 id="issueModalTitle">新建 Issue</h2><input type="hidden" name="id"><div class="form-grid"><div><label>项目</label><select name="projectId" class="select"></select></div><div><label>优先级</label><select name="priority" class="select"><option value="urgent">Urgent</option><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select></div><div><label>责任人</label><div id="issueAssigneePicker"></div></div></div><label>标题</label><input name="title" required><label for="issueTags">标签</label><input id="issueTags" name="tags" placeholder="用逗号分隔，例如 bug, ui" autocomplete="off"><label>说明（Markdown）</label><textarea name="description" rows="7"></textarea><div id="issueBoundNote" class="sync-target-box" hidden><span>外部单据</span><p id="issueBoundNoteText">保存只改本平台记录，不会回写外部系统。</p></div><div id="issueManualTapdBinding" hidden><label>关联 TAPD ID（可选，仅统计）</label><input name="tapdId" inputmode="numeric" pattern="[0-9]*" placeholder="不填写也会按平台需求统计"><small>不会自动同步或回写 TAPD；以后可以补填或清空。</small></div><div class="form-grid"><div><label>代码仓库（可多选）</label><div id="issueRepoChecks" class="repo-checks"></div><small>默认全选；可调整本次需求涉及的仓库。留空时各仓库从配置主分支新建工作分支。</small></div><div><label for="issueBaseBranch">继续开发分支（可选）</label><input id="issueBaseBranch" name="baseBranch" placeholder="留空从配置主分支新建工作分支" aria-describedby="issueBaseBranchHint" autocomplete="off"><div id="issueRepositoryBranches" class="repository-branches" hidden></div><small id="issueBaseBranchHint"></small></div></div><div class="form-grid"><div><label>状态</label><select name="status" class="select"><option value="backlog">待规划</option><option value="todo">待处理</option><option value="in_progress">进行中</option><option value="in_review">评审中</option><option value="done">已完成</option><option value="blocked">已阻塞</option><option value="cancelled">已取消</option></select></div></div><div class="modal-actions"><button type="button" class="button ghost issue-close">取消</button><button id="reopenIssue" type="button" class="button ghost" hidden>重新打开</button><button type="submit" class="button primary">保存</button></div></form></div>
 
   <div id="repositoryModal" class="modal"><form id="repositoryForm" class="modal-card issue-modal-card"><button type="button" class="modal-close repository-close">×</button><p class="eyebrow">代码仓库</p><h2>管理 Git 仓库</h2><p id="repositoryProjectHint" class="modal-hint"></p><input type="hidden" name="id"><input type="hidden" name="gongfengProjectId"><input type="hidden" name="webUrl"><input type="hidden" name="cloneUrl"><label>仓库地址</label><input name="repoUrl" placeholder="https://github.com/owner/repo 或 git@github.com:owner/repo.git" required><p class="modal-hint">粘贴 GitHub Web、SSH 或 clone URL 任一即可，会自动识别仓库路径并补全其余地址。</p><div id="repositoryNameField"><label>仓库名称</label><input name="name" placeholder="留空则自动取项目路径末段"></div><div class="form-grid"><div><label>主分支</label><input name="defaultBranch" value="main" required placeholder="main / master / release"></div><div><label>集成分支（可选）</label><input name="integrateBranch" placeholder="例如 agentflow/integration"></div></div><p class="modal-hint">集成分支用于检查多个 LOOP 执行后工作分支之间是否存在合并冲突。不填则跳过冲突对齐；部分仓库不允许创建 agentflow/ 分支。</p><input type="hidden" name="localPath"><label class="toggle-row"><input id="repositoryMakeDefault" name="makeDefault" type="checkbox" checked><span>设为当前项目默认仓库</span></label><div id="repositoryCredentialHint" class="repository-credential-hint" role="status"></div><div id="repositoryList" class="repository-list"></div><div class="modal-actions"><button type="button" class="button ghost repository-close">取消</button><button type="submit" class="button primary">保存仓库</button></div></form></div>
   <div id="repoDrawerScrim" class="pa-scrim"></div>
@@ -462,16 +435,11 @@
     <div class="modal-card sync-modal-card">
       <button type="button" class="modal-close sync-close">×</button>
       <div class="sync-panel-head">
-        <div class="sync-panel-title"><span>⟳</span><b>外部同步</b><small id="syncPanelSubtitle">GitHub Issue</small></div>
-        <div class="sync-panel-actions">
-          <button id="syncNowBtn" class="button primary small">⟳ 立即同步</button>
-          <label class="sync-auto-toggle"><input id="syncAutoEnabledInline" type="checkbox"> 自动</label>
-        </div>
+        <div class="sync-panel-title"><span>⟳</span><b>导入需求</b><small id="syncPanelSubtitle">GitHub · GitLab</small></div>
       </div>
-      <div class="sync-panel-summary" id="syncPanelSummary"></div>
       <div class="sync-panel-config" id="syncPanelConfig">
-        <p class="sync-auth-hint" id="syncScopeHint">按<strong>当前项目已绑定的 GitHub / GitLab 仓库</strong>拉取 Issue，使用项目 Owner 在个人设置里配置的 GitHub 或 GitLab 访问令牌。立即同步和自动同步覆盖平台上所有项目，由平台管理员操作。</p>
-        <div id="syncGongfengRepos" class="sync-repo-list"></div>
+        <p class="sync-auth-hint" id="syncScopeHint">按当前项目已绑定的 GitHub / GitLab 仓库导入需求，使用你在个人设置里配置的访问令牌。</p>
+        <div id="trackerImportScope" class="sync-repo-list"></div>
         <div class="sync-import-row">
           <select id="trackerImportProvider" class="select small" aria-label="导入来源">
             <option value="github" selected>GitHub</option>
@@ -482,24 +450,6 @@
           <small id="trackerImportHint" class="sync-import-hint">按当前项目已绑定的 GitHub 仓库导入需求</small>
         </div>
         <div id="trackerImportRepos" class="sync-repo-list"></div>
-        <div class="sync-config-grid">
-          <div data-legacy-tracker hidden><label>工蜂 MCP URL（平台）</label><input id="syncGongfengURL" class="input"></div>
-          <div data-legacy-tracker hidden><label>TAPD MCP URL（平台）</label><input id="syncTAPDURL" class="input"></div>
-          <div data-legacy-tracker hidden><label>本项目 TAPD 工作空间 ID</label><input id="syncTAPDWorkspace" class="input"></div>
-          <div data-legacy-tracker hidden><label>本项目 TAPD 迭代 ID</label><input id="syncTAPDIteration" class="input"></div>
-          <div><label>自动同步间隔（秒，平台）</label><input id="syncInterval" class="input" type="number" min="30"></div>
-        </div>
-        <div class="sync-config-actions">
-          <label class="toggle-row"><input id="syncAutoEnabled" type="checkbox"> 启用自动同步</label>
-          <button id="saveSyncConfig" class="button dark small">保存配置</button>
-          <button id="pushToGongfeng" class="button ghost small" data-legacy-tracker hidden>↗ 推送选中项至工蜂</button>
-          <button id="pushToTAPD" class="button ghost small" data-legacy-tracker hidden>↗ 推送选中项至 TAPD</button>
-          <select id="syncPushIssue" class="select small" data-legacy-tracker hidden aria-label="选择要推送的工作项"></select>
-        </div>
-        <details class="sync-logs-details">
-          <summary>同步日志</summary>
-          <div id="syncLogList" class="sync-log-list"></div>
-        </details>
       </div>
     </div>
   </div>

@@ -124,7 +124,7 @@ vm.runInContext(moduleSource, ctx);
   await api.load();
   assert.equal(api.catalog().default, 'model-b');
   assert.equal(api.catalog().models.length, 3, 'catalog adopts concrete models');
-  assert.match(bundle, /bindClarifyModelPicker/);
+  assert.match(bundle, /window\.AgentFlowAssistantModels/, 'the shared model catalog ships in the bundle');
 
   const pair = pickerFixture();
   const changes = [];

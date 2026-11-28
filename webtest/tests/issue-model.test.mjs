@@ -10,8 +10,6 @@ test('the requirement model derives stages, outcomes, and action markup from the
       title:'需求',assigneeUserId:1};
     state.data.projects=[{id:'p1',name:'项目'}];
     state.data.issues=[base];
-    const mrIssue={...base,deliveryState:'merged',deliveryMrState:'merged',
-      deliveryMrs:[{url:'https://git.example.com/team/repo/-/merge_requests/17',state:'merged',repository:'repo'}]};
     const closed={...base,status:'closed',closeSource:'manual'};
     return {
       stages:{
@@ -28,20 +26,21 @@ test('the requirement model derives stages, outcomes, and action markup from the
       outcomes:{
         backlog:issueOutcome(base).key,
         closed:issueOutcome(closed).title,
-        merged:issueOutcome(mrIssue).key,
+        done:issueOutcome({...base,status:'done'}).title,
       },
       actions:{
         closed:issueActionButtons(closed),
         open:issueActionButtons(base),
       },
       owner:issueOwnerSummary(base),
-      mrList:deliveryMRList(mrIssue),mrLabel:deliveryLockedLabel(mrIssue),
-      mrButtons:deliveryMRButtons(mrIssue),
-      reopen:reopenDeliveredButton(closed),
+      reopen:reopenIssueButton(closed),
+      reopenOpen:reopenIssueButton(base),
       removed:['clientIssueLanes','issueActor','issueRunHealth','triggerSOPButton','canRetriggerIssue',
                'normalizeSOPLane','inferSOPLane','projectSOPBindings','normalizePlaybookList','issueLaneDots',
                'issueClarifying','clarificationNeedsConfirm','issueTrackerClosed','issueMergedDelivery',
-               'issueManuallyClosed','deliveryLocked','gongfengIssueClosed']
+               'issueManuallyClosed','deliveryLocked','gongfengIssueClosed',
+               'deliveryMRLinked','pendingDeliveryMRCount','deliveryMRList','deliveryMRButtons',
+               'deliveryLockedLabel','reopenDeliveredButton','deliveryPane']
         .filter(name=>typeof window[name]!=='undefined'),
     };
   })()`));
@@ -56,13 +55,11 @@ test('the requirement model derives stages, outcomes, and action markup from the
   assert.equal(result.stages.closed, 'closed');
   assert.equal(result.outcomes.backlog, 'idle');
   assert.equal(result.outcomes.closed, '需求已关闭');
-  assert.equal(result.outcomes.merged, 'closed');
+  assert.equal(result.outcomes.done, '需求已完成');
   assert.match(result.actions.open, /查看/);
   assert.equal(result.actions.closed.includes('查看'), false, 'a closed requirement shows only its menu');
-  assert.equal(result.mrList[0].iid, 17);
-  assert.equal(result.mrLabel, 'MR 已合入');
-  assert.match(result.mrButtons, /merge_requests\/17/);
   assert.match(result.reopen, /重新打开/);
+  assert.equal(result.reopenOpen, '', 'an open requirement has nothing to reopen');
   assert.equal(result.owner, '未指定');
   assert.deepEqual([...result.removed], []);
 });

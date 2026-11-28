@@ -56,54 +56,16 @@ function issueClosed(i){return String(i?.status||'').toLowerCase()==='closed'}
 function issueOutcome(i){
   const stage=issueCurrentStage(i);
   if(issueClosed(i))return{key:'closed',short:'已关闭',title:'需求已关闭',body:'该需求已关闭。如需继续修改，请先重新打开。'};
-  const delivery=deliveryLockedLabel(i);
-  if(delivery==='MR 已合入'||delivery==='已合入基线')return{key:'closed',short:'已交付',title:delivery,body:'交付已经闭环。如需继续修改，请先重新打开。'};
   if(String(i?.status||'').toLowerCase()==='done')return{key:'closed',short:'已完成',title:'需求已完成',body:'需求已完成。'};
   if(stage.key==='attention')return{key:'attention',short:'需处理',title:stage.label,body:stage.hint};
   if(stage.key==='active')return{key:'active',short:'进行中',title:stage.label,body:stage.hint};
   return{key:'idle',short:stage.label,title:stage.label,body:stage.hint};
 }
-function deliveryMRLinked(i){return deliveryMRList(i).length>0}
-// 待处理 MR：已创建但还没合入的 MR（opened/reopened）。状态未知的历史 MR 不计入，避免数字虚高。
-function pendingDeliveryMRCount(i){return deliveryMRList(i).filter(m=>['opened','reopened'].includes(String(m.state||'').toLowerCase())).length}
-// 多仓库交付每个仓库一个 MR；旧数据只有 deliveryMrUrl。
-function deliveryMRList(i){
-  const withRef=m=>{const hit=String(m.url).match(/^https?:\/\/[^/]+\/(.+?)(?:\/-)?\/merge_requests\/(\d+)/);return{...m,project:m.project||hit?.[1]||'',iid:m.iid||Number(hit?.[2])||0}};
-  const list=(i?.deliveryMrs||[]).filter(m=>String(m?.url||'').trim());
-  if(list.length)return list.map(withRef);
-  const url=String(i?.deliveryMrUrl||'').trim();
-  return url?[withRef({url,state:i?.deliveryMrState||''})]:[];
-}
-const deliveryMRStateText={merged:'已合入',integrated:'已合入基线',opened:'待合入',reopened:'待合入',closed:'已关闭'};
-function deliveryMRButtons(issue,{cls='button ghost small'}={}){
-  const list=deliveryMRList(issue);
-  return list.map(mr=>{
-    const iid=mr.iid||String(mr.url).match(/merge_requests\/(\d+)/)?.[1]||'';
-    const repo=mr.repository||String(mr.project||'').split('/').pop();
-    const label=list.length>1?`打开 MR · ${repo||'仓库'}${iid?` !${iid}`:''}`:'打开 MR';
-    const st=deliveryMRStateText[String(mr.state||'').toLowerCase()];
-    return `<a class="${cls}" href="${escapeHTML(safeURL(mr.url))}" target="_blank" rel="noopener noreferrer" title="${escapeHTML([mr.project,st].filter(Boolean).join(' · ')||mr.url)}">${escapeHTML(label)} ↗</a>`;
-  }).join('');
-}
-function deliveryLockedLabel(i){
-  if(issueClosed(i))return '关闭';
-  const state=String(i?.deliveryMrState||'').toLowerCase();
-  // 旧版手动关闭会写入 deliveryState=merged、deliveryMrState=closed，但没有 MR 链接。
-  if(!deliveryMRLinked(i))return state==='closed'?'已关闭':'交付闭环';
-  switch(state){
-    case 'merged':return 'MR 已合入';
-    case 'integrated':return '已合入基线';
-    case 'closed':return 'MR 已关闭';
-    default:return '交付闭环';
-  }
-}
-// 交付已经闭环（MR 合入）或需求已关闭时，用户可以把它重新打开。
+// 已关闭的需求可以重新打开；其它状态由需求自己的状态说话。
 function issueReopenable(i){
-  if(issueClosed(i))return true;
-  const label=deliveryLockedLabel(i);
-  return label==='MR 已合入'||label==='已合入基线';
+  return issueClosed(i);
 }
-function reopenDeliveredButton(issue,{cls='button primary small'}={}){if(!issueReopenable(issue))return'';return `<button type="button" class="${cls}" data-reopen-issue="${escapeHTML(issue.id)}">重新打开</button>`}
+function reopenIssueButton(issue,{cls='button primary small'}={}){if(!issueReopenable(issue))return'';return `<button type="button" class="${cls}" data-reopen-issue="${escapeHTML(issue.id)}">重新打开</button>`}
 function issueActionButtons(i){
   const more=`<button type="button" class="issue-act-more" data-issue-menu="${escapeHTML(i.id)}" title="更多操作" aria-label="更多操作"><svg class="agent-icon harness-icon" data-icon="more-horizontal" width="16" height="16" aria-hidden="true" focusable="false"></svg></button>`;
   if(issueClosed(i))return more;
@@ -195,7 +157,7 @@ function showIssueActionMenu(e,issueId){
     reopenBtn.onclick=ev=>{
       ev.stopPropagation();
       hideIssueActionMenu();
-      reopenDeliveredIssue(issue.id);
+      reopenIssue(issue.id);
     };
   }
   menu.hidden=false;
@@ -218,6 +180,6 @@ function bindIssueRowActions(root=document){
   root.querySelectorAll('[data-issue-menu]').forEach(button=>button.onclick=e=>showIssueActionMenu(e,button.dataset.issueMenu));
   root.querySelectorAll('[data-edit-issue]').forEach(button=>button.onclick=e=>{e.stopPropagation();const id=button.dataset.editIssue;openIssue((state.data.issues||[]).find(i=>i.id===id)||(id?{id}:null))});
   root.querySelectorAll('[data-open-issue]').forEach(button=>button.onclick=e=>{e.stopPropagation();openIssueDetail(button.dataset.openIssue,button.dataset.dtab||'overview')});
-  root.querySelectorAll('[data-reopen-issue]').forEach(button=>button.onclick=e=>{e.stopPropagation();reopenDeliveredIssue(button.dataset.reopenIssue)});
+  root.querySelectorAll('[data-reopen-issue]').forEach(button=>button.onclick=e=>{e.stopPropagation();reopenIssue(button.dataset.reopenIssue)});
   root.querySelectorAll('[data-close-issue]').forEach(button=>button.onclick=e=>{e.stopPropagation();closeIssueById(button.dataset.closeIssue)});
 }

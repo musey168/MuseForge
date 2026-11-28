@@ -618,7 +618,6 @@ body.view-has-heading .topbar .command-trigger{margin-left:0 !important}
 .page-heading,
 .dash-heading,
 .dash-grid,
-.dash-feed-card,
 .stat-grid,
 .sync-panel,
 .project-context-bar,
@@ -682,7 +681,6 @@ body.view-has-heading .topbar .command-trigger{margin-left:0 !important}
 .dash-grid .sh-card{border-radius:16px;box-shadow:none}
 .sync-panel{border-left:4px solid var(--v4-cyan);border-radius:14px;width:100%;margin:0 0 14px}
 .sync-panel-head{min-height:64px}.sync-panel-title>b{font-size:14px}.sync-panel-summary{padding-block:13px}
-.sync-error-detail{max-width:min(620px,60vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .issue-toolbar{padding:9px 10px;border-radius:14px;width:100%}
 .status.paused{background:rgba(245,158,11,.16);color:#d97706}
 html[data-theme="dark"] .status.paused{color:var(--amber)}
