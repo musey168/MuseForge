@@ -1,29 +1,18 @@
 package httpapi
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"log"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"agentflow/internal/agentcli"
 	"agentflow/internal/domain"
 	"agentflow/internal/managedcli"
-
-	"github.com/gin-gonic/gin"
-
-	"agentflow/internal/cronexpr"
 )
 
 func firstNonEmpty(values ...string) string {
@@ -99,14 +88,6 @@ func fileExecutable(path string) bool {
 	return info.Mode()&0o111 != 0
 }
 
-func assistantSessionRoot(userID int64) string {
-	return filepath.Join(assistantSessionBase(), strconv.FormatInt(userID, 10))
-}
-
-func newAssistantSessionID() string {
-	return "af" + strconv.FormatInt(time.Now().UnixNano(), 36)
-}
-
 func assistantCatalogLists(catalog assistantModelCatalog, id string) bool {
 	for _, model := range catalog.Models {
 		if model.ID == id {
@@ -125,78 +106,6 @@ func assistantSupportsRunnerLogin(engine string) bool {
 	return domain.SupportsRunnerLogin(engine)
 }
 
-func sameScheduleReferenceIDs(a, b []domain.AssetReference) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i].Type != b[i].Type || a[i].ID != b[i].ID {
-			return false
-		}
-	}
-	return true
-}
-
-func parseAssistantCron(expr string) (cronexpr.Schedule, error) {
-	return cronexpr.Parse(expr)
-}
-
-func nextAssistantCron(expr string, after time.Time) (time.Time, error) {
-	return cronexpr.Next(expr, after)
-}
-
-func repositoryRunContext(r domain.Repository) domain.RepositoryContext {
-	return domain.RepositoryContext{RepositoryID: r.ID, Provider: r.Provider, Name: r.Name, GongfengProjectID: r.GongfengProjectID, WebURL: r.WebURL, CloneURL: r.CloneURL, BaseBranch: r.DefaultBranch, DefaultBranch: r.DefaultBranch, LocalPath: r.LocalPath, PipelineProjectID: r.PipelineProjectID, PipelineDefID: r.PipelineDefID, PipelineURLPattern: r.PipelineURLPattern}
-}
-
-func applyNativeToolSafety(argv []string, mode AgentToolMode) []string {
-	_ = mode
-	// --tools is a built-in allowlist. CodeBuddy also applies it to MCP tools,
-	// so listing Read/Grep/Glob or mcp__* globs hides submit_* and TAPD/工蜂.
-	argv = dropNativeArg(argv, "--tools")
-	if !slices.Contains(argv, "--disallowedTools") {
-		argv = appendNativeArgs(argv, "--disallowedTools", nativeDisallowedTools)
-	}
-	if !slices.Contains(argv, "--strict-mcp-config") {
-		argv = appendNativeArgs(argv, "--strict-mcp-config")
-	}
-	return argv
-}
-
-func appendNativeArgs(argv []string, args ...string) []string {
-	for i, arg := range argv {
-		if arg == "--" {
-			out := append([]string(nil), argv[:i]...)
-			out = append(out, args...)
-			return append(out, argv[i:]...)
-		}
-	}
-	return append(argv, args...)
-}
-
-func replaceArgValue(argv []string, flag, value string) []string {
-	out := make([]string, 0, len(argv)+2)
-	replaced := false
-	skip := false
-	for i := 0; i < len(argv); i++ {
-		if skip {
-			skip = false
-			continue
-		}
-		if argv[i] == flag {
-			out = append(out, flag, value)
-			skip = true
-			replaced = true
-			continue
-		}
-		out = append(out, argv[i])
-	}
-	if !replaced {
-		out = appendNativeArgs(out, flag, value)
-	}
-	return out
-}
-
 func redactAgentToolPath(path string) string {
 	const prefix = "/internal/agent-tools/"
 	if !strings.HasPrefix(path, prefix) {
@@ -209,87 +118,7 @@ func redactAgentToolPath(path string) string {
 	return prefix + "[redacted]"
 }
 
-func botChannelName(bot domain.NotificationBot) string {
-	switch bot.ChannelKind() {
-	case domain.BotChannelFeishu:
-		return "飞书"
-	case domain.BotChannelDingTalk:
-		return "钉钉"
-	default:
-		return "企业微信"
-	}
-}
-
-func assistantStreamImageInput(prompt string, imagePaths []string) (*bytes.Buffer, error) {
-	parts := []map[string]any{{"type": "text", "text": prompt}}
-	for _, path := range imagePaths {
-		file, err := os.Open(path)
-		if err != nil {
-			return nil, fmt.Errorf("无法打开本轮图片附件")
-		}
-		data, mime, err := readAssistantImage(file)
-		_ = file.Close()
-		if err != nil {
-			return nil, err
-		}
-		parts = append(parts, map[string]any{"type": "image", "source": map[string]any{
-			"type": "base64", "media_type": mime, "data": data,
-		}})
-	}
-	var input bytes.Buffer
-	err := json.NewEncoder(&input).Encode(map[string]any{
-		"type": "user", "message": map[string]any{"role": "user", "content": parts},
-	})
-	return &input, err
-}
-
-func trimAssistantReplyText(text string) string {
-	text = strings.TrimRightFunc(text, unicode.IsSpace)
-	for {
-		line, rest, ok := strings.Cut(text, "\n")
-		if !ok || strings.TrimSpace(line) != "" {
-			return text
-		}
-		text = rest
-	}
-}
-
 var errAssistantMissingResult = errors.New("CLI did not return a non-empty answer in type=result")
-
-func assistantCLIMaxTurns(text string) bool {
-	text = strings.ToLower(strings.TrimSpace(text))
-	return strings.HasPrefix(text, "max turns (") && strings.HasSuffix(text, ") exceeded")
-}
-
-// assistantSystemPromptText is the default system prompt of a tool-free
-// model call: it only asks for a direct answer.
-func assistantSystemPromptText() string {
-	return "你是 MuseForge 的分析助手。只输出结论，不要解释你的推理过程。"
-}
-
-func decodeAssistantCLIResult(final string, resultError bool, processErr error, stderr []string) (string, error) {
-	if assistantCLIMaxTurns(final) {
-		return "", agentcli.ErrMaxTurns
-	}
-	if processErr != nil {
-		if len(stderr) > 0 {
-			return "", fmt.Errorf("%w; stderr=%s", processErr, strings.Join(stderr, " | "))
-		}
-		return "", processErr
-	}
-	final = trimAssistantReplyText(final)
-	if final == "" {
-		msg := ""
-		if len(stderr) > 0 {
-			msg = "; stderr=" + strings.Join(stderr, " | ")
-		}
-		return "", fmt.Errorf("%w%s", errAssistantMissingResult, msg)
-	}
-	if resultError {
-		log.Printf("model call marked is_error=true with %d-byte structured result; using body", len(final))
-	}
-	return final, nil
-}
 
 // The agent CLIs the platform can drive. A model call never offers tools, so
 // only the two modes that shape the command line survive.
@@ -325,53 +154,7 @@ func assistantExecutor(id string) string {
 	}
 }
 
-// dropNativeArg removes a flag and its value from an argument list.
-func dropNativeArg(argv []string, flag string) []string {
-	out := make([]string, 0, len(argv))
-	for i := 0; i < len(argv); i++ {
-		if argv[i] == flag {
-			i++
-			continue
-		}
-		if strings.HasPrefix(argv[i], flag+"=") {
-			continue
-		}
-		out = append(out, argv[i])
-	}
-	return out
-}
-
-func assistantSessionBase() string {
-	if override := strings.TrimSpace(os.Getenv("AGENTFLOW_ASSISTANT_SESSION_DIR")); override != "" {
-		return override
-	}
-	home, err := os.UserHomeDir()
-	if err != nil || strings.TrimSpace(home) == "" {
-		home = os.TempDir()
-	}
-	return filepath.Join(home, ".agentflow", "assistant")
-}
-func assistantImageMIME(mime string) bool {
-	switch mime {
-	case "image/png", "image/jpeg", "image/webp", "image/gif":
-		return true
-	}
-	return false
-}
-
 const workbenchAttachmentLimit = 10 << 20
-
-func readAssistantImage(file io.Reader) ([]byte, string, error) {
-	data, err := io.ReadAll(io.LimitReader(file, workbenchAttachmentLimit+1))
-	if err != nil || len(data) > workbenchAttachmentLimit {
-		return nil, "", fmt.Errorf("图片附件读取失败或超过 10 MB")
-	}
-	mime := http.DetectContentType(data)
-	if !assistantImageMIME(mime) {
-		return nil, "", fmt.Errorf("图片附件格式不受支持，请使用 PNG、JPEG、WebP 或 GIF")
-	}
-	return data, mime, nil
-}
 
 func assistantEngineBinary(kind string) string {
 	switch kind {
@@ -384,27 +167,4 @@ func assistantEngineBinary(kind string) string {
 	default:
 		return agentcli.AgentCLIBinary(kind)
 	}
-}
-
-// workbenchProjectAllowed reports whether the caller may work in a project:
-// its owner.
-func workbenchProjectAllowed(d *deps, c *gin.Context, projectID string, userID int64) bool {
-	if projectID == "" {
-		return true
-	}
-	p, ok := d.repo.Project(projectID)
-	if !ok {
-		return false
-	}
-	return workbenchProjectAllowsUser(p, userID)
-}
-
-func repositoryBaseBranchName(rc domain.RepositoryContext) string {
-	if branch := strings.TrimSpace(rc.BaseBranch); branch != "" {
-		return branch
-	}
-	return strings.TrimSpace(rc.DefaultBranch)
-}
-func workbenchProjectAllowsUser(p domain.Project, userID int64) bool {
-	return p.AccountOwns(userID)
 }

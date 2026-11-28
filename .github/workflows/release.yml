@@ -7,14 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: "Existing platform release tag to publish (for example v0.3.0)"
+        description: "Existing release tag to publish (for example v1.0.0)"
         required: true
         type: string
 
 permissions:
   actions: read
   contents: write
-  packages: write
 
 concurrency:
   group: release-${{ inputs.source_ref || github.ref_name }}
@@ -23,7 +22,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -46,8 +45,8 @@ jobs:
             echo "Checkout does not match the release tag commit" >&2
             exit 1
           fi
-          if ! git merge-base --is-ancestor "${tag_commit}" origin/main; then
-            echo "Release tag ${TAG} is not on main" >&2
+          if ! git merge-base --is-ancestor "${tag_commit}" origin/dev; then
+            echo "Release tag ${TAG} is not on dev" >&2
             exit 1
           fi
           ci="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow platform.yml --commit "${tag_commit}" \
@@ -57,70 +56,18 @@ jobs:
             exit 1
           fi
           version="${TAG#v}"
-          if [[ "$(grep -cF "/loopforge:${version}}" compose.yaml)" != 2 ]]; then
-            echo "compose.yaml must pin loopforge:${version} (platform image and AGENTFLOW_ISOLATED_IMAGE) before tagging ${TAG}" >&2
+          if ! grep -q "^## ${version} " CHANGELOG.md; then
+            echo "CHANGELOG.md has no '## ${version} ' section" >&2
             exit 1
           fi
-          image="ghcr.io/${GITHUB_REPOSITORY,,}"
           prerelease=false
           [[ "${version}" == *-* ]] && prerelease=true
           {
             echo "tag=${TAG}"
             echo "version=${version}"
-            echo "sha=$(git rev-parse HEAD)"
-            echo "image=${image}"
+            echo "sha=$(git rev-parse --short HEAD)"
             echo "prerelease=${prerelease}"
-            echo "commit=${tag_commit}"
           } >> "$GITHUB_OUTPUT"
-
-      # arm64 lets Apple silicon and arm servers pull the image; only the final
-      # stage runs under emulation, the Go build cross-compiles.
-      - uses: docker/setup-qemu-action@v4
-        with:
-          platforms: arm64
-
-      - uses: docker/setup-buildx-action@v4
-
-      - uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: docker/metadata-action@v5
-        id: metadata
-        with:
-          images: ${{ steps.release.outputs.image }}
-          flavor: latest=false
-          tags: |
-            type=semver,pattern={{version}},value=${{ steps.release.outputs.tag }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.release.outputs.tag }}
-            type=raw,value=sha-${{ steps.release.outputs.sha }}
-            type=raw,value=latest,enable=${{ steps.release.outputs.prerelease == 'false' }}
-
-      - uses: docker/build-push-action@v7
-        id: push
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          build-args: |
-            LOOPFORGE_COMMIT=${{ steps.release.outputs.commit }}
-            LOOPFORGE_RELEASE_VERSION=${{ steps.release.outputs.tag }}
-          tags: ${{ steps.metadata.outputs.tags }}
-          labels: ${{ steps.metadata.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Smoke-test the published image by digest
-        env:
-          LOOPFORGE_IMAGE: ${{ steps.release.outputs.image }}@${{ steps.push.outputs.digest }}
-        run: |
-          ./start.sh -d
-          curl -fsS http://127.0.0.1:8090/api/health
-
-      - if: failure()
-        run: docker compose logs platform | tail -200
 
       - name: Create or update GitHub Release
         shell: bash
@@ -128,10 +75,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
           VERSION: ${{ steps.release.outputs.version }}
-          IMAGE: ${{ steps.release.outputs.image }}
-          DIGEST: ${{ steps.push.outputs.digest }}
           PRERELEASE: ${{ steps.release.outputs.prerelease }}
         run: |
+          # The platform is this checkout; there is no image to pull, so the
+          # release carries the install and upgrade steps and nothing else.
           notes="$(cat <<EOF
           ## Install
 
@@ -141,18 +88,25 @@ jobs:
           ./start.sh
           \`\`\`
 
-          Platform image: \`${IMAGE}:${VERSION}\` (pinned in \`compose.yaml\`).
+          The image is built from the checkout, one container starts on
+          \`127.0.0.1:8090\`, and everything is kept in one SQLite file below the
+          data directory. Open <http://127.0.0.1:8090> — there is no account and
+          no sign-in.
 
-          Digest: \`${IMAGE}@${DIGEST}\`.
+          ## Upgrade
 
-          Where \`ghcr.io\` is slow, set \`MIRROR\` to a registry host that replaces it (for example \`MIRROR=ghcr.nju.edu.cn ./start.sh\`). This trusts that host: the download is tagged as the pinned name. Check it with \`docker image inspect --format '{{index .RepoDigests 0}}' ${IMAGE}:${VERSION}\` and compare the digest after \`@\`. For an existing installation, read the [upgrade instructions in CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md) before starting \`${TAG}\`.
+          Stop the platform, check out \`${TAG}\`, run \`./start.sh pull\`. The schema
+          only gains the columns and tables it needs, so take the database backup
+          described in \`docs/deployment.md\` first. Read the \`${TAG}\` section of
+          [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md)
+          before starting it.
           EOF
           )"
           if gh release view "${TAG}" >/dev/null 2>&1; then
-            echo "Release ${TAG} already exists; image republished"
+            echo "Release ${TAG} already exists; leaving it in place"
             exit 0
           fi
-          release_args=(--title "LoopForge v${VERSION}" --notes "${notes}" --generate-notes --verify-tag)
+          release_args=(--title "MuseForge v${VERSION}" --notes "${notes}" --generate-notes --verify-tag)
           if [[ "${PRERELEASE}" == "true" ]]; then
             release_args+=(--prerelease)
           else

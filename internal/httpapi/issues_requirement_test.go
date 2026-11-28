@@ -145,3 +145,17 @@ func TestRequirementCarriesNoFlowFields(t *testing.T) {
 		t.Errorf("detail tags = %#v", issue["tags"])
 	}
 }
+
+// The personal build has no sign-in: with the auth switch untouched the
+// requirement list answers. The platform once turned authentication on by
+// default and answered "authentication required" on every route, and only the
+// live suite noticed.
+func TestPersonalBuildServesWithoutAuth(t *testing.T) {
+	t.Setenv("AGENTFLOW_AUTH_REQUIRED", "")
+	_, h := newRequirementStore(t)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/issues", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/issues = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+}

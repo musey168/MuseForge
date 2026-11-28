@@ -423,7 +423,6 @@ func parseStoredGongfengIssueID(id string) (repo string, iid int) {
 	return body[:i], n
 }
 
-
 func sortSlice[T any](values []T, less func(a, b T) bool) {
 	sort.Slice(values, func(i, j int) bool { return less(values[i], values[j]) })
 }

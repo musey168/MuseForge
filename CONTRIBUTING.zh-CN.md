@@ -15,7 +15,7 @@ python3 scripts/check-public.py
 bash scripts/scan-secrets.sh
 ```
 
-`e2e/` 下的实机套件对着你自己启动的平台运行：`cd e2e && ./local.sh api` 会编译当前代码，用临时 SQLite 文件、免登录启动，再跑 API 用例。请区分通过、失败、跳过与未运行。
+`e2e/` 下的实机套件自己启动平台：`cd e2e && ./verify-personal.sh` 会编译当前代码，用临时 SQLite 文件、免登录启动，再跑 API 与控制台用例。请区分通过、失败、跳过与未运行。
 
 平台的 pull request 会跑 `core` 作业，也就是上面的检查。仓库管理员需要在 GitHub 分支保护里把它手动勾成必须通过的检查；这次代码改动不会修改 GitHub 上的分支保护设置。
 

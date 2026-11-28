@@ -64,9 +64,11 @@ Single-context layout: root `GLOSSARY.md` plus `docs/adr/`. See `docs/agents/dom
 1. **代码不做迁移、不做 seed。** `repo.Open()` 只负责连接和 gorm
    AutoMigrate 的增量 DDL（补缺失的表/列/索引）。基线 schema、数据迁移
    （改数据、删行、删列）和 seed 数据一律写成 `migrations/` 下的 SQL
-   脚本。官方 Compose 安装与升级按部署文档执行指定的 SQL。迁移 041 由
-   `./start.sh pull` 在确认目标镜像兼容且数据库仍有旧资产表后、启动新版前执行。
-   其余需要运维处理的迁移按发布说明手动执行。
+   脚本，**不写进启动路径**。
+   **个人版没有迁移步骤**：全新安装由 AutoMigrate 建表，`./start.sh pull`
+   只重建镜像并重启容器，不执行任何 SQL。`migrations/` 只服务一种情况——
+   把团队版留下的旧数据库升级过来，由运维按发布说明手工执行；每个脚本都
+   必须能在当前 schema 上跑通，指向已退役表的脚本属于死代码，随表一起删除。
 2. 每个分支自带自己的迁移脚本，不做任何自动化生成（没有 seedgen 之类的
    工具）。脚本命名 `NNN_描述.sql`，按序号递增。
 3. 禁止新增 `ensureXxx`/`migrateXxx`/`seedXxx` 之类的启动自愈逻辑写入

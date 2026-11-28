@@ -1,6 +1,49 @@
 # Changelog
 
-Platform releases use `vX.Y.Z` tags and publish `ghcr.io/tencent/loopforge`. LoopForge Local packages use `local-vX.Y.Z` tags and are published by manually running the `release-local` workflow.
+Releases use `vX.Y.Z` tags; the tag runs the `release` workflow, which creates the
+GitHub release once the `platform` workflow succeeded on that commit. The `local/`
+edition has its own `local-vX.Y.Z` tags, published by the `release-local` workflow.
+Entries below `1.0.0` describe the platform this repository came from.
+
+## 1.0.0 — the personal project board
+
+MuseForge is the personal edition of the platform this repository came from; the
+fork point is upstream `v0.4.3` (commit `fd039e51`, tag `upstream-v0.4.3`). It is
+one person's project board — requirements, where they come from, and the machines
+the agent CLIs live on — and nothing in it runs an agent.
+
+### Changed
+
+- **Single operator, no sign-in.** There is no account, no password and no
+  administrator side: the console opens straight into the requirement list, and the
+  server refuses a non-loopback bind. (#1, #7, #12)
+- **One SQLite file is the datasource.** MySQL stays supported but optional and off
+  by default: `./start.sh` builds the image, starts one container and keeps
+  everything in one file to back up. (#2)
+- **A requirement is a plain to-do item.** Title, description, status, priority,
+  project, tags and comments — no assignee, no workflow engine, no run queue. (#10)
+- **A project is a place requirements live,** not a membership. (#6)
+- **The statistics page is an omp usage console.** It shows the tokens and cost of
+  work done elsewhere, reported by the omp extension, instead of the platform's own
+  run metrics. (#3, #5)
+- **A machine is an inventory entry.** What the agent CLIs are, their versions,
+  login state and reachable models; never a work queue. (#11)
+- **Requirements can be imported from GitHub and GitLab.** Re-running an import
+  refreshes the upstream fields and keeps a locally edited description; GitLab has
+  its own credential. (#4, #15)
+
+### Removed (breaking)
+
+- The platform no longer runs an agent: execution, task dispatch, sandboxes, run
+  leases, workflow LOOPs and their pages are gone. (#9)
+- The chat workbench, the assistant's conversations and its scheduled prompts are
+  gone. (#8)
+- Every team route answers 404, and a test plus `scripts/check-public.py` prove it;
+  reintroducing a team surface fails the test rather than a document asserting its
+  absence. (#13)
+- No container image is published: an installation builds the checkout, as
+  `README.md` and `docs/deployment.md` describe, so the release notes carry the
+  install and upgrade steps instead of an image digest. (#14)
 
 ## 0.4.3 — LOOP orchestration, execution machines and asset evolution
 

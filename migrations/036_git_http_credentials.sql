@@ -32,14 +32,3 @@ WHERE COALESCE(TRIM(c.git_token), '') <> ''
   AND LOWER(TRIM(c.git_token)) NOT LIKE 'oauth2:%'
   AND LOWER(TRIM(c.git_token)) NOT LIKE 'private:%'
 ON DUPLICATE KEY UPDATE id = user_git_http_credentials.id;
-
--- The user who registered a delivered MR; background polling prefers that
--- user's credential for the MR host. Startup AutoMigrate also adds it.
-SET @mr_registered_by_ddl = IF(
- (SELECT COUNT(*) FROM information_schema.columns
-  WHERE table_schema=DATABASE() AND table_name='mr_delivery_states' AND column_name='registered_by')=0,
- 'ALTER TABLE mr_delivery_states ADD COLUMN registered_by BIGINT NULL',
- 'SELECT 1');
-PREPARE mr_registered_by_stmt FROM @mr_registered_by_ddl;
-EXECUTE mr_registered_by_stmt;
-DEALLOCATE PREPARE mr_registered_by_stmt;

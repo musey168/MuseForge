@@ -15,7 +15,7 @@ python3 scripts/check-public.py
 bash scripts/scan-secrets.sh
 ```
 
-The live end-to-end suite under `e2e/` runs against a platform you start: `cd e2e && ./local.sh api` builds the current checkout, starts it on a temporary SQLite file with no sign-in, and runs the API scenarios. State passed, failed, skipped and not-run checks accurately.
+The live end-to-end suite under `e2e/` starts the platform itself: `cd e2e && ./verify-personal.sh` builds the current checkout, starts it on a temporary SQLite file with no sign-in, and runs the API and console scenarios against it. State passed, failed, skipped and not-run checks accurately.
 
 Platform pull requests run the `core` job, which is the gate above. A repository administrator marks it as a required status check in GitHub branch protection; this repository does not change that setting.
 
