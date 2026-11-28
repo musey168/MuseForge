@@ -7,7 +7,7 @@
 - **代码仓库**：仓库绑定（GitHub 与 GitLab）
 - **个人**：账号、模型目录、个人凭据、Git 凭据
 - **机器**：机器注册、心跳、CLI 清单、模型探测、CLI 维护
-- **用量台**：外部工作流的上报数据源与执行汇总（[接入说明](../external-workflow-usage.md)）
+- **统计台与用量**：平台自身的统计（`GET /api/stats/overview`）、外部工作流的上报数据源与执行汇总（[接入说明](../external-workflow-usage.md)）
 - **跟踪器导入**：从已绑定的 GitHub 或 GitLab 仓库导入需求
 - **服务**：健康检查、能力清单、bootstrap、可观测性契约
 

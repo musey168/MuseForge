@@ -15,8 +15,9 @@ so is the agent execution surface. What remains is what one person actually uses
   your SSH and HTTP Git credentials
 - a **machine inventory** — the agent CLIs installed on your machines, their
   versions, their login state and the models they can reach
-- an **omp usage console** — the tokens and cost of the work your own agent reported
-  from outside
+- a **statistics console** — one page for two questions: what you have (projects,
+  requirements by status and source, created/closed trend, tags, repositories,
+  machines) and what the agents you connected spent in tokens and money
 - an **MCP / HTTP API** — the channel an external agent (omp, Claude Code, Codex,
   Cursor, OpenCode) reads and writes your requirements through
 
@@ -66,7 +67,7 @@ The datasource is one setting:
 
 ---
 
-## The omp usage console
+## The statistics console and your agent usage
 
 Your agent sessions already cost you money; MuseForge shows the bill. omp records each
 session's per-model usage in its own statistics database, and a small **omp
@@ -80,8 +81,11 @@ bash omp-extension/scripts/install.sh --user     # or --project /path/to/project
 bash omp-extension/scripts/install.sh --print-config > ~/.config/museforge/omp-usage.json
 ```
 
-The reporting credential is created in the usage console's **数据源 / Data source**
-dialog — it is independent of any login state, revocable, and expiring.
+The reporting credential is created in the statistics console's **数据源 / Data source**
+dialog — it is independent of any login state, revocable, and expiring. The same page
+carries the backfill command for Codex, pi and Claude Code (`museforge-usage`) and the
+MCP configuration for all four CLIs, so a connected agent can read and write your
+requirements directly.
 
 The extension reads its configuration on every session end, so rotating the token
 needs no reinstall. It reports nothing when no credential is configured, and a failed
@@ -102,7 +106,7 @@ usage is mapped onto a reported execution — are in
 | [`docs/personal-scope/decision.md`](./docs/personal-scope/decision.md) | what was kept, what was cut, and why — the authority on scope |
 | [`docs/personal-scope/baseline-tests.md`](./docs/personal-scope/baseline-tests.md) | the measured pre-trim test baseline |
 | [`docs/architecture.md`](./docs/architecture.md) | how the personal build is put together |
-| [`docs/adr/`](./docs/adr/) | the decisions that shaped it: the trim's depth, the console's position, the usage console, the SQLite-only datasource, the no-login loopback-only exposure model |
+| [`docs/adr/`](./docs/adr/) | the decisions that shaped it: the trim's depth, the console's position, the statistics console, the SQLite-only datasource, the no-login loopback-only exposure model |
 | [`docs/api/`](./docs/api/) | the HTTP API and its OpenAPI contract |
 | [`docs/deployment.md`](./docs/deployment.md) | running it |
 | [`docs/testing/`](./docs/testing/) | the test suites and how to run them |

@@ -12,7 +12,8 @@ MuseForge 是 [Tencent/LoopForge](https://github.com/Tencent/LoopForge) 的
 - **项目分组** —— 需求的归属容器，没有成员名册
 - **个人配置** —— 模型 API Key、GitHub 设备码授权、SSH 与 HTTP Git 凭据
 - **执行机器** —— 你的机器上装了哪些 Agent CLI、版本号、登录态、能触达哪些模型
-- **omp 用量台** —— 你的 Agent 从外部上报回来的工作用量与成本
+- **统计台** —— 一页看清两件事：你自己的数据（项目、需求、状态与来源分布、创建/关闭
+  趋势、标签、仓库、机器），以及接入的 Agent 花掉的 Token 与费用
 - **MCP / HTTP API** —— 外部 Agent（omp、Claude Code、Codex、Cursor、OpenCode）
   读写你需求的正式通道
 
@@ -60,7 +61,7 @@ docker compose up -d --wait
 
 ---
 
-## omp 用量台
+## 统计台与 Agent 用量
 
 你的 Agent 会话本来就在花钱；MuseForge 负责把账摆出来。omp 把每次会话的逐模型
 用量记在自己的统计库里，一个小 **omp 扩展**在会话结束时把这次会话汇总成
@@ -74,7 +75,9 @@ bash omp-extension/scripts/install.sh --user     # 或 --project /path/to/projec
 bash omp-extension/scripts/install.sh --print-config > ~/.config/museforge/omp-usage.json
 ```
 
-上报凭据在用量台的**数据源**对话框里创建 —— 它与登录状态无关，可撤销，也会过期。
+上报凭据在统计台的**数据源**对话框里创建 —— 它与登录状态无关，可撤销，也会过期。
+同一张页面还给出 Codex / pi / Claude Code 的回填命令（`museforge-usage`），以及四个
+CLI 的 MCP 配置片段 —— 接上之后 Agent 可以直接读写需求与项目。
 
 扩展每次会话结束都重新读取配置，所以换 Token 不需要重装扩展。没有配置凭据时它
 什么也不上报；上报失败也绝不会打断它正在汇报的那次会话。
@@ -93,7 +96,7 @@ bash omp-extension/scripts/install.sh --print-config > ~/.config/museforge/omp-u
 | [`docs/personal-scope/decision.md`](./docs/personal-scope/decision.md) | 保留了什么、删掉了什么、为什么 —— 范围的权威 |
 | [`docs/personal-scope/baseline-tests.md`](./docs/personal-scope/baseline-tests.md) | 裁剪前实测的测试基线 |
 | [`docs/architecture.md`](./docs/architecture.md) | 个人版是怎么搭起来的 |
-| [`docs/adr/`](./docs/adr/) | 决定这次形态的几个决策：裁剪深度、控制台定位、用量台、只用 SQLite、免登录且只绑回环 |
+| [`docs/adr/`](./docs/adr/) | 决定这次形态的几个决策：裁剪深度、控制台定位、统计台、只用 SQLite、免登录且只绑回环 |
 | [`docs/api/`](./docs/api/) | HTTP API 及其 OpenAPI 契约 |
 | [`docs/deployment.md`](./docs/deployment.md) | 怎么部署运行 |
 | [`docs/testing/`](./docs/testing/) | 测试套件与运行方式 |

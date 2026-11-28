@@ -73,6 +73,14 @@ tapdId / externalRef / conversationSessionId / createdAt / updatedAt / completed
 上游没有需求同步的实现可抄，需要新建（GitLab Issues API 与 GitHub 形状不同：
 用 `GET /projects/:id/issues` + `private_token`，状态与标签映射也不同）。
 
+### 第 02/15 项后来变了：用量台 → 统计台
+
+当初把统计页定成「只放外部上报的用量」。部署出来才看清后果：没有发送者时整页是空的，
+而 MuseForge 自己的项目、需求、仓库、机器一个数字都没有。ticket #16 把它改成统计台 ——
+上半部分是平台自己的数据（`GET /api/stats/overview`），下半部分是 Agent 用量；
+发送者从「设想中的 omp 扩展」变成两个已实现的连接器（`omp-extension/` 与
+`cmd/museforge-usage`）。这是本记录里第二处「裁剪之后新增、而非删除」的能力。
+
 ### 第 24 项「执行机器」保留，但页面内容需要拆
 
 截图⑩ 你标的是「执行机器**我需要**」，其余（角色定义 / 能力资产 / 环境资产 /

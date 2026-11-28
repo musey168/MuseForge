@@ -98,6 +98,23 @@ test('an empty platform shows zeros and a hint instead of pretending to have dat
   assert.ok(card);
   assert.match(card.textContent, /还没有数据/);
 });
+test('the connect card hands over the real endpoint for MCP and for usage', async (t) => {
+  const app = await loadApp();
+  t.after(app.close);
+  await prepare(app);
+  await app.evaluate('refreshObs()');
+  await settle(4);
+  const card = app.document.querySelector('[data-obs-card="connect"]');
+  assert.ok(card, 'the connect card renders');
+  const text = card.textContent;
+  const origin = app.window.location.origin;
+  assert.ok(text.includes(`${origin}/mcp`), 'the MCP url is the page origin');
+  assert.match(text, /codex mcp add museforge --url/);
+  assert.match(text, /claude mcp add --transport http museforge/);
+  assert.ok(text.includes('.omp/agent/mcp.json'), 'omp connects through its json file');
+  assert.match(text, /go run \.\/cmd\/museforge-usage sync --agent codex/);
+  assert.match(text, /install\.sh --user/);
+});
 test('the usage console renders token, cost, cache, execution, trend, breakdown and execution panels', async (t) => {
   const app = await loadApp();
   t.after(app.close);
@@ -106,7 +123,7 @@ test('the usage console renders token, cost, cache, execution, trend, breakdown 
   await settle(4);
   const body = app.document.querySelector('#obsBody');
   const cards = [...body.querySelectorAll('[data-obs-card]')].map(el => el.dataset.obsCard);
-  assert.deepEqual(cards, ['platform', 'trend', 'models', 'providers', 'executions']);
+  assert.deepEqual(cards, ['platform', 'trend', 'models', 'providers', 'executions', 'connect']);
   const text = body.textContent;
   assert.match(text, /Token 用量/);
   assert.match(text, /费用/);

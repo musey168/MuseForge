@@ -21,9 +21,15 @@ _Avoid_: 备注字段, Description
 一组需求的归属容器。个人版里项目只是分组，没有成员和权限。
 _Avoid_: 工作区, 空间, 团队
 
-**用量台（Usage Console）**:
-统计页。展示 omp 上报过来的 Token、成本、缓存命中和趋势。
-_Avoid_: 统计, 报表, 效能看板
+**统计台（Statistics Console）**:
+一个页面回答两件事：MuseForge 自己的数据（项目、需求、状态与来源分布、创建/关闭
+趋势、标签、仓库、机器），以及接入的 Agent 花掉的 Token 与费用。
+_Avoid_: 用量台, 报表, 效能看板
+
+**对接（Connector）**:
+把一个 Agent CLI 接到 MuseForge 的动作，两个方向：MCP（它读写需求与项目）与用量
+上报（omp 扩展在会话结束时推送、`museforge-usage` 回填历史会话）。
+_Avoid_: 集成, 适配器, 插件
 
 **数据源（Data Source）**:
 一个允许向 MuseForge 上报用量的凭据。omp 推送时使用。
