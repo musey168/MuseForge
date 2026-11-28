@@ -575,13 +575,13 @@ func TestRouteSurfaceHoldsOnlyThePersonalRoutes(t *testing.T) {
 	}
 }
 
-// personalRoutes is the platform// personalRoutes is the platform// personalRoutes is the platform's whole route surface: the requirement list,
+// personalRoutes is the platform's whole route surface: the requirement list,
 // the projects, the personal settings, the machine inventory, the usage console,
-// the tracker import and the MCP mount.
+// the tracker import, the reporting credential and the MCP mount.
 var personalRoutes = []struct {
 	method string
 	path   string
-}{{"GET", "/api/auth/current"},
+}{
 	{"GET", "/api/auth/github"},
 	{"PUT", "/api/auth/github/config"},
 	{"POST", "/api/auth/github/device"},
@@ -716,4 +716,5 @@ var personalRoutes = []struct {
 	{"GET", "/runners/health"},
 	{"POST", "/runners/heartbeat"},
 	{"GET", "/runners/install.sh"},
-	{"POST", "/runners/register"}}
+	{"POST", "/runners/register"},
+}

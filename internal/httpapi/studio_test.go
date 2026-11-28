@@ -99,11 +99,10 @@ func TestStudioPagesShowShortBuildCommit(t *testing.T) {
 	t.Setenv("LOOPFORGE_COMMIT", "60FC455aabbccddeeff001122334455667788990")
 	static := fstest.MapFS{
 		"index.html": {Data: []byte(`<html><head></head><body><div id="app"></div></body></html>`)},
-		"login.html": {Data: []byte(`<html><body class="login-page"></body></html>`)},
 	}
 	h := studioFileServer(static)
 	want := `class="loopforge-build" title="镜像版本 60fc455aabbccddeeff001122334455667788990">60fc455</span>`
-	for _, path := range []string{"/", "/login.html"} {
+	for _, path := range []string{"/"} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 		if rec.Code != http.StatusOK {
