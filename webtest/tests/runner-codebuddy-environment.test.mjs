@@ -91,12 +91,12 @@ test('Claude Code, Codex and Antigravity offer account login and API Key rows ex
   }
 });
 
-test('testing a CLI sends its machine and provider and shows the result', async (t) => {
+test('probing a CLI sends its machine and provider and shows the result', async (t) => {
   const app = await loadApp();
   t.after(app.close);
   renderCodeBuddyRow(app, {});
   let finish;
-  app.router.post('/api/runners/runtimes/test', () => new Promise(resolve => { finish = resolve; }));
+  app.router.post('/api/runners/runner-cb/models/probe', () => new Promise(resolve => { finish = resolve; }));
   const trigger = () => app.document.querySelector('[data-runner-runtime-menu="runner-cb|codex"]');
   trigger().click();
   const items = [...app.document.querySelectorAll('.runner-runtime-menu [role="menuitem"]')];
@@ -105,12 +105,12 @@ test('testing a CLI sends its machine and provider and shows the result', async 
   items[0].click();
   assert.equal(trigger().getAttribute('aria-busy'), 'true');
   assert.ok(app.document.querySelector('img[src="/images/credentials/codex.svg"]'));
-  const request = app.router.calls.find(c => c.path === '/api/runners/runtimes/test');
-  assert.deepEqual(request.body, { runnerId: 'runner-cb', provider: 'codex' });
-  finish({ ok: true });
+  const request = app.router.calls.find(c => c.path === '/api/runners/runner-cb/models/probe');
+  assert.deepEqual(request.body, { provider: 'codex', useSaved: false });
+  finish({ models: [{ id: 'gpt-5' }] });
   await settle();
   assert.equal(trigger().getAttribute('aria-busy'), 'false');
-  assert.match(app.document.querySelector('#toastContainer').textContent, /Codex 测试通过/);
+  assert.match(app.document.querySelector('#toastContainer').textContent, /Codex 可用 1 个模型/);
 });
 
 test('Runner update checks first and applies after the user chooses to update', async t => {
