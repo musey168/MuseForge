@@ -86,7 +86,7 @@ async function projectWizardCreate(){
   const ident=generateProjectIdentity(d.name,projects,w.seed);
   const value=buildProjectPayload(clone(d),{id:ident.id,key:ident.key,defaultRepositoryId:''});
   const invalid=validateProjectPayload(value,{creating:true,projects,workflows:state.data.workflows||[]});
-  if(invalid)return projectWizardFail(invalid.field==='id'||invalid.field==='key'?'无法根据名称生成可用的项目标识，请换个名称重试':invalid.message,['name','workflowId','ownerId'].includes(invalid.field)?invalid.field:'');
+  if(invalid)return projectWizardFail(invalid.field==='id'||invalid.field==='key'?'无法根据名称生成可用的项目标识，请换个名称重试':invalid.message,['name','ownerId'].includes(invalid.field)?invalid.field:'');
   const stored=await projectWizardRequest(()=>persistProject(value,'POST'),'创建失败，可修改项目名称后重试：');
   if(!stored||projectWizard!==w)return false;
   w.projectId=stored.id||value.id;
@@ -226,7 +226,7 @@ function projectWizardBasicHTML(w){
     +pwField('项目说明',`<textarea class="pw-input" id="pwDescription" name="description" rows="3" placeholder="可选，这个项目负责什么？Agent 会把它作为上下文。">${escapeHTML(d.description||'')}</textarea>`,{for:'pwDescription'}));
   const owner=Number(state.currentUser?.id)?'':pwField('项目 Owner',userCombobox('ownerId',d.ownerId,'请选择项目 Owner'),{required:true,hint:'项目的默认责任人，创建后可在项目设置中调整。'});
   const defaults=pwCard('默认设置','新建需求时自动带上的流程',pwPill('已预选','ok'),
-    `${pwField('默认 LOOP',pwSelect(projectDefaultSOPField(d)),{required:true})}${owner}`);
+    owner);
   return projectWizardHeadHTML(w,'基本信息','只需填写项目名称即可创建，其余都有默认值。')+`<div class="pw-pane">${identity}${defaults}</div>`;
 }
 function projectWizardRepoHint(url){
@@ -254,10 +254,8 @@ function projectWizardTapdHTML(w){
 }
 function projectWizardSummary(project,repos){
   const p=project||{},def=repos.find(r=>r.id===p.defaultRepositoryId);
-  const sop=projectWorkflowName(p.workflowId)||p.workflowId||'';
   return [
     {key:'project',ok:true,label:'项目',value:`${escapeHTML(p.name||'')} · <code>${escapeHTML(p.id||'')}</code> · <code>${escapeHTML(p.key||'')}</code>`},
-    {key:'sop',ok:!!sop,label:'默认 LOOP',value:sop?escapeHTML(sop):'未配置'},
     {key:'repos',ok:repos.length>0,label:'代码仓库',value:repos.length?`${repos.length} 个，默认 ${escapeHTML(def?.name||def?.gongfengProjectId||'未设置')}`:'未配置，可稍后在项目设置补充'},
     {key:'tapd',ok:!!p.tapdWorkspaceId,label:'TAPD',value:p.tapdWorkspaceId?`Workspace <code>${escapeHTML(p.tapdWorkspaceId)}</code>${p.tapdIterationId?` · Iteration <code>${escapeHTML(p.tapdIterationId)}</code>`:''}`:'未配置，可稍后在项目设置补充'},
   ].filter(i=>i.key!=='tapd'||tapdIntegrationAvailable(p));
@@ -340,7 +338,7 @@ function syncProjectWizardField(t){
     d.ownerId=Number(t.value)||0;
     return true;
   }
-  if(!['name','description','workflowId','tapdWorkspaceId','tapdIterationId'].includes(name))return false;
+  if(!['name','description','tapdWorkspaceId','tapdIterationId'].includes(name))return false;
   d[name]=t.value;
   if(name==='name'){const pill=$('#projectWizard')?.querySelector('[data-pw-name-pill]');if(pill)pill.outerHTML=projectWizardNamePill(t.value)}
   return true;

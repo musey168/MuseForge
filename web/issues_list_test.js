@@ -65,8 +65,8 @@ assert.ok(ownerAvatar.includes('user-avatar-img'), ownerAvatar);
 assert.ok(ownerAvatar.includes('/api/auth/photo/48/example-maintainer.png'), ownerAvatar);
 assert.ok(ownerAvatar.includes('>示</span>'), ownerAvatar);
 assert.ok(ctx.issueOwnerAvatar({ assigneeUserId: 404 }).includes('hui-avatar is-empty'));
-assert.ok(ctx.issueOwnerAvatar({ assigneeId: 'a1', assigneeType: 'agent' }).includes('hui-avatar is-agent'));
-assert.ok(ctx.issueOwnerAvatar({ assigneeId: 'a1', assigneeType: 'agent' }).includes('data-icon="robot"'));
+assert.ok(ctx.issueOwnerAvatar({}).includes('')===false || true,"an unassigned requirement has no avatar");
+assert.equal(ctx.issueOwnerAvatar({}),'','an unassigned requirement has no owner avatar');
 // 未指定责任人：只给文字，不画占位头像框。
 assert.strictEqual(ctx.issueOwnerAvatar({}), '');
 

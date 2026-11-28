@@ -127,7 +127,7 @@ assert.match(card,/AgentFlow/);
 assert.match(card,/agentflow · AF/);
 assert.match(card,/平台本体/);
 assert.match(card,/agent-flow \+1/);
-assert.match(card,/通用 · Backend/);
+assert.ok(!card.includes("通用 ·"),"a project card names no default LOOP");
 assert.match(card,/TAPD/);
 assert.match(card,/class="pa-chip cur">当前/);
 assert.ok(!card.includes("pa-av"),"a project card shows no member avatars");
@@ -188,7 +188,7 @@ assert.match(edit,/name="id" value="agentflow" required readonly/);
 assert.match(edit,/修改 Key/);
 assert.match(edit,/标识用于接口与链接，创建后不可修改/);
 assert.match(edit,/<option value="r1" selected>agent-flow/);
-assert.match(edit,/select name="workflowId"/);
+assert.ok(!edit.includes('name="workflowId"'),"the project no longer chooses a default LOOP");
 assert.match(edit,/name="tapdClear"/);
 assert.match(edit,/name="tapdWorkspaceId"/,"projects already using TAPD keep its settings");
 {

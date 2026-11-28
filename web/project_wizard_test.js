@@ -120,7 +120,7 @@ function assertFooterLayout(step){
   assert.match(basic,/role="dialog" aria-modal="true"/);
   assert.match(basic,/第 1 步，共 3 步/);
   assert.match(basic,/name="name"/);
-  assert.match(basic,/name="workflowId"[^]*value="generic-backend-delivery" selected/);
+  assert.ok(!basic.includes('name="workflowId"'),"the project no longer chooses a default LOOP");
   for(const bad of ['name="id"','name="key"',"自定义","标识与 Key","data-pa-ident"])assert.ok(!basic.includes(bad),"step 1 has no "+bad);
   assert.ok(!basic.includes('name="ownerId"'),"signed-in users own the project without a picker");
   assert.equal((basic.match(/class="pw-step[ "]/g)||[]).length,4);
@@ -165,7 +165,7 @@ function assertFooterLayout(step){
   assert.equal(requests[0].body.id,"web-console");
   assert.equal(requests[0].body.key,"WC");
   assert.equal(requests[0].body.ownerId,1);
-  assert.equal(requests[0].body.workflowId,"generic-backend-delivery");
+  assert.ok(!("workflowId" in requests[0].body),"the LOOP catalogue is gone");
   assert.ok(!("businessDomainId" in requests[0].body));
   assert.equal(W().step,"repos");assert.equal(W().projectId,"web-console");
   assert.ok(projects.some(p=>p.id==="web-console"),"project list includes the new project");
