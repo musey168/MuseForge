@@ -44,40 +44,40 @@ function codeBuddyKeyURL(value){return (codeBuddyEnvironmentIntent(value)||CODEB
 function codeBuddyKeyLinkLabel(value){return `前往${(codeBuddyEnvironmentIntent(value)||CODEBUDDY_ENVIRONMENTS[0]).label}获取 API Key`}
 const CREDENTIAL_KINDS=[
   {key:'gitToken',group:'platform',name:'GitHub',short:'仓库授权',logo:'github',monochrome:true,
-    use:'克隆私有仓库、创建任务分支、推送交付产物',
-    description:'用于克隆私有仓库、创建任务分支及推送交付产物。',
+    use:'克隆私有仓库、读取 GitHub 上的需求',
+    description:'用于克隆私有仓库，以及把 GitHub 上的需求导入需求列表。',
     guide:[['打开 GitHub「Settings → Developer settings → Personal access tokens」','https://github.com/settings/tokens','前往 GitHub 申请个人访问令牌'],['新建令牌，为目标仓库授予 <code>Contents</code> 和 <code>Pull requests</code> 的读写权限'],['复制令牌粘贴到下方，保存前会自动校验权限']],
     placeholder:'请输入个人访问令牌（PAT）',hint:'保存前会先校验令牌有效性与权限',
-    impact:'依赖私有仓库的 LOOP 将无法克隆或推送仓库。'},
+    impact:'依赖私有仓库的需求将无法克隆。'},
   {key:'gitSshKey',group:'platform',name:'Git SSH',short:'Git SSH 密钥',icon:'key',
-    use:'SSH 密钥用于克隆和推送；创建 PR/MR 需要访问令牌',dialog:()=>openGitSSHKeys(),action:'管理密钥'},
+    use:'SSH 密钥用于克隆私有仓库',dialog:()=>openGitSSHKeys(),action:'管理密钥'},
   {key:'gitHttpCredentials',group:'platform',name:'Git HTTPS',short:'Git 访问令牌',icon:'lock',
-    use:'按主机管理 HTTPS 访问令牌，工作区的 git、gh、glab 自动认证',dialog:()=>openGitHTTPCredentials(),action:'管理令牌'},
+    use:'按主机管理 HTTPS 访问令牌，git、gh、glab 自动认证',dialog:()=>openGitHTTPCredentials(),action:'管理令牌'},
   {key:'codeBuddyApiKey',group:'model',name:'CodeBuddy',short:'CodeBuddy API Key',logo:'codebuddy',
-    use:'AI 对话与 LOOP 的 CodeBuddy 执行器',
-    description:'AI 对话（含 Claude、GPT 等模型）和 LOOP 的 CodeBuddy 执行器都使用它；网络环境按账号所在环境配置。',
+    use:'CodeBuddy 的模型目录',
+    description:'CodeBuddy 的模型目录和这台机器上的 CodeBuddy CLI 都使用它；网络环境按账号所在环境配置。',
     guide:[['使用官方地址时，选择 CodeBuddy 账号所在的网络环境'],['登录该站点的 API Key 页面，新建 API Key',codeBuddyKeyURL,codeBuddyKeyLinkLabel],['使用自定义网关时，填写网关提供的 Base URL 和 API Key']],
     placeholder:'请输入个人 ck_ key',
     extra:{name:'codeBuddyInternetEnvironment',label:'网络环境',options:CODEBUDDY_ENVIRONMENTS},
     baseURL:'codeBuddyBaseUrl',
     models:{name:'codeBuddyModels',engine:'codebuddy'},
-    impact:'CodeBuddy 会使用可用的共享配置。其他 CLI 继续使用各自的凭据。'},
+    impact:'CodeBuddy 将没有可用的凭据。其他 CLI 继续使用各自的凭据。'},
   {key:'codexApiKey',group:'model',name:'Codex',short:'Codex API Key',logo:'codex',monochrome:true,
-    use:'AI 对话选择 Codex 执行器，以及以 Codex 运行的 LOOP 节点',
-    description:'AI 对话切换到 Codex 后可选用模型目录里的模型，LOOP 在执行机器上以 Codex 运行的节点也使用它。目录为空时，未填 Base URL 使用 Codex 自带模型，填写后跟随服务发布的模型；也可以自己挑选、排序和命名。',
-    guide:[['在模型服务商控制台创建 API Key'],['如走代理或私有网关，记下服务地址'],['粘贴 Key，按需填写 Base URL；保存后可在模型目录里挑选 AI 对话的模型']],
+    use:'Codex 的模型目录',
+    description:'Codex 的模型目录和这台机器上的 Codex CLI 都使用它。目录为空时，未填 Base URL 使用 Codex 自带模型，填写后跟随服务发布的模型；也可以自己挑选、排序和命名。',
+    guide:[['在模型服务商控制台创建 API Key'],['如走代理或私有网关，记下服务地址'],['粘贴 Key，按需填写 Base URL；保存后可在模型目录里挑选模型']],
     placeholder:'请输入 Codex API Key',
     extra:{name:'codexBaseUrl',label:'Base URL',placeholder:'https://api.openai.com/v1',url:true,clearWithKey:true},
     models:{name:'codexModels',engine:'codex',endpoint:'/models'},
-    impact:'以 Codex 运行的 LOOP 节点将无法执行，Base URL 与模型目录一并清空。'},
+    impact:'Codex 将没有可用的凭据，Base URL 与模型目录一并清空。'},
   {key:'claudeCodeApiKey',group:'model',name:'Claude Code',short:'Claude Code API Key',logo:'claude',monochrome:true,
-    use:'AI 对话选择 Claude 执行器，以及以 Claude Code 运行的 LOOP 节点',
-    description:'AI 对话切换到 Claude Code 后可选用模型目录里的模型，LOOP 在执行机器上以 Claude Code 运行的节点也使用它。目录为空时，未填 Base URL 使用 Claude Code 自带模型，填写后跟随服务发布的模型；也可以自己挑选、排序和命名。',
-    guide:[['在模型服务商控制台创建 API Key'],['如走代理或私有网关，记下服务地址'],['粘贴 Key，按需填写 Base URL；保存后可在模型目录里挑选 AI 对话的模型']],
+    use:'Claude Code 的模型目录',
+    description:'Claude Code 的模型目录和这台机器上的 Claude Code CLI 都使用它。目录为空时，未填 Base URL 使用 Claude Code 自带模型，填写后跟随服务发布的模型；也可以自己挑选、排序和命名。',
+    guide:[['在模型服务商控制台创建 API Key'],['如走代理或私有网关，记下服务地址'],['粘贴 Key，按需填写 Base URL；保存后可在模型目录里挑选模型']],
     placeholder:'请输入 Claude Code API Key',
     extra:{name:'claudeCodeBaseUrl',label:'Base URL',placeholder:'https://api.anthropic.com',url:true,clearWithKey:true},
     models:{name:'claudeCodeModels',engine:'claude-code',endpoint:'/v1/models'},
-    impact:'以 Claude Code 运行的 LOOP 节点将无法执行，Base URL 与模型目录一并清空。'},
+    impact:'Claude Code 将没有可用的凭据，Base URL 与模型目录一并清空。'},
   agentCliCredentialKind('opencode',{name:'OpenCode',logo:'opencode',baseUrl:'https://api.example.com/v1',required:()=>true,
     note:'OpenCode 没有自己的模型服务，需要填写 Base URL。',protocols:[['chat','Chat Completions'],['responses','Responses'],['messages','Messages（Anthropic）']]}),
   agentCliCredentialKind('cursor',{name:'Cursor CLI',logo:'cursor',monochrome:true,
@@ -99,16 +99,16 @@ const CREDENTIAL_KINDS=[
 function agentCliCredentialKind(cli,o){
   const field=`agentCli.${cli}.`,configurable=!!o.protocols;
   return {key:`agentCli.${cli}`,agentCli:cli,group:'model',name:o.name,short:`${o.name} API Key`,logo:o.logo,monochrome:!!o.monochrome,
-    use:`AI 对话的 ${o.name} 模型与以 ${o.name} 运行的 LOOP 节点`,
-    description:`AI 对话切换到 ${o.name} 后可选用它的模型，LOOP 在执行机器上以 ${o.name} 运行的节点也使用它。${o.note||''}`,
-    guide:o.guide||[['在模型服务商控制台创建 API Key'],['记下服务地址和它提供的接口协议'],['粘贴 Key，按需填写 Base URL 并选择协议；保存后可在模型目录里挑选 AI 对话的模型']],
+    use:`${o.name} 的模型目录`,
+    description:`${o.name} 的模型目录和这台机器上的 ${o.name} CLI 都使用它。${o.note||''}`,
+    guide:o.guide||[['在模型服务商控制台创建 API Key'],['记下服务地址和它提供的接口协议'],['粘贴 Key，按需填写 Base URL 并选择协议；保存后可在模型目录里挑选模型']],
     placeholder:`请输入 ${o.name} API Key`,
     ...(configurable?{
       extra:{name:field+'baseUrl',label:'Base URL',placeholder:o.baseUrl,url:true,clearWithKey:true,required:o.required,note:o.extraNote||(o.required?'必填':'')},
       protocol:{name:field+'protocol',options:o.protocols},
     }:{}),
     models:{name:field+'models',engine:cli},
-    impact:`AI 对话将不能再切换到 ${o.name}，以 ${o.name} 运行的 LOOP 节点将无法执行${configurable?'，Base URL、协议与模型目录一并清空':''}。`};
+    impact:`${o.name} 将没有可用的凭据${configurable?'，Base URL、协议与模型目录一并清空':''}。`};
 }
 function credentialValue(user,name){
   const [scope,cli,field]=String(name).split('.');
@@ -697,7 +697,7 @@ function credentialEditorHTML(kind,user){
 function credentialRuntimeStatus(kind) {
   const engine=kind.models?.engine;
   const option=credentialUI().catalog?.engines?.find(item=>item.id===engine);
-  return option?.serverMissing?'<small class="credential-runtime-status">平台服务器未安装 CLI</small>':'';
+  return option?.serverMissing?'<small class="credential-runtime-status">这台机器没有装这个 CLI</small>':'';
 }
 function credentialRowMainHTML(kind,user){
   const managed=!!kind.dialog,on=credentialConfigured(kind,user),open=on&&credentialUI().open===kind.key,status=credentialStatus(kind,user);
@@ -1695,37 +1695,26 @@ function renderUserProfilePopover() {
   const versionRow = version || build ? `<div class="upp-build" title="${escapeHTML(build?.title||'')}">
     <span>${version?'版本':'构建'}</span><code>${escapeHTML(version||build.textContent)}${version&&build?` · ${escapeHTML(build.textContent)}`:''}</code>
   </div>` : '';
-  let authErr = null;
-  try { authErr = sessionStorage.getItem('agentflow_auth_err'); } catch (_) {}
-
   if (isGuest) {
+    // There is no sign-in in the personal build: the platform has one account
+    // and the console shows it. The card only says so.
     popover.innerHTML = `
       <div class="upp-header">
         <div class="upp-avatar-lg is-guest">${escapeHTML(initial)}</div>
         <div class="upp-user-meta">
           <div class="upp-name-row">
-            <span class="upp-name">访客身份</span>
-            <span class="upp-badge-tag is-guest">未认证</span>
+            <span class="upp-name">${escapeHTML(displayName)}</span>
           </div>
-          <div class="upp-login-sub">Guest Session</div>
+          <div class="upp-login-sub">${escapeHTML(user?.loginName || '')}</div>
         </div>
       </div>
       <div class="upp-divider"></div>
       <div class="upp-guest-body">
-        ${authErr ? `
-          <div class="upp-alert-warn">
-            <b>⚠️ 认证换票未通过</b><br>此前统一认证票据已失效，请点击下方按钮重新登录。
-          </div>
-        ` : `
-          <p class="upp-guest-desc">登录后可在「个人配置」添加 Git 凭据和执行器。</p>
-        `}
+        <p class="upp-guest-desc">在「个人配置」里添加 Git 凭据和执行器。</p>
       </div>
       <div class="upp-divider"></div>
       ${themeSegmentHTML()}
       ${versionRow}
-      <div class="upp-footer">
-        <button id="uppLoginBtn" class="button small primary upp-full-btn" type="button">通过账号登录</button>
-      </div>
     `;
   } else {
     const storedUser=(state.data?.users||[]).find(u=>Number(u.id)===Number(user.id))||{};
@@ -1843,15 +1832,14 @@ function renderUserBadge(){
   const displayName=user?.chineseName||user?.loginName||'访客';
   if(nameEl) nameEl.textContent=displayName;
   if(avatarEl) avatarEl.innerHTML=userAvatarHTML(user, 100);
-  let authErr = null;
-  try { authErr = sessionStorage.getItem('agentflow_auth_err'); } catch (_) {}
   if(isGuest){
     badge.classList.add('is-guest');
   }else{
     badge.classList.remove('is-guest');
   }
+  // There is no sign-in: the platform has one account and the badge names it.
   const tipText = isGuest
-    ? (authErr ? '认证换票未通过 · 点击查看个人信息' : '当前为访客身份 · 点击查看个人信息')
+    ? `${displayName} · 点击查看个人信息`
     : `${displayName} (${user.loginName||user.staffId||''}) · 点击查看个人信息`;
   badge.title = tipText;
   if(typeof badge.setAttribute === 'function'){

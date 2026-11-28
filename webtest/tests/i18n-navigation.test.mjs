@@ -51,8 +51,7 @@ test('English mode translates every page title and the copy the app renders into
   const titles = app.evaluate('viewTitles()');
   const untranslated = Object.entries(titles).filter(([, zh]) => HAN.test(window.lfTranslate(zh)));
   assert.deepEqual(untranslated, []);
-  for (const text of ['收起设置导航', '展开设置导航', '收起导航', '展开导航', '返回首页', '拖动调整侧栏宽度，双击恢复默认', '调整侧栏宽度',
-    '认证换票未通过 · 点击查看个人信息']) {
+  for (const text of ['收起设置导航', '展开设置导航', '收起导航', '展开导航', '返回首页', '拖动调整侧栏宽度，双击恢复默认', '调整侧栏宽度']) {
     assert.doesNotMatch(window.lfTranslate(text), HAN, text);
   }
   window.close();
