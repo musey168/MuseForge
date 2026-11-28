@@ -2,9 +2,8 @@
 # Build helpers with the same toolchain as the server. Installed agents and
 # execution machines must not depend on a different Go found on service PATH.
 #   build-binaries.sh [--helpers|--platform] [output-dir]
-# --helpers builds everything that does not embed the web UI, so Docker can
-# compile it while the chatbot bundle is still building; --platform builds the
-# server, which embeds web/native-chat. Without a flag both are built.
+# --helpers builds the binaries without the server; --platform builds the
+# server, which embeds the console from web/. Without a flag both are built.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mode=all
@@ -14,10 +13,6 @@ esac
 output="${1:-$PWD/.local/bin}"
 mkdir -p "$output"
 output="$(cd "$output" && pwd)"
-if [[ $mode != helpers && ! -f web/native-chat/index.html ]]; then
-  npm --prefix chatbot ci --include=dev --no-audit --no-fund
-  npm --prefix chatbot run build
-fi
 
 # One compile job per CPU, but at most one per GiB of memory so small hosts do
 # not run out of memory (a cold build peaks near 1.3 GiB total with 4 jobs).
@@ -55,12 +50,14 @@ build() {
 
 printf 'Building with %s parallel jobs\n' "$jobs"
 if [[ $mode != platform ]]; then
-  printf '\nBuilding agentflow-mcp and loopforge-account for the platform…\n'
-  build '' ./cmd/agentflow-mcp ./cmd/loopforge-account
+  printf '\nBuilding agentflow-mcp for the platform…\n'
+  build '' ./cmd/agentflow-mcp
+  # The platform serves the runner binary for the machine that connects, so
+  # every supported OS and architecture is built.
   for target_os in linux darwin; do
     for target_arch in amd64 arm64; do
-      printf '\nBuilding agentflow-runner and agentflow-gate-mcp (%s/%s)…\n' "$target_os" "$target_arch"
-      GOOS="$target_os" GOARCH="$target_arch" build "-$target_os-$target_arch" ./cmd/agentflow-runner ./cmd/agentflow-gate-mcp
+      printf '\nBuilding agentflow-runner (%s/%s)…\n' "$target_os" "$target_arch"
+      GOOS="$target_os" GOARCH="$target_arch" build "-$target_os-$target_arch" ./cmd/agentflow-runner
     done
   done
 fi

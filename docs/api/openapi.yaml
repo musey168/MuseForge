@@ -31,557 +31,94 @@ tags:
   - name: Feedback
   - name: Evolution
 paths:
-  /api/evolution/overview:
-    parameters:
-      - {name: projectId, in: query, required: true, schema: {type: string}}
-    get:
-      tags: [Evolution]
-      operationId: getEvolutionOverview
-      summary: Read project evolution overview
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/diagnose:
+  /api/account:
     post:
-      tags: [Evolution]
-      operationId: diagnoseEvolution
-      summary: Diagnose recent project runs
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      requestBody:
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/OpenObject"}
+      tags: [Personal]
+      operationId: post_api_account
+      summary: "Record the platform's single account"
       responses:
         "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/findings:
-    parameters:
-      - {name: projectId, in: query, required: true, schema: {type: string}}
-    get:
-      tags: [Evolution]
-      operationId: listEvolutionFindings
-      summary: List project findings
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {type: array, items: {$ref: "#/components/schemas/OpenObject"}}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/findings/{id}/runs:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
-    get:
-      tags: [Evolution]
-      operationId: getEvolutionFindingRuns
-      summary: Read finding run evidence
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/findings/{id}/dismiss:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
-    post:
-      tags: [Evolution]
-      operationId: dismissEvolutionFinding
-      summary: Dismiss a finding
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      requestBody:
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/OpenObject"}
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/findings/{id}/snooze:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
-    post:
-      tags: [Evolution]
-      operationId: snoozeEvolutionFinding
-      summary: Snooze a finding
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      requestBody:
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/OpenObject"}
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/proposals:
-    parameters:
-      - {name: projectId, in: query, required: true, schema: {type: string}}
-    get:
-      tags: [Evolution]
-      operationId: listEvolutionProposals
-      summary: List project proposals
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {type: array, items: {$ref: "#/components/schemas/OpenObject"}}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-    post:
-      tags: [Evolution]
-      operationId: createEvolutionProposal
-      summary: Generate a private project asset candidate or queue intent
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      requestBody:
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/OpenObject"}
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "202":
-          description: Candidate generation started or later intent queued
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/proposals/{id}:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
-    get:
-      tags: [Evolution]
-      operationId: getEvolutionProposal
-      summary: Read proposal content and validation
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/proposals/{id}/replays/{rid}/compare:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
-      - {name: rid, in: path, required: true, schema: {type: string}}
-    get:
-      tags: [Evolution]
-      operationId: compareEvolutionReplay
-      summary: Compare source and replay nodes
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/proposals/{id}/approve:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
-    post:
-      tags: [Evolution]
-      operationId: approveEvolutionProposal
-      summary: Start a private project trial or release a candidate
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      requestBody:
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/OpenObject"}
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/proposals/{id}/canary/traffic:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
-    post:
-      tags: [Evolution]
-      operationId: adjustEvolutionTraffic
-      summary: Adjust the project trial traffic share
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      requestBody:
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/OpenObject"}
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/proposals/{id}/reject:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
-    post:
-      tags: [Evolution]
-      operationId: rejectEvolutionProposal
-      summary: Reject a candidate or stop its trial
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      requestBody:
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/OpenObject"}
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/queue/{id}/start:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
-    post:
-      tags: [Evolution]
-      operationId: startEvolutionQueueItem
-      summary: Generate a queued improvement using the latest asset
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      requestBody:
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/OpenObject"}
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/queue/{id}/reject:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
-    post:
-      tags: [Evolution]
-      operationId: rejectEvolutionQueueItem
-      summary: Cancel a queued improvement
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      requestBody:
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/OpenObject"}
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/policies:
-    parameters:
-      - {name: projectId, in: query, required: true, schema: {type: string}}
-    get:
-      tags: [Evolution]
-      operationId: listEvolutionPolicies
-      summary: List project evolution policies
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {type: array, items: {$ref: "#/components/schemas/OpenObject"}}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/policies/{kind}/{id}:
-    parameters:
-      - {name: kind, in: path, required: true, schema: {type: string, enum: [agent, rule]}}
-      - {name: id, in: path, required: true, schema: {type: string}}
-    put:
-      tags: [Evolution]
-      operationId: putEvolutionPolicy
-      summary: Set autonomy level; L3 requires deployment opt-in
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      requestBody:
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/OpenObject"}
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/assets/{kind}/{id}/versions:
-    parameters:
-      - {name: kind, in: path, required: true, schema: {type: string, enum: [agent, rule]}}
-      - {name: id, in: path, required: true, schema: {type: string}}
-    get:
-      tags: [Evolution]
-      operationId: getEvolutionAssetVersions
-      summary: Read asset versions and live content
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/assets/{kind}/{id}/rollback:
-    parameters:
-      - {name: kind, in: path, required: true, schema: {type: string, enum: [agent, rule]}}
-      - {name: id, in: path, required: true, schema: {type: string}}
-    post:
-      tags: [Evolution]
-      operationId: rollbackEvolutionAsset
-      summary: Manually restore an asset version
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      requestBody:
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/OpenObject"}
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/evolution/samples:
-    parameters:
-      - {name: projectId, in: query, required: true, schema: {type: string}}
-    get:
-      tags: [Evolution]
-      operationId: listEvolutionSamples
-      summary: List project regression samples
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {type: array, items: {$ref: "#/components/schemas/OpenObject"}}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/runs/{id}/feedback:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
-    post:
-      tags: [Evolution]
-      operationId: createEvolutionFeedback
-      summary: Record run feedback
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      requestBody:
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/OpenObject"}
-      responses:
-        "201":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/runs/{id}/pin-sample:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
-    post:
-      tags: [Evolution]
-      operationId: pinEvolutionSample
-      summary: Pin a successful run as a regression sample
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      requestBody:
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/OpenObject"}
-      responses:
-        "201":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-    delete:
-      tags: [Evolution]
-      operationId: unpinEvolutionSample
-      summary: Remove a pinned regression sample
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/OpenObject"}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/runs/{id}/asset-pins:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
-    get:
-      tags: [Evolution]
-      operationId: getRunAssetPins
-      summary: Read asset hashes recorded at run start
-      description: See docs/api/evolution.md for access, first-release replay restrictions and deployment requirements.
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema: {type: array, items: {$ref: "#/components/schemas/OpenObject"}}
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          description: Unsupported scope, disabled L3, stale baseline or conflicting state
-  /api/runs/{id}/wait:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
-    get:
-      tags: [Runs]
-      operationId: waitForRun
-      summary: Wait for a LOOP result or human action
-      description: |
-        Reads the current status of one LOOP. Returns as soon as it is succeeded,
-        failed, cancelled, waiting or paused. If the wait window expires first,
-        the current status is returned with timedOut=true.
-      parameters:
-        - name: timeoutSec
-          in: query
-          description: Seconds to wait. Zero reads the current status immediately.
-          schema: {type: integer, minimum: 0, maximum: 25, default: 25}
-      responses:
-        "200":
-          description: Latest LOOP status
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [runId, projectId, status, terminal, timedOut]
-                properties:
-                  runId: {type: string}
-                  projectId: {type: string}
-                  status: {type: string}
-                  terminal: {type: boolean, description: "Status is succeeded, failed, or cancelled"}
-                  timedOut: {type: boolean, description: The wait window ended while the run was still active or queued}
+          description: OK
         "400":
-          description: Invalid timeoutSec
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
+          description: The request is malformed
         "404":
-          description: Run not found
-        "409":
-          description: The run is a conversation workspace
-  /api/runs/{id}/control:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
+          description: The resource does not exist
+  /api/auth/github:
     get:
-      tags: [Runs]
-      operationId: getRunControl
-      summary: Read run mode and valid next actions
-      description: Requires project membership. Separates execution progress, verification results and explicit delivery acceptance. Returns mode (sop or workspace), status, waitingReason, allowedActions and acceptance evidence. Workspaces and historical role-group records allow no LOOP actions.
+      tags: [Personal]
+      operationId: get_api_auth_github
+      summary: "GET /api/auth/github"
       responses:
         "200":
-          description: Current control state
-        "403":
-          $ref: "#/components/responses/Forbidden"
+          description: OK
+        "400":
+          description: The request is malformed
         "404":
-          description: Run not found
-  /api/health:
+          description: The resource does not exist
+  /api/auth/github/config:
+    put:
+      tags: [Personal]
+      operationId: put_api_auth_github_config
+      summary: "PUT /api/auth/github/config"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/auth/github/device:
+    post:
+      tags: [Personal]
+      operationId: post_api_auth_github_device
+      summary: "POST /api/auth/github/device"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/auth/github/poll:
+    post:
+      tags: [Personal]
+      operationId: post_api_auth_github_poll
+      summary: "POST /api/auth/github/poll"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/auth/github/repositories:
+    get:
+      tags: [Personal]
+      operationId: get_api_auth_github_repositories
+      summary: "GET /api/auth/github/repositories"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/bootstrap:
     get:
       tags: [System]
-      operationId: getHealth
-      summary: Check service health
+      operationId: getBootstrap
+      summary: Load the complete Studio bootstrap catalog
       responses:
         "200":
-          description: Service is healthy
+          description: Bootstrap state
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Health"
+                $ref: "#/components/schemas/Bootstrap"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
   /api/capabilities:
     get:
       tags: [System]
@@ -614,1009 +151,72 @@ paths:
                       stdioCommand: {type: string}
         "401":
           $ref: "#/components/responses/Unauthorized"
-  /api/openapi.yaml:
+  /api/executor-models:
     get:
-      tags: [System]
-      operationId: getOpenAPI
-      summary: Read this OpenAPI 3.1 contract
-      responses:
-        "200":
-          description: OpenAPI YAML
-          content:
-            application/yaml:
-              schema: {type: string}
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/auth/photo/{spec}/{username}:
-    get:
-      tags: [System]
-      operationId: getEmployeePhoto
-      summary: Fetch a user avatar from the configured SSO photo service
-      parameters:
-        - name: spec
-          in: path
-          required: true
-          description: Photo dimension (48, 100, 150, 500)
-          schema: {type: integer, enum: [48, 100, 150, 500]}
-        - name: username
-          in: path
-          required: true
-          description: User login name (with or without .png)
-          schema: {type: string}
-      responses:
-        "200":
-          description: Avatar image binary
-          headers:
-            Cache-Control:
-              schema: {type: string, example: "public, max-age=86400"}
-          content:
-            image/png:
-              schema: {type: string, format: binary}
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "502":
-          description: SSO photo service error
-  /api/auth/tokens:
-    get:
-      tags: [System]
-      operationId: listPersonalTokens
-      summary: List tokens owned by the logged-in user
-      security:
-        - cookieAuth: []
-      responses:
-        "200":
-          description: Token metadata; plaintext and hashes are never returned
-          content:
-            application/json:
-              schema:
-                type: array
-                items: {$ref: "#/components/schemas/APIToken"}
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-    post:
-      tags: [System]
-      operationId: createPersonalToken
-      summary: Create a personal REST API and MCP token
-      security:
-        - cookieAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name]
-              properties:
-                name: {type: string, maxLength: 128}
-                expiresInDays: {type: integer, minimum: 1, maximum: 365, default: 90}
-      responses:
-        "201":
-          description: Plaintext token is returned once in this response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  token: {type: string}
-                  metadata: {$ref: "#/components/schemas/APIToken"}
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/auth/tokens/{tokenId}:
-    delete:
-      tags: [System]
-      operationId: revokePersonalToken
-      summary: Revoke one token owned by the logged-in user
-      security:
-        - cookieAuth: []
-      parameters:
-        - name: tokenId
-          in: path
-          required: true
-          schema: {type: string}
-      responses:
-        "200":
-          description: Token revoked
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/bootstrap:
-    get:
-      tags: [System]
-      operationId: getBootstrap
-      summary: Load the complete Studio bootstrap catalog
-      responses:
-        "200":
-          description: Bootstrap state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Bootstrap"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/ServerError"
-  /api/users:
-    get:
-      tags: [Users]
-      operationId: listUsers
-      summary: List users with credential values redacted
-      responses:
-        "200":
-          description: User directory
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/User"
-  /api/users/{id}/credentials:
-    put:
-      tags: [Users]
-      operationId: updateOwnCredentials
-      summary: Update model credentials for the current authenticated user
-      description: Git access tokens are managed through /api/users/{id}/git-http-credentials.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: {type: integer, format: int64}
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                assistantDefaults:
-                  $ref: "#/components/schemas/AssistantDefaults"
-                codeBuddyApiKey: {type: string, writeOnly: true}
-                codeBuddyApiKeyClear: {type: boolean}
-                codeBuddyBaseUrl: {type: string, description: "HTTP(S) CodeBuddy gateway base URL. Omitted preserves the value; empty uses the official endpoint for the selected edition."}
-                codeBuddyInternetEnvironment: {type: string, description: "Edition that issued the CodeBuddy key: empty for International, \"internal\" for China, \"ioa\" for iOA (\"public\" and \"China\" are also accepted). Any other value is rejected with 400."}
-                codexApiKey: {type: string, writeOnly: true, description: "Blank preserves the stored key."}
-                codexApiKeyClear: {type: boolean}
-                codexBaseUrl: {type: string, description: "HTTP(S) Responses API base URL. Omitted preserves the value; empty uses the official endpoint."}
-                claudeCodeApiKey: {type: string, writeOnly: true, description: "Blank preserves the stored key."}
-                claudeCodeApiKeyClear: {type: boolean}
-                claudeCodeBaseUrl: {type: string, description: "HTTP(S) Anthropic-compatible service URL. Omitted preserves the value; empty uses the official endpoint."}
-      responses:
-        "200":
-          description: Redacted saved user
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/User"
-        "403":
-          $ref: "#/components/responses/Unauthorized"
-  /api/platform/accounts:
-    get:
-      tags: [Users]
-      operationId: listPlatformAccounts
-      summary: List accounts for platform administrators
-      responses:
-        "200":
-          description: Accounts, oldest first, and whether self sign-up is enabled
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  accounts: {type: array, items: {$ref: "#/components/schemas/PlatformAccount"}}
-                  signupEnabled: {type: boolean}
-        "403": {description: Platform administrator access required}
-    post:
-      tags: [Users]
-      operationId: createPlatformAccount
-      summary: Create a password account
-      description: Platform administrators only. Browser requests must be same-origin; API tokens are accepted. The account joins the welcome project.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [loginName, password]
-              properties:
-                loginName: {type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$"}
-                password: {type: string, writeOnly: true, minLength: 6, maxLength: 72}
-                admin: {type: boolean, description: Also grant platform administration}
-      responses:
-        "201":
-          description: Created account
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/PlatformAccount"}
-        "400": {description: Invalid login name or password}
-        "403": {description: Platform administrator access or same-origin request required}
-        "409": {description: Login name already taken}
-  /api/platform/accounts/{id}/password:
-    put:
-      tags: [Users]
-      operationId: resetPlatformAccountPassword
-      summary: Set a new password for a password account
-      description: Platform administrators only. Accounts that sign in through GitHub or a gateway are refused with 400, so this never adds a password login to them.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: {type: integer, format: int64}
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [password]
-              properties:
-                password: {type: string, writeOnly: true, minLength: 6, maxLength: 72}
-      responses:
-        "200":
-          description: Account
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/PlatformAccount"}
-        "400": {description: Invalid password or not a password account}
-        "403": {description: Platform administrator access or same-origin request required}
-        "404": {description: Unknown account}
-  /api/platform/codebuddy-key:
-    get:
-      tags: [Users]
-      operationId: getPlatformCodeBuddyKey
-      summary: Show the shared CodeBuddy API Key settings
-      description: Platform administrators only. The key itself is never returned.
-      parameters:
-        - name: environment
-          in: query
-          description: Network environment whose models to list in catalog; defaults to the saved one.
-          schema: {type: string, enum: ["", internal, ioa]}
-      responses:
-        "200":
-          description: Shared key status and the models offered in the environment
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/PlatformCodeBuddyKey"}
-        "403": {description: Platform administrator access required}
-    put:
-      tags: [Users]
-      operationId: savePlatformCodeBuddyKey
-      summary: Share a CodeBuddy API Key with users who have none
-      description: >-
-        Platform administrators only; browser requests must be same-origin. Users without their own key
-        chat and run LOOPs on this key, limited to models (the first is the default). It replaces the
-        AGENTFLOW_ASSISTANT_SPONSOR_LOGIN account while configured.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [models]
-              properties:
-                apiKey: {type: string, writeOnly: true, description: Blank keeps the stored key.}
-                internetEnvironment: {type: string, description: "Empty for International, \"internal\" for China, \"ioa\" for iOA."}
-                models: {type: array, minItems: 1, maxItems: 32, items: {type: string}}
-      responses:
-        "200":
-          description: Saved settings
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/PlatformCodeBuddyKey"}
-        "400": {description: Missing key or models, or an invalid environment or model ID}
-        "403": {description: Platform administrator access or same-origin request required}
-    delete:
-      tags: [Users]
-      operationId: clearPlatformCodeBuddyKey
-      summary: Stop sharing the CodeBuddy API Key
-      responses:
-        "200":
-          description: Settings after clearing
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/PlatformCodeBuddyKey"}
-        "403": {description: Platform administrator access or same-origin request required}
-  /api/platform/git-ssh-hosts:
-    get:
-      tags: [Repositories]
-      operationId: listPlatformGitSSHHosts
-      summary: List Git SSH host keys registered by platform administrators
-      responses:
-        "200":
-          description: Platform registrations
-          content:
-            application/json:
-              schema: {type: array, items: {$ref: "#/components/schemas/PlatformGitSSHHost"}}
-        "403": {$ref: "#/components/responses/Forbidden"}
-    post:
-      tags: [Repositories]
-      operationId: createPlatformGitSSHHost
-      summary: Register a verified Git SSH host for the whole platform
-      description: Platform administrators only. Browser requests must be same-origin.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/PlatformGitSSHHost"}
-      responses:
-        "201":
-          description: Saved registration
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/PlatformGitSSHHost"}
-        "400": {description: Invalid SSH host or public keys}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "409": {description: The host and port are already registered}
-    delete:
-      tags: [Repositories]
-      operationId: deleteStoredPlatformGitSSHHost
-      summary: Remove a Git SSH host registration by its stored hostname
-      description: Platform administrators can remove a record marked invalid in the list by supplying its stored hostname and revision. Browser requests must be same-origin.
-      parameters:
-        - name: host
-          in: query
-          required: true
-          allowEmptyValue: true
-          schema: {type: string}
-          description: The host field as returned by the list, including any invalid characters in a corrupt record.
-        - name: If-Match
-          in: header
-          required: true
-          schema: {type: string}
-          description: Quote the revision returned when the registration was read.
-      responses:
-        "204": {description: Registration removed}
-        "400": {description: Invalid host parameter or revision}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "412": {description: The registration has changed or been removed}
-        "428": {description: The current registration revision is required}
-  /api/platform/git-ssh-hosts/preview:
-    post:
-      tags: [Repositories]
-      operationId: previewPlatformGitSSHHost
-      summary: Read SHA256 fingerprints for proposed Git SSH host keys
-      description: Platform administrators can preview supplied keys or read a single key presented by an SSH host. Preview leaves the registry unchanged. Verify the fingerprint with the Git provider before saving the returned public key.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              oneOf:
-                - $ref: "#/components/schemas/PlatformGitSSHHost"
-                - type: object
-                  required: [host, probe]
-                  properties:
-                    host: {type: string, example: "git.example.org:2222"}
-                    probe:
-                      type: object
-                      properties:
-                        runnerId: {type: string, description: Use an online Runner owned by the requesting administrator. Omit to use the platform server.}
-      responses:
-        "200":
-          description: Normalized host, public keys, and proposed fingerprints
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/PlatformGitSSHHost"}
-        "400": {description: Invalid host or keys or multiple preview sources}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "404": {description: Runner not found}
-        "409": {description: Runner cannot read an SSH host public key at this time}
-        "502": {description: Unable to read a valid public key from the SSH host}
-        "503": {description: Runner unavailable}
-        "504": {description: Runner did not respond in time}
-  /api/platform/git-ssh-hosts/{host}:
-    parameters:
-      - {name: host, in: path, required: true, schema: {type: string}, example: "git.example.org:2222"}
-      - name: If-Match
-        in: header
-        required: true
-        schema: {type: string}
-        description: Quote the revision returned when the registration was read or saved.
-    put:
-      tags: [Repositories]
-      operationId: updatePlatformGitSSHHost
-      summary: Replace the keys of a registered Git SSH host
-      description: Platform administrators only. Browser requests must be same-origin.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [publicKeys]
-              properties:
-                publicKeys: {type: string, description: One OpenSSH public key per line.}
-      responses:
-        "200":
-          description: Updated registration
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/PlatformGitSSHHost"}
-        "400": {description: Invalid SSH host or public keys}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "412": {description: The registration has changed or been removed}
-        "428": {description: The current registration revision is required}
-    delete:
-      tags: [Repositories]
-      operationId: deletePlatformGitSSHHost
-      summary: Remove a platform Git SSH host registration
-      description: Platform administrators only. Browser requests must be same-origin.
-      responses:
-        "204": {description: Registration removed}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "412": {description: The registration has changed or been removed}
-        "428": {description: The current registration revision is required}
-  /api/git-https-hosts:
-    get:
-      tags: [Repositories]
-      operationId: listGitHTTPSHostChoices
-      summary: List authorized HTTPS Git instances for the signed-in user
-      responses:
-        "200":
-          description: Host and provider options for personal access tokens
-          content:
-            application/json:
-              schema: {type: array, items: {$ref: "#/components/schemas/GitHTTPSHostChoice"}}
-        "403": {$ref: "#/components/responses/Forbidden"}
-  /api/git-http-hosts:
-    get:
-      tags: [Repositories]
-      operationId: listGitHTTPHostChoices
-      summary: List explicitly authorized plaintext Git instances for the signed-in user
-      responses:
-        "200":
-          description: Endpoint and provider choices for personal access tokens
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  required: [host, platform]
-                  properties:
-                    host: {type: string, example: "http://git.example.org:8080"}
-                    platform: {type: string, enum: [other]}
-        "403": {$ref: "#/components/responses/Forbidden"}
-  /api/platform/git-http-hosts:
-    get:
-      tags: [Repositories]
-      operationId: listPlatformGitHTTPHosts
-      summary: List plaintext Git host authorizations
-      responses:
-        "200":
-          description: Authorized hosts and ports
-          content:
-            application/json:
-              schema: {type: array, items: {$ref: "#/components/schemas/PlatformGitHTTPHost"}}
-        "403": {$ref: "#/components/responses/Forbidden"}
-    post:
-      tags: [Repositories]
-      operationId: createPlatformGitHTTPHost
-      summary: Authorize a plaintext Git host and port
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/PlatformGitHTTPHost"}
-      responses:
-        "201":
-          description: Saved authorization
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/PlatformGitHTTPHost"}
-        "400": {description: Invalid HTTP host}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "409": {description: The HTTP host and port are already authorized}
-  /api/platform/git-http-hosts/{host}:
-    parameters:
-      - {name: host, in: path, required: true, schema: {type: string}, example: "git.example.org:8080"}
-      - name: If-Match
-        in: header
-        required: true
-        schema: {type: string}
-        description: Quote the revision returned when the authorization was read or saved.
-    delete:
-      tags: [Repositories]
-      operationId: deletePlatformGitHTTPHost
-      summary: Revoke authorization for a plaintext Git host
-      responses:
-        "204": {description: Authorization revoked}
-        "400": {description: Invalid host or revision}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "412": {description: The registration has changed or been removed}
-        "428": {description: The current registration revision is required}
-  /api/platform/git-https-hosts:
-    get:
-      tags: [Repositories]
-      operationId: listPlatformGitHTTPSHosts
-      summary: List Git HTTPS host authorizations
-      responses:
-        "200":
-          description: Host authorizations and approved addresses
-          content:
-            application/json:
-              schema: {type: array, items: {$ref: "#/components/schemas/PlatformGitHTTPSHost"}}
-        "403": {$ref: "#/components/responses/Forbidden"}
-    post:
-      tags: [Repositories]
-      operationId: createPlatformGitHTTPSHost
-      summary: Authorize a Git HTTPS host and its confirmed addresses
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/PlatformGitHTTPSHost"}
-      responses:
-        "201":
-          description: Saved authorization
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/PlatformGitHTTPSHost"}
-        "400": {description: Invalid host or addresses}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "409": {description: The host and port are already authorized}
-  /api/platform/git-https-hosts/preview:
-    post:
-      tags: [Repositories]
-      operationId: previewPlatformGitHTTPSHost
-      summary: Review assigned or resolved IP addresses for a Git HTTPS host
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              allOf:
-                - $ref: "#/components/schemas/GitHTTPSHostChoice"
-                - type: object
-                  properties:
-                    addresses:
-                      type: array
-                      minItems: 1
-                      items: {type: string}
-                      description: IP addresses to validate for review. Omit to resolve the hostname with DNS.
-      responses:
-        "200":
-          description: Normalized host, provider, and IP addresses
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/PlatformGitHTTPSHost"}
-        "400": {description: Invalid host, provider, or supplied addresses}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "502": {description: No valid addresses could be resolved}
-  /api/platform/git-https-hosts/{host}:
-    parameters:
-      - {name: host, in: path, required: true, schema: {type: string}, example: "gitlab.example.org:8443"}
-      - name: If-Match
-        in: header
-        required: true
-        schema: {type: string}
-        description: Quote the revision returned when the authorization was read or saved.
-    put:
-      tags: [Repositories]
-      operationId: updatePlatformGitHTTPSHost
-      summary: Update the provider and approved addresses of a Git HTTPS host
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [platform, addresses]
-              properties:
-                platform: {type: string, enum: [github, gitlab, other]}
-                addresses: {type: array, minItems: 1, items: {type: string}}
-      responses:
-        "200":
-          description: Updated authorization
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/PlatformGitHTTPSHost"}
-        "400": {description: Invalid addresses or revision}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "412": {description: The authorization has changed or been removed}
-        "428": {description: The current authorization revision is required}
-    delete:
-      tags: [Repositories]
-      operationId: deletePlatformGitHTTPSHost
-      summary: Revoke a platform Git HTTPS host authorization
-      responses:
-        "204": {description: Authorization removed}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "412": {description: The authorization has changed or been removed}
-        "428": {description: The current authorization revision is required}
-  /api/business-domains:
-    get:
-      tags: [BusinessDomains]
-      operationId: listBusinessDomains
-      responses:
-        "200":
-          description: Domain catalog, per-domain canManage/canView, canAdmin and userId
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        domain: {$ref: "#/components/schemas/BusinessDomain"}
-                        canManage: {type: boolean}
-                        canView: {type: boolean}
-                  canAdmin: {type: boolean}
-                  userId: {type: integer, format: int64}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-    put:
-      tags: [BusinessDomains]
-      operationId: saveBusinessDomain
-      parameters:
-        - name: createOnly
-          in: query
-          description: Reject an existing ID with 409 instead of updating it.
-          schema: {type: boolean, default: false}
-      description: Platform admins create and enable/disable domains and assign managers. Domain managers may edit names, descriptions and viewers. Duplicate names or concurrent updates return 409.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/BusinessDomain"}
-      responses:
-        "200":
-          description: Saved domain
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/BusinessDomain"}
-        "400": {$ref: "#/components/responses/BadRequest"}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "403": {description: Caller cannot manage this domain or change protected grants}
-        "409": {description: Duplicate name or concurrent update}
-  /api/business-domain-report:
-    get:
-      tags: [BusinessDomains]
-      operationId: getBusinessDomainReport
-      description: Aggregate only. Queries always resolve current project attribution; historical runs follow the current domain. All means the caller's authorized reporting scope. Unclassified projects are visible to their owners and platform admins.
-      parameters:
-        - name: businessDomainId
-          in: query
-          schema: {type: string, default: all}
-          description: Domain ID, all, or unclassified
-        - name: from
-          in: query
-          schema: {type: string, format: date-time}
-        - name: to
-          in: query
-          schema: {type: string, format: date-time}
-        - name: grain
-          in: query
-          schema: {type: string, enum: [day, week, month], default: day}
-        - name: timeZone
-          in: query
-          schema: {type: string, default: UTC}
-          description: IANA timezone for delivery and MR trend buckets, for example Asia/Shanghai. Run usage trends retain their existing UTC buckets.
-      responses:
-        "200":
-          description: Current-attribution summary, delivery summary, trend, project contributions and business-domain distribution; excludes run, user and log details
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/BusinessDomainReport"}
-        "400": {$ref: "#/components/responses/BadRequest"}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "403": {description: Domain aggregate access not granted}
-        "404": {$ref: "#/components/responses/NotFound"}
-  /api/projects/{projectId}/business-domain:
-    parameters:
-      - name: projectId
-        in: path
-        required: true
-        schema: {type: string}
-    put:
-      tags: [BusinessDomains]
-      operationId: assignProjectBusinessDomain
-      description: Owners can assign an unclassified project. Platform admins can transfer or clear an assignment. Target must be active. Compare-and-swap protects against concurrent reassignment.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [businessDomainId, expectedDomainId]
-              properties:
-                businessDomainId: {type: string, description: 'Empty string clears the assignment'}
-                expectedDomainId: {type: string, description: 'Previously observed assignment; empty for unclassified'}
-                reason: {type: string, maxLength: 500}
-      responses:
-        "200": {$ref: "#/components/responses/Project"}
-        "400": {$ref: "#/components/responses/BadRequest"}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "403": {description: Owner or platform admin access required}
-        "404": {$ref: "#/components/responses/NotFound"}
-        "409": {description: Project assignment changed; refresh before retrying}
-  /api/projects/{projectId}/business-domain/history:
-    parameters:
-      - name: projectId
-        in: path
-        required: true
-        schema: {type: string}
-    get:
-      tags: [BusinessDomains]
-      operationId: getProjectBusinessDomainHistory
-      responses:
-        "200":
-          description: Last 100 assignment changes, newest first
-          content:
-            application/json:
-              schema:
-                type: array
-                items: {$ref: "#/components/schemas/BusinessDomainAssignment"}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "403": {description: Project owner or platform admin access required}
-        "404": {$ref: "#/components/responses/NotFound"}
-  /api/projects:
-    get:
-      tags: [Projects]
-      operationId: listProjects
-      responses:
-        "200":
-          $ref: "#/components/responses/ProjectList"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-    post:
-      tags: [Projects]
-      operationId: createProject
-      requestBody:
-        $ref: "#/components/requestBodies/Project"
-      responses:
-        "200":
-          $ref: "#/components/responses/Project"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-    put:
-      tags: [Projects]
-      operationId: upsertProject
-      description: When replacing members of an existing project, send membersVersion from the last project read. Omit members to preserve the current roster.
-      requestBody:
-        $ref: "#/components/requestBodies/Project"
-      responses:
-        "200":
-          $ref: "#/components/responses/Project"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "409":
-          description: The member list has changed or membersVersion is missing. Reload the project before retrying.
-  /api/projects/{projectId}:
-    parameters:
-      - name: projectId
-        in: path
-        required: true
-        schema: {type: string}
-    get:
-      tags: [Projects]
-      operationId: getProject
-      responses:
-        "200":
-          $ref: "#/components/responses/Project"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-    delete:
-      tags: [Projects]
-      operationId: deleteProject
-      description: >-
-        Delete (archive) a project; owner or platform admin. The project leaves
-        project lists and syncs, its requirements, runs and settings are kept
-        and the id stays taken. 409 while it has unfinished runs or enabled
-        schedule jobs.
-      responses:
-        "200":
-          $ref: "#/components/responses/Project"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/projects/{projectId}/restore:
-    parameters:
-      - name: projectId
-        in: path
-        required: true
-        schema: {type: string}
-    post:
-      tags: [Projects]
-      operationId: restoreProject
-      description: Restore a deleted project; owner or platform admin.
-      responses:
-        "200":
-          $ref: "#/components/responses/Project"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/projects/{projectId}/join-requests:
-    parameters:
-      - name: projectId
-        in: path
-        required: true
-        schema: {type: string}
-    post:
-      tags: [Projects]
-      operationId: createProjectJoinRequest
-      description: Ask to join a project. One pending request per user and project; owners, members and open projects (no owner and no members) are refused.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                role: {type: string, enum: [member, viewer], default: member}
-                reason: {type: string, maxLength: 500}
-      responses:
-        "200": {$ref: "#/components/responses/ProjectJoinRequest"}
-        "400": {$ref: "#/components/responses/BadRequest"}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "404": {$ref: "#/components/responses/NotFound"}
-        "409": {description: Already a member or a pending request exists}
-  /api/project-join-requests:
-    get:
-      tags: [Projects]
-      operationId: listProjectJoinRequests
-      description: The caller's own requests plus every request of projects the caller owns or maintains (platform admins see all), newest first.
+      tags: [Assets]
+      operationId: listExecutorModels
+      description: Returns, per built-in CLI, the selectable model IDs, the default model and the reasoning-effort levels. An Agent's model should be one of these IDs. `configured` reports whether a LOOP run can use the CLI for the caller, and `personal` whether the caller saved their own key for it.
       parameters:
         - name: projectId
           in: query
           schema: {type: string}
-        - name: status
-          in: query
-          schema: {type: string, enum: [pending, approved, rejected, withdrawn]}
+          description: Resolve `configured` against the execution machine a LOOP in this project uses, which is the caller's project default before the personal default. Omit it for personal LOOPs.
       responses:
         "200":
-          description: Join requests
+          description: Model catalog keyed by CLI id
           content:
             application/json:
               schema:
-                type: array
-                items: {$ref: "#/components/schemas/ProjectJoinRequest"}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-  /api/project-join-requests/{requestId}/approve:
-    parameters:
-      - name: requestId
-        in: path
-        required: true
-        schema: {type: integer, format: int64}
-    post:
-      tags: [Projects]
-      operationId: approveProjectJoinRequest
-      description: Approve a pending request and add the applicant as a member; project owner, maintainer or platform admin. Archived projects cannot be reviewed.
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                role:
-                  type: string
-                  enum: [maintainer, member, viewer]
-                  description: Granted role; defaults to the requested role. Only owners and platform admins grant maintainer.
-      responses:
-        "200": {$ref: "#/components/responses/ProjectJoinRequest"}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "404": {$ref: "#/components/responses/NotFound"}
-        "409": {description: Request is no longer pending or the applicant is already a project owner or member}
-  /api/project-join-requests/{requestId}/reject:
-    parameters:
-      - name: requestId
-        in: path
-        required: true
-        schema: {type: integer, format: int64}
-    post:
-      tags: [Projects]
-      operationId: rejectProjectJoinRequest
-      description: Reject a pending request; project owner, maintainer or platform admin.
-      responses:
-        "200": {$ref: "#/components/responses/ProjectJoinRequest"}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "404": {$ref: "#/components/responses/NotFound"}
-        "409": {description: Request is no longer pending}
-  /api/project-join-requests/{requestId}/withdraw:
-    parameters:
-      - name: requestId
-        in: path
-        required: true
-        schema: {type: integer, format: int64}
-    post:
-      tags: [Projects]
-      operationId: withdrawProjectJoinRequest
-      description: Withdraw the caller's own pending request.
-      responses:
-        "200": {$ref: "#/components/responses/ProjectJoinRequest"}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "404": {$ref: "#/components/responses/NotFound"}
-        "409": {description: Request is no longer pending}
-  /api/repositories:
+                $ref: "#/components/schemas/OpenObject"
+  /api/health:
     get:
-      tags: [Repositories]
-      operationId: listRepositories
+      tags: [System]
+      operationId: getHealth
+      summary: Check service health
       responses:
         "200":
-          description: Repository list
+          description: Service is healthy
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Repository"
+                $ref: "#/components/schemas/Health"
         "401":
           $ref: "#/components/responses/Unauthorized"
-    post:
-      tags: [Repositories]
-      operationId: createRepository
-      requestBody:
-        $ref: "#/components/requestBodies/Repository"
-      responses:
-        "200":
-          $ref: "#/components/responses/Repository"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-    put:
-      tags: [Repositories]
-      operationId: upsertRepository
-      requestBody:
-        $ref: "#/components/requestBodies/Repository"
-      responses:
-        "200":
-          $ref: "#/components/responses/Repository"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-    delete:
-      tags: [Repositories]
-      operationId: deleteRepository
-      parameters:
-        - $ref: "#/components/parameters/RepositoryIdQuery"
-      responses:
-        "200":
-          $ref: "#/components/responses/Status"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/repositories/{repositoryId}:
-    parameters:
-      - name: repositoryId
-        in: path
-        required: true
-        schema: {type: string}
+  /api/insights/v1/sources:
     get:
-      tags: [Repositories]
-      operationId: getRepository
+      tags: [Usage]
+      operationId: get_api_insights_v1_sources
+      summary: "List the reporting sources of a project"
       responses:
         "200":
-          $ref: "#/components/responses/Repository"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: OK
+        "400":
+          description: The request is malformed
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: The resource does not exist
+    post:
+      tags: [Usage]
+      operationId: post_api_insights_v1_sources
+      summary: "Create a reporting source for a project and return its token once"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/insights/v1/sources/{id}:
+    delete:
+      tags: [Usage]
+      operationId: delete_api_insights_v1_sources_id
+      summary: "Revoke a reporting source"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
   /api/issues:
     get:
       tags: [Issues]
@@ -1690,23 +290,6 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
-  /api/issues/{issueId}/resync-tapd:
-    parameters:
-      - $ref: "#/components/parameters/IssueId"
-    post:
-      tags: [Issues]
-      operationId: resyncTAPDIssue
-      summary: Re-sync one TAPD-sourced issue from TAPD
-      description: Pulls the linked TAPD story/bug/task again and refreshes the local issue content (title/description/status/priority). Local assignee, clarification state, base branch and repository bindings are preserved. Only issues with source=tapd are accepted.
-      responses:
-        "200":
-          $ref: "#/components/responses/Issue"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
   /api/issues/{issueId}:
     parameters:
       - $ref: "#/components/parameters/IssueId"
@@ -1746,6 +329,18 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           description: Issue has successful execution history or is clarifying or executing a LOOP
+  /api/issues/{id}/close:
+    post:
+      tags: [Requirements]
+      operationId: post_api_issues_id_close
+      summary: "Close a requirement"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
   /api/issues/{issueId}/comments:
     parameters:
       - $ref: "#/components/parameters/IssueId"
@@ -1767,56 +362,18 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
-  /api/issues/{issueId}/runs:
-    parameters:
-      - $ref: "#/components/parameters/IssueId"
+  /api/issues/{id}/images/{imageId}:
     get:
-      tags: [Issues, Runs]
-      operationId: listIssueRuns
+      tags: [Requirements]
+      operationId: get_api_issues_id_images_imageId
+      summary: "GET /api/issues/{id}/images/{imageId}"
       responses:
         "200":
-          $ref: "#/components/responses/RunList"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/issues/{issueId}/clarification:
-    parameters:
-      - $ref: "#/components/parameters/IssueId"
-    post:
-      tags: [Issues]
-      operationId: saveIssueClarification
-      description: Persists one work item's multi-turn clarification. When ready, appends the summary to its linked Gongfeng Issue or TAPD story as a comment without starting its LOOP.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                summary:
-                  type: string
-                ready:
-                  type: boolean
-                history:
-                  type: array
-                  items:
-                    $ref: "#/components/schemas/ClarificationMessage"
-                questions:
-                  type: array
-                  items:
-                    $ref: "#/components/schemas/ClarificationQuestion"
-                retry:
-                  type: boolean
-      responses:
-        "200":
-          $ref: "#/components/responses/Issue"
+          description: OK
         "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: The request is malformed
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: The resource does not exist
   /api/issues/{issueId}/reopen:
     parameters:
       - $ref: "#/components/parameters/IssueId"
@@ -1832,774 +389,436 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
-  /api/issues/{issueId}/dispatch:
-    parameters:
-      - $ref: "#/components/parameters/IssueId"
-    post:
-      tags: [Issues, Tasks]
-      operationId: dispatchIssue
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                rerun:
-                  type: boolean
-                  default: false
+  /api/issues/{id}/requirement:
+    get:
+      tags: [Requirements]
+      operationId: get_api_issues_id_requirement
+      summary: "GET /api/issues/{id}/requirement"
       responses:
-        "201":
-          description: Task created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Task"
+        "200":
+          description: OK
         "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: The request is malformed
         "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/tasks:
+          description: The resource does not exist
+  /api/model-catalog:
     get:
-      tags: [Tasks]
-      operationId: listTasks
+      tags: [Models]
+      operationId: get_api_model_catalog
+      summary: "Get the personal model catalogue: the CLIs the account may run with and the models each offers"
       responses:
         "200":
-          description: Task list
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Task"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/tasks/{taskId}:
-    parameters:
-      - name: taskId
-        in: path
-        required: true
-        schema: {type: string}
-    get:
-      tags: [Tasks]
-      operationId: getTask
-      responses:
-        "200":
-          description: Task
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Task"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/agents:
-    get:
-      tags: [Assets]
-      operationId: listAgents
-      parameters:
-        - name: projectId
-          in: query
-          required: false
-          schema:
-            type: string
-          description: Return roles owned by this project plus roles explicitly shared by other projects.
-      responses:
-        "200":
-          description: Agent definitions
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AgentDefinition"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-    put:
-      tags: [Assets]
-      operationId: upsertAgent
-      requestBody:
-        $ref: "#/components/requestBodies/Agent"
-      responses:
-        "200":
-          description: Stored agent
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AgentDefinition"
+          description: OK
         "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/agents/{agentId}:
-    parameters:
-      - $ref: "#/components/parameters/AgentId"
-    get:
-      tags: [Assets]
-      operationId: getAgent
-      responses:
-        "200":
-          description: Agent definition
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AgentDefinition"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: The request is malformed
         "404":
-          $ref: "#/components/responses/NotFound"
-    delete:
-      tags: [Assets]
-      operationId: deleteAgent
-      summary: Delete an Agent definition that is not shared and not referenced by any workflow
-      responses:
-        "204":
-          description: Agent deleted
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/agents/{agentId}/revisions:
-    parameters:
-      - $ref: "#/components/parameters/AgentId"
+          description: The resource does not exist
+  /api/observability/spec:
     get:
-      tags: [Assets]
-      operationId: listAgentRevisions
+      tags: [Analytics]
+      operationId: getObservabilitySpec
       responses:
         "200":
-          $ref: "#/components/responses/RevisionList"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/agents/{agentId}/revisions/{revisionId}:
-    parameters:
-      - $ref: "#/components/parameters/AgentId"
-      - $ref: "#/components/parameters/RevisionId"
-    get:
-      tags: [Assets]
-      operationId: getAgentRevision
-      responses:
-        "200":
-          description: Agent definition revision
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DefinitionRevision"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/agents/{agentId}/revisions/{revisionId}/restore:
-    parameters:
-      - $ref: "#/components/parameters/AgentId"
-      - $ref: "#/components/parameters/RevisionId"
-    post:
-      tags: [Assets]
-      operationId: restoreAgentRevision
-      responses:
-        "200":
-          description: Restored agent
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AgentDefinition"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/rules:
-    get:
-      tags: [Assets]
-      operationId: listRules
-      responses:
-        "200":
-          $ref: "#/components/responses/AssetList"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-    put:
-      tags: [Assets]
-      operationId: upsertRule
-      requestBody:
-        $ref: "#/components/requestBodies/RuleAsset"
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-    delete:
-      tags: [Assets]
-      operationId: deleteRule
-      summary: Delete a Rule that is not shared and not referenced by any agent
-      parameters:
-        - $ref: "#/components/parameters/AssetIdQuery"
-      responses:
-        "204":
-          description: Rule deleted
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/skills:
-    get:
-      tags: [Assets]
-      operationId: listSkills
-      responses:
-        "200":
-          $ref: "#/components/responses/AssetList"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-    put:
-      tags: [Assets]
-      operationId: upsertSkill
-      requestBody:
-        $ref: "#/components/requestBodies/SkillAsset"
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-    delete:
-      tags: [Assets]
-      operationId: deleteSkill
-      summary: Delete a Skill that is not shared and not referenced by any agent
-      parameters:
-        - $ref: "#/components/parameters/AssetIdQuery"
-      responses:
-        "204":
-          description: Skill deleted
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/skillhub/skills:
-    get:
-      tags: [Assets]
-      operationId: listSkillhubSkills
-      summary: Search public SkillHub skills through the platform proxy
-      description: Only whitelisted query parameters are forwarded. SkillHub failures map to 429 (rate limited), 502 (unavailable) or 504 (timeout).
-      parameters:
-        - {name: keyword, in: query, schema: {type: string, maxLength: 100}}
-        - {name: category, in: query, schema: {type: string}}
-        - {name: sortBy, in: query, schema: {type: string, enum: [downloads, score, updated_at], default: downloads}}
-        - {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
-        - {name: pageSize, in: query, schema: {type: integer, minimum: 1, maximum: 50, default: 24}}
-      responses:
-        "200":
-          description: "{total, page, pageSize, items:[{slug, namespace, name, description, iconUrl, category, version, ownerName, homepage, downloads, stars, labels, verified, updatedAt}]}"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "429":
-          $ref: "#/components/responses/SkillhubUnavailable"
-        "502":
-          $ref: "#/components/responses/SkillhubUnavailable"
-        "504":
-          $ref: "#/components/responses/SkillhubUnavailable"
-  /api/skillhub/categories:
-    get:
-      tags: [Assets]
-      operationId: listSkillhubCategories
-      summary: Active SkillHub top-level categories, cached for 10 minutes
-      responses:
-        "200":
-          description: "{items:[{key, name}]}"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "502":
-          $ref: "#/components/responses/SkillhubUnavailable"
-  /api/skillhub/skills/{slug}:
-    parameters:
-      - $ref: "#/components/parameters/SkillhubSlug"
-      - $ref: "#/components/parameters/SkillhubNamespace"
-    get:
-      tags: [Assets]
-      operationId: getSkillhubSkill
-      responses:
-        "200":
-          description: "{skill, latestVersion, owner, securityReports}"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "502":
-          $ref: "#/components/responses/SkillhubUnavailable"
-  /api/skillhub/skills/{slug}/versions:
-    parameters:
-      - $ref: "#/components/parameters/SkillhubSlug"
-      - $ref: "#/components/parameters/SkillhubNamespace"
-    get:
-      tags: [Assets]
-      operationId: listSkillhubSkillVersions
-      responses:
-        "200":
-          description: "{versions:[{version, changelog, createdAt, securityReports?:{<vendor>:{status, statusText, reportUrl, safe}}}]}"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/skillhub/skills/{slug}/files:
-    parameters:
-      - $ref: "#/components/parameters/SkillhubSlug"
-      - $ref: "#/components/parameters/SkillhubNamespace"
-      - $ref: "#/components/parameters/SkillhubVersion"
-    get:
-      tags: [Assets]
-      operationId: listSkillhubSkillFiles
-      responses:
-        "200":
-          description: "{version, files:[{path, size, sha256}]}"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/skillhub/skills/{slug}/file:
-    parameters:
-      - $ref: "#/components/parameters/SkillhubSlug"
-      - $ref: "#/components/parameters/SkillhubNamespace"
-      - $ref: "#/components/parameters/SkillhubVersion"
-      - {name: path, in: query, required: true, schema: {type: string}}
-    get:
-      tags: [Assets]
-      operationId: previewSkillhubSkillFile
-      summary: Text preview of one package file
-      description: The server follows the signed download redirect itself; signed storage URLs are never returned. Files over 1MB or non UTF-8 content return previewable=false.
-      responses:
-        "200":
-          description: "{path, size, previewable:true, content} or {path, previewable:false, reason}"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/skillhub/skills/{slug}/evaluation:
-    parameters:
-      - $ref: "#/components/parameters/SkillhubSlug"
-      - $ref: "#/components/parameters/SkillhubNamespace"
-    get:
-      tags: [Assets]
-      operationId: getSkillhubSkillEvaluation
-      responses:
-        "200":
-          description: "{available:true, dimensions, summary, userSummary, updatedAt} or {available:false} when SkillHub has no evaluation"
-  /api/skillhub/install:
-    post:
-      tags: [Assets]
-      operationId: installSkillhubSkill
-      summary: Download a SkillHub package and store it as a project skill
-      description: Files and the skill row are written in one transaction; any failure leaves no partial skill. The new skill records source {provider, namespace, slug, version, homepage, installedAt, updatedAt} and its files are read-only.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [slug, projectId]
-              properties:
-                slug: {type: string}
-                namespace: {type: string}
-                version: {type: string, description: Defaults to the latest version}
-                projectId: {type: string}
-                id: {type: string, description: Defaults to slug}
-                name: {type: string}
-      responses:
-        "201":
-          description: Installed SkillDefinition
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "422":
-          $ref: "#/components/responses/SkillhubUnavailable"
-        "502":
-          $ref: "#/components/responses/SkillhubUnavailable"
-        "504":
-          $ref: "#/components/responses/SkillhubUnavailable"
-  /api/skillhub/update:
-    post:
-      tags: [Assets]
-      operationId: updateSkillhubSkill
-      summary: Replace a SkillHub-sourced skill's files with another version
-      description: Keeps id, name, description, sharing and agent bindings; a failure leaves the existing files untouched.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [skillId]
-              properties:
-                skillId: {type: string}
-                version: {type: string, description: Defaults to the latest version}
-      responses:
-        "200":
-          description: Updated SkillDefinition
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "422":
-          $ref: "#/components/responses/SkillhubUnavailable"
-        "502":
-          $ref: "#/components/responses/SkillhubUnavailable"
-  /api/knowledge/connectors:
-    get:
-      tags: [Assets]
-      operationId: listKnowledgeConnectors
-      summary: List the current user's personal knowledge connectors
-      description: Returns user-owned personal knowledge connectors (Obsidian, Notion, SiYuan, Feishu, WeKnora, MCP) with secrets redacted.
-      responses:
-        "200":
-          $ref: "#/components/responses/AssetList"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/mcp-servers:
-    get:
-      tags: [Assets]
-      operationId: listMcpServers
-      responses:
-        "200":
-          $ref: "#/components/responses/AssetList"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-    put:
-      tags: [Assets]
-      operationId: upsertMcpServer
-      requestBody:
-        $ref: "#/components/requestBodies/MCPServerAsset"
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/mcp-servers/import:
-    post:
-      tags: [Assets]
-      operationId: importMcpServers
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              description: MCP object, array, keyed map, or mcpServers/servers envelope.
-      responses:
-        "200":
-          description: Import result
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [imported, servers]
-                properties:
-                  imported:
-                    type: integer
-                  servers:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/OpenObject"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/mcp-servers/{id}/files:
-    post:
-      tags: [Assets]
-      operationId: uploadMcpFiles
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: {type: string}
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                files:
-                  type: array
-                  items: {type: string, format: binary}
-                paths:
-                  type: array
-                  items: {type: string}
-      responses:
-        "200": {description: Updated MCP definition}
-        "400": {$ref: "#/components/responses/BadRequest"}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "404": {$ref: "#/components/responses/NotFound"}
-  /api/mcp-servers/{id}/files/{path}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: {type: string}
-      - name: path
-        in: path
-        required: true
-        schema: {type: string}
-    get:
-      tags: [Assets]
-      operationId: downloadMcpFile
-      responses:
-        "200": {description: MCP file content}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "404": {$ref: "#/components/responses/NotFound"}
-    delete:
-      tags: [Assets]
-      operationId: deleteMcpFile
-      responses:
-        "200": {description: Updated MCP definition}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "404": {$ref: "#/components/responses/NotFound"}
-  /api/executors:
-    get:
-      tags: [Assets]
-      operationId: listExecutors
-      description: Returns the read-only built-in CLI catalog. Executors are not user-configurable.
-      responses:
-        "200":
-          $ref: "#/components/responses/AssetList"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/executor-models:
-    get:
-      tags: [Assets]
-      operationId: listExecutorModels
-      description: Returns, per built-in CLI, the selectable model IDs, the default model and the reasoning-effort levels. An Agent's model should be one of these IDs. `configured` reports whether a LOOP run can use the CLI for the caller, and `personal` whether the caller saved their own key for it.
-      parameters:
-        - name: projectId
-          in: query
-          schema: {type: string}
-          description: Resolve `configured` against the execution machine a LOOP in this project uses, which is the caller's project default before the personal default. Omit it for personal LOOPs.
-      responses:
-        "200":
-          description: Model catalog keyed by CLI id
+          description: Public observability vocabulary and adapters
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/OpenObject"
-  /api/sandboxes:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/openapi.yaml:
     get:
-      tags: [Assets]
-      operationId: listSandboxProfiles
+      tags: [System]
+      operationId: getOpenAPI
+      summary: Read this OpenAPI 3.1 contract
       responses:
         "200":
-          $ref: "#/components/responses/AssetList"
+          description: OpenAPI YAML
+          content:
+            application/yaml:
+              schema: {type: string}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/projects:
+    get:
+      tags: [Projects]
+      operationId: listProjects
+      responses:
+        "200":
+          $ref: "#/components/responses/ProjectList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Projects]
+      operationId: createProject
+      requestBody:
+        $ref: "#/components/requestBodies/Project"
+      responses:
+        "200":
+          $ref: "#/components/responses/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
     put:
-      tags: [Assets]
-      operationId: upsertSandboxProfile
+      tags: [Projects]
+      operationId: upsertProject
+      description: When replacing members of an existing project, send membersVersion from the last project read. Omit members to preserve the current roster.
       requestBody:
-        $ref: "#/components/requestBodies/SandboxProfile"
+        $ref: "#/components/requestBodies/Project"
       responses:
         "200":
-          $ref: "#/components/responses/Ok"
+          $ref: "#/components/responses/Project"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: The member list has changed or membersVersion is missing. Reload the project before retrying.
+  /api/projects/{projectId}:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [Projects]
+      operationId: getProject
+      responses:
+        "200":
+          $ref: "#/components/responses/Project"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Projects]
+      operationId: deleteProject
+      description: >-
+        Delete (archive) a project; owner or platform admin. The project leaves
+        project lists and syncs, its requirements, runs and settings are kept
+        and the id stays taken. 409 while it has unfinished runs or enabled
+        schedule jobs.
+      responses:
+        "200":
+          $ref: "#/components/responses/Project"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
-    delete:
-      tags: [Assets]
-      operationId: deleteSandbox
-      summary: Delete a sandbox profile that is not shared and not referenced by any workflow
-      parameters:
-        - $ref: "#/components/parameters/AssetIdQuery"
-      responses:
-        "204":
-          description: Sandbox profile deleted
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
-  /api/workflows:
+  /api/projects/{id}/credentials:
     get:
-      tags: [Workflows]
-      operationId: listWorkflows
+      tags: [Projects]
+      operationId: get_api_projects_id_credentials
+      summary: "List a project's credentials with the secrets redacted"
       responses:
         "200":
-          $ref: "#/components/responses/WorkflowList"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+    post:
+      tags: [Projects]
+      operationId: post_api_projects_id_credentials
+      summary: "Create a project credential"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/projects/{id}/credentials/{credentialId}:
+    delete:
+      tags: [Projects]
+      operationId: delete_api_projects_id_credentials_credentialId
+      summary: "DELETE /api/projects/{id}/credentials/{credentialId}"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
     put:
-      tags: [Workflows]
-      operationId: upsertWorkflow
-      requestBody:
-        $ref: "#/components/requestBodies/Workflow"
+      tags: [Projects]
+      operationId: put_api_projects_id_credentials_credentialId
+      summary: "PUT /api/projects/{id}/credentials/{credentialId}"
       responses:
         "200":
-          $ref: "#/components/responses/Workflow"
+          description: OK
         "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/workflows/{workflowId}:
-    parameters:
-      - $ref: "#/components/parameters/WorkflowId"
-    get:
-      tags: [Workflows]
-      operationId: getWorkflow
-      responses:
-        "200":
-          $ref: "#/components/responses/Workflow"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: The request is malformed
         "404":
-          $ref: "#/components/responses/NotFound"
-    delete:
-      tags: [Workflows]
-      operationId: deleteWorkflow
-      responses:
-        "204":
-          description: Workflow deleted
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/workflows/{workflowId}/revisions:
+          description: The resource does not exist
+  /api/projects/{projectId}/restore:
     parameters:
-      - $ref: "#/components/parameters/WorkflowId"
-    get:
-      tags: [Workflows]
-      operationId: listWorkflowRevisions
-      responses:
-        "200":
-          $ref: "#/components/responses/RevisionList"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/workflows/{workflowId}/revisions/{revisionId}:
-    parameters:
-      - $ref: "#/components/parameters/WorkflowId"
-      - $ref: "#/components/parameters/RevisionId"
-    get:
-      tags: [Workflows]
-      operationId: getWorkflowRevision
-      responses:
-        "200":
-          description: Workflow revision
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DefinitionRevision"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/workflows/{workflowId}/revisions/{revisionId}/restore:
-    parameters:
-      - $ref: "#/components/parameters/WorkflowId"
-      - $ref: "#/components/parameters/RevisionId"
-    post:
-      tags: [Workflows]
-      operationId: restoreWorkflowRevision
-      responses:
-        "200":
-          $ref: "#/components/responses/Workflow"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/workflows/{workflowId}/publish:
-    parameters:
-      - $ref: "#/components/parameters/WorkflowId"
-    post:
-      tags: [Workflows]
-      operationId: publishWorkflow
-      responses:
-        "200":
-          $ref: "#/components/responses/Workflow"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/workflows/{workflowId}/clone:
-    parameters:
-      - $ref: "#/components/parameters/WorkflowId"
-    post:
-      tags: [Workflows]
-      operationId: cloneWorkflow
-      requestBody:
+      - name: projectId
+        in: path
         required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [id, name]
-              properties:
-                id:
-                  type: string
-                name:
-                  type: string
-                owner:
-                  type: string
-                projectId:
-                  type: string
-                  description: Target project. Empty or omitted retains the source project; generic templates require a target project.
-                sandboxProfileId:
-                  type: string
-                  description: Use this fixed sandbox in the copy.
-                autoSelectSandbox:
-                  type: boolean
-                  description: Choose a sandbox at runtime. With neither option supplied, inherit the source LOOP setting.
-      responses:
-        "201":
-          $ref: "#/components/responses/Workflow"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/workflow-metrics:
-    get:
-      tags: [Analytics]
-      operationId: listWorkflowMetrics
+        schema: {type: string}
+    post:
+      tags: [Projects]
+      operationId: restoreProject
+      description: Restore a deleted project; owner or platform admin.
       responses:
         "200":
-          description: Workflow metrics
+          $ref: "#/components/responses/Project"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/repositories:
+    get:
+      tags: [Repositories]
+      operationId: listRepositories
+      responses:
+        "200":
+          description: Repository list
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/WorkflowMetrics"
+                  $ref: "#/components/schemas/Repository"
         "401":
           $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Repositories]
+      operationId: createRepository
+      requestBody:
+        $ref: "#/components/requestBodies/Repository"
+      responses:
+        "200":
+          $ref: "#/components/responses/Repository"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [Repositories]
+      operationId: upsertRepository
+      requestBody:
+        $ref: "#/components/requestBodies/Repository"
+      responses:
+        "200":
+          $ref: "#/components/responses/Repository"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags: [Repositories]
+      operationId: deleteRepository
+      parameters:
+        - $ref: "#/components/parameters/RepositoryIdQuery"
+      responses:
+        "200":
+          $ref: "#/components/responses/Status"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/repositories/{repositoryId}:
+    parameters:
+      - name: repositoryId
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [Repositories]
+      operationId: getRepository
+      responses:
+        "200":
+          $ref: "#/components/responses/Repository"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/runners:
+    get:
+      tags: [Machines]
+      operationId: get_api_runners
+      summary: "List the registered machines: their operating system, their CLIs, each CLI's version and login mode, and when "
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/runners/bind-codes:
+    post:
+      tags: [Machines]
+      operationId: post_api_runners_bind_codes
+      summary: "POST /api/runners/bind-codes"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/runners/deregister:
+    post:
+      tags: [Machines]
+      operationId: post_api_runners_deregister
+      summary: "POST /api/runners/deregister"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/runners/disconnect:
+    post:
+      tags: [Machines]
+      operationId: post_api_runners_disconnect
+      summary: "POST /api/runners/disconnect"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/runners/heartbeat:
+    post:
+      tags: [Machines]
+      operationId: post_api_runners_heartbeat
+      summary: "POST /api/runners/heartbeat"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/runners/register:
+    post:
+      tags: [Machines]
+      operationId: post_api_runners_register
+      summary: "POST /api/runners/register"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/runners/runtimes:
+    post:
+      tags: [Machines]
+      operationId: post_api_runners_runtimes
+      summary: "POST /api/runners/runtimes"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+    put:
+      tags: [Machines]
+      operationId: put_api_runners_runtimes
+      summary: "PUT /api/runners/runtimes"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/runners/{id}:
+    delete:
+      tags: [Machines]
+      operationId: delete_api_runners_id
+      summary: "DELETE /api/runners/{id}"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/runners/{id}/maintenance:
+    get:
+      tags: [Machines]
+      operationId: get_api_runners_id_maintenance
+      summary: "Read a machine's CLI maintenance state"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+    post:
+      tags: [Machines]
+      operationId: post_api_runners_id_maintenance
+      summary: "Update or roll back a machine's CLI"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/runners/{id}/models:
+    put:
+      tags: [Machines]
+      operationId: put_api_runners_id_models
+      summary: "PUT /api/runners/{id}/models"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/runners/{id}/models/probe:
+    post:
+      tags: [Machines]
+      operationId: post_api_runners_id_models_probe
+      summary: "Probe the models a machine's CLI can reach"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/tracker/import:
+    get:
+      tags: [Tracker]
+      operationId: get_api_tracker_import
+      summary: "Read the tracker import's last run and its outcome"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+    post:
+      tags: [Tracker]
+      operationId: post_api_tracker_import
+      summary: "Import the open issues of every bound GitHub or GitLab repository"
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
   /api/usage:
     get:
       tags: [Analytics]
@@ -2651,1312 +870,186 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
-  /api/observability/spec:
+  /api/users/{id}:
     get:
-      tags: [Analytics]
-      operationId: getObservabilitySpec
+      tags: [Personal]
+      operationId: get_api_users_id
+      summary: "GET /api/users/{id}"
       responses:
         "200":
-          description: Public observability vocabulary and adapters
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OpenObject"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/runs:
-    get:
-      tags: [Runs]
-      operationId: listRuns
-      responses:
-        "200":
-          $ref: "#/components/responses/RunList"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-    post:
-      tags: [Runs]
-      operationId: startRun
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [workflowId]
-              properties:
-                workflowId:
-                  type: string
-                input:
-                  type: string
-                projectId:
-                  type: string
-      responses:
-        "201":
-          $ref: "#/components/responses/Run"
+          description: OK
         "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-  /api/runs/{runId}:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs]
-      operationId: getRun
-      responses:
-        "200":
-          $ref: "#/components/responses/Run"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: The request is malformed
         "404":
-          $ref: "#/components/responses/NotFound"
-    delete:
-      tags: [Runs]
-      operationId: deleteRun
+          description: The resource does not exist
+    post:
+      tags: [Personal]
+      operationId: post_api_users_id
+      summary: "POST /api/users/{id}"
       responses:
         "200":
-          $ref: "#/components/responses/Status"
+          description: OK
         "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: The request is malformed
         "404":
-          $ref: "#/components/responses/NotFound"
-  /api/runs/{runId}/preview/download:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs]
-      operationId: downloadRunPreview
-      description: Download the archived static build as a ZIP with original files and relative paths. Available after workspace cleanup and until preview expiry; does not require a preview session. Supports HTTP Range requests.
+          description: The resource does not exist
+  /api/users/{id}/cli-models/probe:
+    post:
+      tags: [Personal]
+      operationId: post_api_users_id_cli_models_probe
+      summary: "POST /api/users/{id}/cli-models/probe"
       responses:
         "200":
-          description: Complete static site ZIP attachment
-          content:
-            application/zip:
-              schema: {type: string, format: binary}
-        "206":
-          description: Requested range of the ZIP attachment
-          content:
-            application/zip:
-              schema: {type: string, format: binary}
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: OK
+        "400":
+          description: The request is malformed
         "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          description: Preview has not finished archiving
-        "410":
-          description: Preview has expired or been deleted
-        "500":
-          $ref: "#/components/responses/ServerError"
-  /api/runs/{runId}/telemetry:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs, Analytics]
-      operationId: listRunTelemetry
-      parameters:
-        - $ref: "#/components/parameters/NodeIdQuery"
-        - name: adapter
-          in: query
-          schema:
-            type: string
-        - $ref: "#/components/parameters/After"
-        - $ref: "#/components/parameters/Before"
-        - $ref: "#/components/parameters/Limit"
-      responses:
-        "200":
-          description: Cursor-paged telemetry
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TelemetryPage"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/runs/{runId}/logs:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs]
-      operationId: listRunLogs
-      parameters:
-        - $ref: "#/components/parameters/NodeIdQuery"
-        - $ref: "#/components/parameters/After"
-        - $ref: "#/components/parameters/Before"
-        - $ref: "#/components/parameters/Limit"
-      responses:
-        "200":
-          description: Cursor-paged logs
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LogPage"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/runs/{runId}/logs.txt:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs]
-      operationId: downloadRunLogs
-      parameters:
-        - $ref: "#/components/parameters/NodeIdQuery"
-      responses:
-        "200":
-          description: Plain-text worker log export
-          content:
-            text/plain:
-              schema:
-                type: string
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/runs/{runId}/workspace/terminal:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    post:
-      tags: [Runs]
-      operationId: controlRunWorkspaceTerminal
-      summary: Open, poll, type into, resize or close a workspace PTY
-      description: Requires project write membership and an active human editor lease. Shells run on the workspace owner with a sanitized environment; a disconnected client is reclaimed after 15 seconds. Terminal data is transient and output is base64 encoded.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [operation]
-              properties:
-                operation: {type: string, enum: [open, read, input, resize, close]}
-                id: {type: string}
-                data: {type: string, maxLength: 32768}
-                cols: {type: integer}
-                rows: {type: integer}
-      responses:
-        "200":
-          description: Terminal identifier and new output
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id: {type: string}
-                  data: {type: string, format: byte}
-                  exited: {type: boolean}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "409": {description: Execution not stopped, editor lease expired, foreign terminal, or workspace unavailable}
-  /api/runs/{runId}/workspace:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs]
-      operationId: getRunWorkspace
-      summary: Inspect availability and Git changes for the read-only Run workspace
-      responses:
-        "200":
-          description: Workspace availability and change summary
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RunWorkspace"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/runs/{runId}/workspace/restore:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs]
-      operationId: getRunWorkspaceRestoreStatus
-      summary: Inspect background workspace restoration independently of LOOP execution
-      responses:
-        "200":
-          description: Restore status (idle, restoring, ready or failed), optional startedAt and error
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-    post:
-      tags: [Runs]
-      operationId: restoreRunWorkspace
-      parameters:
-        - in: header
-          name: Prefer
-          schema:
-            type: string
-            example: respond-async
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "202":
-          description: Background restoration accepted; poll GET on this path
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/runs/{runId}/workspace/tree:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs]
-      operationId: listRunWorkspaceTree
-      summary: List safe, non-sensitive files in a Run workspace
-      parameters:
-        - name: path
-          in: query
-          schema: {type: string}
-      responses:
-        "200":
-          description: Flat workspace tree, capped at 4000 entries
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [entries, truncated]
-                properties:
-                  entries:
-                    type: array
-                    items: {$ref: "#/components/schemas/WorkspaceEntry"}
-                  truncated: {type: boolean}
-        "400": {$ref: "#/components/responses/BadRequest"}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "404": {$ref: "#/components/responses/NotFound"}
-        "409": {description: Workspace is unavailable because its owner instance or remote Runner cannot currently be reached}
-        "410": {description: Workspace is no longer available}
-  /api/runs/{runId}/workspace/file:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs]
-      operationId: getRunWorkspaceFile
-      summary: Preview one text file from a Run workspace
-      parameters:
-        - name: path
-          in: query
-          required: true
-          schema: {type: string}
-      responses:
-        "200":
-          description: Text file content, limited to 1 MiB
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [path, content, size]
-                properties:
-                  path: {type: string}
-                  content: {type: string}
-                  size: {type: integer, format: int64}
-        "400": {$ref: "#/components/responses/BadRequest"}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "404": {$ref: "#/components/responses/NotFound"}
-        "409": {description: Workspace is unavailable because its owner instance or remote Runner cannot currently be reached}
-        "410": {description: Workspace is no longer available}
-  /api/runs/{runId}/workspace/diff:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs]
-      operationId: getRunWorkspaceDiff
-      summary: Read the working-tree diff against HEAD
-      parameters:
-        - name: path
-          in: query
-          schema: {type: string}
-      responses:
-        "200":
-          description: Git diff plus base and working-tree content for a file, capped at 1 MiB
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [diff, truncated]
-                properties:
-                  diff: {type: string}
-                  original: {type: string, description: File content at HEAD when path is provided}
-                  modified: {type: string, description: Current workspace content when path is provided}
-                  truncated: {type: boolean}
-        "400": {$ref: "#/components/responses/BadRequest"}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "404": {$ref: "#/components/responses/NotFound"}
-        "409": {description: Workspace is unavailable because its owner instance or remote Runner cannot currently be reached}
-        "410": {description: Workspace is no longer available}
-  /api/runs/{runId}/workspace/search:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs]
-      operationId: searchRunWorkspace
-      summary: Search text content in safe, bounded workspace files
-      parameters:
-        - name: q
-          in: query
-          required: true
-          schema: {type: string, minLength: 2}
-      responses:
-        "200":
-          description: Up to 100 matching lines from at most 20 MiB of text files
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [results, truncated]
-                properties:
-                  results:
-                    type: array
-                    items: {$ref: "#/components/schemas/WorkspaceSearchResult"}
-                  truncated: {type: boolean}
-        "400": {$ref: "#/components/responses/BadRequest"}
-        "401": {$ref: "#/components/responses/Unauthorized"}
-        "404": {$ref: "#/components/responses/NotFound"}
-        "409": {description: Workspace is unavailable because its owner instance or remote Runner cannot currently be reached}
-        "410": {description: Workspace is no longer available}
-  /api/runs/{runId}/stream:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs]
-      operationId: streamRun
-      parameters:
-        - $ref: "#/components/parameters/After"
-        - name: logsAfter
-          in: query
-          schema:
-            type: integer
-            format: int64
-      responses:
-        "200":
-          description: SSE run updates with run, telemetryDelta, and logDelta payloads
-          content:
-            text/event-stream:
-              schema:
-                type: string
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "500":
-          $ref: "#/components/responses/ServerError"
-  /api/runs/{runId}/artifacts/{artifactId}:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-      - $ref: "#/components/parameters/ArtifactId"
-    get:
-      tags: [Runs]
-      operationId: getRunArtifact
-      responses:
-        "200":
-          description: Artifact content using its stored media type
-          content:
-            text/plain:
-              schema:
-                type: string
-            text/markdown:
-              schema:
-                type: string
-            application/json:
-              schema: {}
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/runs/{runId}/approve:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    post:
-      tags: [Runs]
-      operationId: approveRunNode
-      requestBody:
-        $ref: "#/components/requestBodies/NodeAction"
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/runs/{runId}/pass:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    post:
-      tags: [Runs]
-      operationId: passFailedRunNode
-      summary: Pass a failed script node
-      description: Marks a failed script or command node as succeeded and continues downstream without re-executing it. Agent nodes must use retry with optional human context instead.
-      requestBody:
-        $ref: "#/components/requestBodies/NodeAction"
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/runs/{runId}/reject:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    post:
-      tags: [Runs]
-      operationId: rejectRunNode
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [nodeId, reason]
-              properties:
-                nodeId:
-                  type: string
-                targetId:
-                  type: string
-                reason:
-                  type: string
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/runs/{runId}/retry:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    post:
-      tags: [Runs]
-      operationId: retryRunNode
-      description: With Prefer respond-async, a reclaimed workspace returns 202 workspaceRestore while restoring. Poll GET /api/runs/{runId}/workspace/restore, then repeat the decision when ready. Only 200 confirms the retry started.
-      parameters:
-        - in: header
-          name: Prefer
-          schema:
-            type: string
-            example: respond-async
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [nodeId]
-              properties:
-                nodeId:
-                  type: string
-                reason:
-                  type: string
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "202":
-          description: Workspace restoration accepted (Prefer respond-async); poll restore status before repeating the decision
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/runs/{runId}/decline-retry:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    post:
-      tags: [Runs]
-      operationId: declineRunRetry
-      requestBody:
-        $ref: "#/components/requestBodies/NodeAction"
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/runs/{runId}/cancel:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    post:
-      tags: [Runs]
-      operationId: cancelRun
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/runs/{runId}/pause:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    post:
-      tags: [Runs]
-      operationId: pauseRun
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/runs/{runId}/resume:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    post:
-      tags: [Runs]
-      operationId: resumePausedRun
-      description: Prefer respond-async separates background workspace restoration from resuming execution, using the same polling flow as retry.
-      parameters:
-        - in: header
-          name: Prefer
-          schema:
-            type: string
-            example: respond-async
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                context:
-                  type: string
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "202":
-          description: Workspace restoration accepted; poll restore status before resuming
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/runs/{runId}/refresh-sop:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    post:
-      tags: [Runs]
-      operationId: refreshPausedRunSOP
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/runs/{runId}/eval:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs]
-      operationId: getRunEval
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-    post:
-      tags: [Runs]
-      operationId: startRunEval
-      description: Evaluates a finished run using the requesting account's personal CLI credentials.
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                model:
-                  type: string
-      responses:
-        "202":
-          $ref: "#/components/responses/Ok"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/runs/{runId}/evals:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs]
-      operationId: listRunEvals
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/runs/{runId}/eval/stream:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    get:
-      tags: [Runs]
-      operationId: streamRunEval
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/runs/{runId}/eval/apply:
-    parameters:
-      - $ref: "#/components/parameters/RunId"
-    post:
-      tags: [Runs]
-      operationId: applyRunEval
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                evalId:
-                  type: string
-                recommendationIds:
-                  type: array
-                  items:
-                    type: string
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/notification-bots:
-    get:
-      summary: List configured project notification Bots and bound chats
-      operationId: listNotificationBots
-      parameters:
-        - name: projectId
-          in: query
-          required: true
-          schema: {type: string}
-      responses:
-        "200":
-          description: Public Bot records, without credentials
-          content:
-            application/json:
-              schema: {type: array, items: {type: object}}
-        "403":
-          description: Project membership required
-    post:
-      summary: Create a notification Bot (WeCom, Feishu or DingTalk)
-      description: |
-        `channel` is `wecom` (default for clients that omit it), `feishu` or
-        `dingtalk`. New Bots default to `writeApproval=readonly`; Feishu and
-        DingTalk accept only `readonly`. Feishu and DingTalk credentials are
-        verified before anything is stored. DingTalk requires `tenantKey`
-        (the enterprise CorpId): the first private message from that
-        enterprise locks it, another enterprise moves the Bot to
-        `tenantState=conflict`. Secrets are sealed with
-        AGENTFLOW_CREDENTIAL_KEYS.
-      operationId: createNotificationBot
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/NotificationBotInput"}
-      responses:
-        "200":
-          description: Stored Bot, without credentials
-        "400":
-          description: Invalid input, `credential_invalid`, `tenant_required` or `immutable_field`
-        "409":
-          description: "`receive_slot_taken` (application already receives in another configuration) or `channel_not_ready`"
-        "503":
-          description: "`credential_key_missing` or `bot_maintenance`"
-  /api/notification-bots/{id}:
+          description: The resource does not exist
+  /api/users/{id}/credentials:
     put:
-      summary: Update a notification Bot
-      description: |
-        Channel, project and (for Feishu) the App ID are immutable. Send the
-        `configVersion` read from the Bot; a concurrent change returns
-        `409 config_changed`.
-      operationId: updateNotificationBot
-      parameters:
-        - {name: id, in: path, required: true, schema: {type: string}}
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/NotificationBotInput"}
-      responses:
-        "200":
-          description: Stored Bot
-        "400":
-          description: Invalid input or `immutable_field`
-        "409":
-          description: "`config_changed`, `receive_slot_taken` or `channel_not_ready`"
-        "503":
-          description: "`credential_key_missing` or `bot_maintenance`"
-    delete:
-      summary: Delete a notification Bot
-      description: |
-        Cancels unsent work, moves in-flight sends to `reply_unknown` /
-        `send_unknown`, and revokes the configuration's chat bindings.
-      operationId: deleteNotificationBot
-      parameters:
-        - {name: id, in: path, required: true, schema: {type: string}}
-      responses:
-        "200":
-          description: Deleted
-        "503":
-          description: "`bot_maintenance`"
-  /api/notification-bots/{id}/interactions:
-    get:
-      summary: Inspect Bot connection and recent chat interactions
-      operationId: inspectBotInteractions
+      tags: [Users]
+      operationId: updateOwnCredentials
+      summary: Update model credentials for the current authenticated user
+      description: Git access tokens are managed through /api/users/{id}/git-http-credentials.
       parameters:
         - name: id
           in: path
           required: true
-          schema: {type: string}
-      responses:
-        "200":
-          description: Connection status, recent conversations and messages; credentials excluded. Messages whose text was removed by the retention cleanup carry `bodyPurgedAt` and empty `content`/`reply`; they cannot be sent again. DingTalk messages carry `pushResendAvailable`.
-        "403":
-          description: Bot management permission required
-  /api/notification-bots/{id}/tenant:
-    get:
-      summary: Read the enterprise confirmation state of a Feishu Bot
-      description: |
-        Returns `tenantState` (`awaiting_confirmation`, `locked`, `conflict`),
-        the candidate observed on the first trusted event, `configVersion`,
-        and the platform's enterprise query (`queried`) or `queryError`.
-      operationId: getNotificationBotTenant
-      parameters:
-        - {name: id, in: path, required: true, schema: {type: string}}
-      responses:
-        "200":
-          description: Confirmation state
-        "409":
-          description: "`channel_not_ready` (WeCom has no enterprise confirmation)"
-  /api/notification-bots/{id}/tenant/confirm:
-    post:
-      summary: Lock the candidate enterprise scope, or restart discovery
-      operationId: confirmNotificationBotTenant
-      parameters:
-        - {name: id, in: path, required: true, schema: {type: string}}
+          schema: {type: integer, format: int64}
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [configVersion]
               properties:
-                tenantKey: {type: string}
-                configVersion: {type: integer}
-                rediscover: {type: boolean}
+                assistantDefaults:
+                  $ref: "#/components/schemas/AssistantDefaults"
+                codeBuddyApiKey: {type: string, writeOnly: true}
+                codeBuddyApiKeyClear: {type: boolean}
+                codeBuddyBaseUrl: {type: string, description: "HTTP(S) CodeBuddy gateway base URL. Omitted preserves the value; empty uses the official endpoint for the selected edition."}
+                codeBuddyInternetEnvironment: {type: string, description: "Edition that issued the CodeBuddy key: empty for International, \"internal\" for China, \"ioa\" for iOA (\"public\" and \"China\" are also accepted). Any other value is rejected with 400."}
+                codexApiKey: {type: string, writeOnly: true, description: "Blank preserves the stored key."}
+                codexApiKeyClear: {type: boolean}
+                codexBaseUrl: {type: string, description: "HTTP(S) Responses API base URL. Omitted preserves the value; empty uses the official endpoint."}
+                claudeCodeApiKey: {type: string, writeOnly: true, description: "Blank preserves the stored key."}
+                claudeCodeApiKeyClear: {type: boolean}
+                claudeCodeBaseUrl: {type: string, description: "HTTP(S) Anthropic-compatible service URL. Omitted preserves the value; empty uses the official endpoint."}
       responses:
         "200":
-          description: Stored Bot with `tenantState=locked` (or `awaiting_confirmation` after rediscover)
+          description: Redacted saved user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
         "403":
-          description: Same-origin browser request and Bot management permission required
-        "409":
-          description: "`config_changed` or `tenant_candidate_mismatch`"
-  /api/bot-interactions/pending:
+          $ref: "#/components/responses/Unauthorized"
+  /api/users/{id}/git-http-credentials:
     get:
-      summary: List a project's chat replies awaiting manual review
-      description: Includes records of deleted Bots for project managers.
-      operationId: listPendingBotInteractions
-      parameters:
-        - {name: projectId, in: query, required: true, schema: {type: string}}
+      tags: [Personal]
+      operationId: get_api_users_id_git_http_credentials
+      summary: "GET /api/users/{id}/git-http-credentials"
       responses:
         "200":
-          description: Interactions in `reply_unknown` or `reply_failed`
-        "403":
-          description: Bot creator or project maintainer required
-  /api/bot-interactions/{interactionId}/confirm:
-    post:
-      summary: Mark a reply_unknown reply as received
-      operationId: confirmBotInteraction
-      parameters:
-        - {name: interactionId, in: path, required: true, schema: {type: string}}
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/BotManualAction"}
-      responses:
-        "200":
-          description: Interaction now `replied` with `receiptSource=manual`; a repeated actionKey returns the same result
-        "409":
-          description: "`state_conflict`"
-  /api/bot-interactions/{interactionId}/resend:
-    post:
-      summary: Send a saved reply again as a new delivery generation
-      description: Accepts `reply_unknown` or `reply_failed`; the recipient may receive a duplicate.
-      operationId: resendBotInteraction
-      parameters:
-        - {name: interactionId, in: path, required: true, schema: {type: string}}
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/BotManualAction"}
-      responses:
-        "200":
-          description: Interaction back in `ready` with `deliveryGeneration` + 1; a repeated actionKey returns the same generation
-        "409":
-          description: "`bot_deleted`, `route_expired` or `state_conflict`"
-  /api/bot-interactions/{interactionId}/push-resend:
-    post:
-      summary: Send an expired DingTalk reply as a proactive private message
-      description: Accepts `reply_failed` with `terminalReason=route_expired` on a DingTalk Bot. The original sender must still be bound to the same platform user, keep project permission and have passed a trial proactive send. The saved reply is sent again as a new generation with a new key.
-      operationId: pushResendBotInteraction
-      parameters:
-        - {name: interactionId, in: path, required: true, schema: {type: string}}
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/BotManualAction"}
-      responses:
-        "200":
-          description: Interaction back in `ready` with `sendRoute=push` and `deliveryGeneration` + 1; a repeated actionKey returns the same result
-        "409":
-          description: "`push_target_unverified`, `bot_deleted` or `state_conflict`"
-  /api/notification-bots/{id}/targets/verify:
-    post:
-      summary: Send a trial proactive message to a bound member (Feishu, DingTalk)
-      description: Records `targetVerifiedAt` on the member's binding when the platform confirms delivery. Does not change the notification recipient.
-      operationId: verifyBotPushTarget
-      parameters:
-        - {name: id, in: path, required: true, schema: {type: string}}
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [targetId]
-              properties:
-                targetId: {type: string, description: Sender ID of the bound member (Feishu open_id, DingTalk staffId)}
-      responses:
-        "200":
-          description: Verified target
-        "409":
-          description: "`push_target_unverified` or `push_target_unavailable`"
-        "502":
-          description: "`push_trial_failed`; `outcome` is `rejected`, `not_delivered` or `unknown`"
-  /api/notification-bots/{id}/sessions:
-    get:
-      summary: List selectable notification targets
-      description: WeCom lists chats from wecom-cli. Feishu and DingTalk list members bound in a private chat with this Bot (after the enterprise is confirmed); `verifiedAt` marks a successful trial send.
-      operationId: listNotificationBotSessions
-      parameters:
-        - {name: id, in: path, required: true, schema: {type: string}}
-      responses:
-        "200":
-          description: "`{sessions, total}`"
-        "409":
-          description: "`push_target_unavailable` (enterprise not confirmed)"
-  /api/notification-bots/{id}/test:
-    post:
-      summary: Send a test notification to the saved target
-      description: For Feishu and DingTalk this repeats the trial send and refreshes the target verification.
-      operationId: testNotificationBot
-      parameters:
-        - {name: id, in: path, required: true, schema: {type: string}}
-      responses:
-        "200":
-          description: Test sent
-        "409":
-          description: "`push_target_unavailable`"
-        "502":
-          description: "`push_trial_failed`"
-  /api/notification-deliveries:
-    get:
-      summary: List notification deliveries of a project
-      description: Content is never returned. `contentSource=purged` marks deliveries whose rendered text was removed by the retention cleanup; they cannot be retried.
-      operationId: listNotificationDeliveries
-      parameters:
-        - {name: projectId, in: query, required: true, schema: {type: string}}
-      responses:
-        "200":
-          description: Deliveries, newest first
-  /api/notification-deliveries/{deliveryId}/retry:
-    post:
-      summary: Send a failed, unauthorized, unavailable-target or send_unknown delivery again
-      description: Starts a new delivery generation with a new send key. Deliveries with invalid or purged content are refused.
-      operationId: retryNotificationDelivery
-      parameters:
-        - {name: deliveryId, in: path, required: true, schema: {type: string}}
-        - {name: projectId, in: query, required: true, schema: {type: string}}
-      responses:
-        "200":
-          description: Delivery back in `pending`
-        "409":
-          description: The delivery cannot be retried
-  /api/notification-deliveries/{deliveryId}/confirm:
-    post:
-      summary: Mark a send_unknown notification as received
-      operationId: confirmNotificationDelivery
-      parameters:
-        - {name: deliveryId, in: path, required: true, schema: {type: string}}
-        - {name: projectId, in: query, required: true, schema: {type: string}}
-      responses:
-        "200":
-          description: "`{\"ok\": true}`; delivery now `sent` with `receiptSource=manual`"
-        "409":
-          description: Only `send_unknown` deliveries can be confirmed
-  /api/bot-bindings:
-    get:
-      summary: List the logged-in user's chat identity bindings (WeCom, Feishu)
-      operationId: listBotUserBindings
-      responses:
-        "200":
-          description: Bindings belonging to the interactive browser user
-        "401":
-          description: Interactive browser login required
-  /api/bot-bindings/{id}:
-    delete:
-      summary: Revoke the logged-in user's chat identity binding
-      operationId: revokeBotUserBinding
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: {type: string}
-      responses:
-        "204":
-          description: Revoked; outstanding challenges invalidated
-        "401":
-          description: Interactive browser login required
-        "403":
-          description: Same-origin browser request required
+          description: OK
+        "400":
+          description: The request is malformed
         "404":
-          description: Binding does not belong to the current user
-  /api/bot-bindings/claim:
-    post:
-      summary: Nominate the logged-in account; the original chat sender must confirm
-      operationId: claimBotUserBinding
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [token]
-              properties:
-                token: {type: string, minLength: 64, maxLength: 64}
-      responses:
-        "200":
-          description: Login name, status, browser-only confirmation command, and channel, Bot, project and masked sender of the link
-        "400":
-          description: Expired, invalid or already claimed challenge
-        "401":
-          description: Interactive browser login required; Bearer tokens rejected
-        "403":
-          description: Same-origin browser request required
-  /api/bot-bindings/status:
-    post:
-      summary: Read identity challenge status without logging its token in the URL
-      operationId: botUserBindingStatus
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [token]
-              properties:
-                token: {type: string, minLength: 64, maxLength: 64}
-      responses:
-        "200":
-          description: Current challenge status and login name; no confirmation code
-        "400":
-          description: Expired, invalid or claimed by another account
-        "401":
-          description: Interactive browser login required
-  /api/notification-preview:
-    post:
-      summary: Preview a notification using sample context without sending or calling AI
-      operationId: previewNotification
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [projectId, binding]
-              properties:
-                projectId: {type: string}
-                binding: {$ref: "#/components/schemas/NotificationBinding"}
-                sourceType: {type: string, enum: [run, schedule_job, assistant_task]}
-      responses:
-        "200":
-          description: Preview content and its source
-        "400":
-          description: Invalid template
-  /api/schedule-jobs:
-    get:
-      tags: [Scheduling]
-      operationId: listScheduleJobs
-      responses:
-        "200":
-          $ref: "#/components/responses/ScheduleJobList"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-    post:
-      tags: [Scheduling]
-      operationId: createScheduleJob
-      requestBody:
-        $ref: "#/components/requestBodies/ScheduleJob"
-      responses:
-        "200":
-          $ref: "#/components/responses/ScheduleJob"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: The resource does not exist
     put:
-      tags: [Scheduling]
-      operationId: upsertScheduleJob
-      requestBody:
-        $ref: "#/components/requestBodies/ScheduleJob"
+      tags: [Personal]
+      operationId: put_api_users_id_git_http_credentials
+      summary: "PUT /api/users/{id}/git-http-credentials"
       responses:
         "200":
-          $ref: "#/components/responses/ScheduleJob"
+          description: OK
         "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-  /api/schedule-jobs/{jobId}:
-    parameters:
-      - $ref: "#/components/parameters/JobId"
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/users/{id}/git-http-credentials/{credID}:
     delete:
-      tags: [Scheduling]
-      operationId: deleteScheduleJob
+      tags: [Personal]
+      operationId: delete_api_users_id_git_http_credentials_credID
+      summary: "DELETE /api/users/{id}/git-http-credentials/{credID}"
       responses:
         "200":
-          $ref: "#/components/responses/Ok"
+          description: OK
         "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: The request is malformed
         "404":
-          $ref: "#/components/responses/NotFound"
-  /api/schedule-jobs/{jobId}/run:
-    parameters:
-      - $ref: "#/components/parameters/JobId"
+          description: The resource does not exist
+  /api/users/{id}/git-http-credentials/{credID}/verify:
     post:
-      tags: [Scheduling]
-      operationId: runScheduleJob
-      description: |
-        Starts the job on the server and returns 202 with lastStatus=running.
-        Closing the client does not cancel the run. Poll GET /api/schedule-jobs
-        until lastStatus is success, failed, or waiting.
+      tags: [Personal]
+      operationId: post_api_users_id_git_http_credentials_credID_verify
+      summary: "POST /api/users/{id}/git-http-credentials/{credID}/verify"
       responses:
-        "202":
-          $ref: "#/components/responses/ScheduleJob"
+        "200":
+          description: OK
         "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: The request is malformed
         "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /api/schedule-jobs/{jobId}/enabled:
-    parameters:
-      - $ref: "#/components/parameters/JobId"
-    post:
-      tags: [Scheduling]
-      operationId: setScheduleJobEnabled
-      description: |
-        Starts or stops the job's schedule. Only `enabled` changes: the prompt,
-        key binding (runAsUserId) and session mode stay as saved, and a run in
-        progress finishes either way. Requires write access to the job's project.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [enabled]
-              properties:
-                enabled: { type: boolean }
+          description: The resource does not exist
+  /api/users/{id}/git-ssh-keys:
+    get:
+      tags: [Personal]
+      operationId: get_api_users_id_git_ssh_keys
+      summary: "GET /api/users/{id}/git-ssh-keys"
       responses:
         "200":
-          $ref: "#/components/responses/ScheduleJob"
+          description: OK
         "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
+          description: The request is malformed
         "404":
-          $ref: "#/components/responses/NotFound"
-  /api/schedule-job-executions:
-    get:
-      tags: [Scheduling]
-      operationId: listScheduleJobExecutions
-      description: |
-        Execution history of the schedule jobs the caller may read, newest first.
-      parameters:
-        - { name: projectId, in: query, schema: { type: string } }
-        - { name: jobId, in: query, schema: { type: string } }
-        - { name: status, in: query, schema: { type: string, enum: [running, success, failed, waiting] } }
-        - { name: traceId, in: query, schema: { type: string } }
-        - { name: limit, in: query, schema: { type: integer, default: 100, maximum: 500 } }
+          description: The resource does not exist
+    put:
+      tags: [Personal]
+      operationId: put_api_users_id_git_ssh_keys
+      summary: "PUT /api/users/{id}/git-ssh-keys"
       responses:
         "200":
-          description: Executions
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ScheduleJobExecution"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          description: jobId belongs to a project the caller cannot read
-  /api/schedule-job-executions/dashboard:
-    get:
-      tags: [Scheduling]
-      operationId: scheduleJobExecutionDashboard
-      description: |
-        One page of a project's execution dashboard, filtered, counted and paged on the server.
-        `total` counts the executions matching the filters. `overview` follows the job filter
-        only and compares the last 7×24 hours (the current hour included) with the 7×24 hours
-        before, counted by the hour an execution started. Finished executions come from hourly
-        statistics kept 30 days, independent of the 200 executions a job keeps; running ones
-        are counted from the history. `records` and `recentFailed` cover the whole project.
-      parameters:
-        - { name: projectId, in: query, required: true, schema: { type: string } }
-        - { name: jobId, in: query, schema: { type: string } }
-        - { name: status, in: query, schema: { type: string, enum: [running, success, failed, waiting] } }
-        - { name: since, in: query, description: Only executions started at or after this time, schema: { type: string, format: date-time } }
-        - { name: q, in: query, description: Case-insensitive search in job name and ID, trace ID, error, AI reply and dispatched runs, schema: { type: string } }
-        - { name: offset, in: query, schema: { type: integer, default: 0 } }
-        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 100 } }
-      responses:
-        "200":
-          description: Dashboard page
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/ScheduleJobExecution"
-                  total:
-                    type: integer
-                  overview:
-                    type: object
-                    properties:
-                      current:
-                        $ref: "#/components/schemas/ScheduleExecutionWindow"
-                      previous:
-                        $ref: "#/components/schemas/ScheduleExecutionWindow"
-                      since:
-                        type: string
-                        format: date-time
-                  records:
-                    type: integer
-                    description: Executions kept for the project
-                  recentFailed:
-                    type: integer
-                    description: Failed executions of the project in the current window
+          description: OK
         "400":
-          description: projectId missing or since is not RFC 3339
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          description: jobId belongs to a project the caller cannot read
-  /api/shared-schedule-tasks:
-    get:
-      tags: [Scheduling]
-      operationId: listSharedScheduleTasks
-      summary: List latest published shared AI task versions
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/users/{id}/git-ssh-keys/{keyID}:
+    delete:
+      tags: [Personal]
+      operationId: delete_api_users_id_git_ssh_keys_keyID
+      summary: "DELETE /api/users/{id}/git-ssh-keys/{keyID}"
       responses:
         "200":
-          description: Latest immutable definition for each shared task, without credentials or project notifications
-          content:
-            application/json:
-              schema: {type: array, items: {$ref: "#/components/schemas/SharedScheduleVersion"}}
-  /api/shared-schedule-tasks/{id}/versions:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+  /api/users/{id}/git-token/verify:
     get:
-      tags: [Scheduling]
-      operationId: listSharedScheduleVersions
-      summary: List immutable versions in descending order
+      tags: [Personal]
+      operationId: get_api_users_id_git_token_verify
+      summary: "GET /api/users/{id}/git-token/verify"
       responses:
         "200":
-          description: Published versions, retained while subscriptions can reference them
-          content:
-            application/json:
-              schema: {type: array, items: {$ref: "#/components/schemas/SharedScheduleVersion"}}
-        "404": {$ref: "#/components/responses/NotFound"}
-  /api/schedule-jobs/{id}/publish:
-    parameters:
-      - {name: id, in: path, required: true, schema: {type: string}}
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
     post:
-      tags: [Scheduling]
-      operationId: publishSharedScheduleVersion
-      summary: Publish a credential-free version from an independent AI task
-      description: Requires source project write access. Trigger configs and subscriptions cannot be republished. Publishing never changes existing subscriptions.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [baseVersion]
-              properties:
-                name: {type: string, maxLength: 255}
-                description: {type: string, maxLength: 2000}
-                prompt: {type: string, description: 'Template with {{params.name}} placeholders; defaults to source task prompt'}
-                parameters: {type: array, maxItems: 20, items: {$ref: "#/components/schemas/ScheduleParameter"}}
-                changeNote: {type: string, maxLength: 1000}
-                baseVersion: {type: integer, minimum: 0, description: '0 for first publication, otherwise the latest published version'}
+      tags: [Personal]
+      operationId: post_api_users_id_git_token_verify
+      summary: "POST /api/users/{id}/git-token/verify"
       responses:
-        "201":
-          description: Newly published immutable version
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/SharedScheduleVersion"}
-        "400": {$ref: "#/components/responses/BadRequest"}
-        "403": {$ref: "#/components/responses/Forbidden"}
-        "404": {$ref: "#/components/responses/NotFound"}
-        "409": {$ref: "#/components/responses/Conflict"}
+        "200":
+          description: OK
+        "400":
+          description: The request is malformed
+        "404":
+          description: The resource does not exist
+
 components:
   securitySchemes:
     bearerAuth:

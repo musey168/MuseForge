@@ -91,7 +91,8 @@ func TestMCPServerStdioAndToolErrors(t *testing.T) {
 			t.Fatalf("output missing %q: %s", want, out.String())
 		}
 	}
-	if len(resourceTemplates()) != 2 || toolError("x", 400)["isError"] != true {
+	// The personal build runs nothing, so it publishes no resources.
+	if len(resourceTemplates()) != 0 || toolError("x", 400)["isError"] != true {
 		t.Fatal("resource/tool helpers")
 	}
 	if resultAsTool(InvokeResult{Status: http.StatusNoContent})["isError"] != false {
@@ -99,29 +100,18 @@ func TestMCPServerStdioAndToolErrors(t *testing.T) {
 	}
 }
 
-func TestMCPServerResourceVariants(t *testing.T) {
+func TestMCPServerRefusesEveryResource(t *testing.T) {
 	s := New(LocalInvoker{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "bad") {
-			http.Error(w, "no", http.StatusNotFound)
-			return
-		}
 		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 		_, _ = w.Write([]byte("content"))
 	})})
-	for _, uri := range []string{
-		"agentflow://runs/run-1/logs",
-		"agentflow://runs/run-1/artifacts/art-1",
-	} {
-		raw := []byte(`{"uri":"` + uri + `"}`)
-		result, err := s.readResource(context.Background(), raw)
-		if err != nil || result["contents"] == nil {
-			t.Fatalf("%s = %#v, %v", uri, result, err)
-		}
-	}
+	// No route serves a run, so no resource URI resolves: the mount publishes
+	// none, and reading one is refused rather than answered with a 404 body.
 	for _, raw := range [][]byte{
 		[]byte(`{`),
+		[]byte(`{"uri":"agentflow://runs/run-1/logs"}`),
+		[]byte(`{"uri":"agentflow://runs/run-1/artifacts/art-1"}`),
 		[]byte(`{"uri":"agentflow://runs/run-1/unknown"}`),
-		[]byte(`{"uri":"agentflow://runs/bad/logs"}`),
 	} {
 		if _, err := s.readResource(context.Background(), raw); err == nil {
 			t.Fatalf("resource accepted: %s", raw)

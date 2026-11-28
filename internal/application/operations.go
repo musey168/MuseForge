@@ -1,6 +1,6 @@
 package application
 
-// Operation is a user-facing AgentFlow capability exposed through both HTTP
+// Operation is a user-facing MuseForge capability exposed through both HTTP
 // and MCP. Path parameters use the {name} form and are supplied separately
 // from query parameters and JSON bodies.
 type Operation struct {
@@ -11,99 +11,56 @@ type Operation struct {
 	ReadOnly    bool   `json:"readOnly"`
 }
 
-// PublicOperations is the canonical MCP capability manifest. Internal worker
-// signals, OTLP ingestion, leases, and sandbox maintenance are intentionally
-// excluded.
+// PublicOperations is the canonical MCP capability manifest: the routes the
+// personal build serves. Internal signals — OTLP ingestion, runner control
+// sockets, image bytes — are intentionally excluded.
+//
+// Every operation here must name a route the platform registers; a test in
+// internal/httpapi pins that.
 func PublicOperations() []Operation {
 	return []Operation{
-		{Name: "health_get", Description: "Check LoopForge service health", Method: "GET", Path: "/api/health", ReadOnly: true},
-		{Name: "capabilities_get", Description: "List public API and MCP operations", Method: "GET", Path: "/api/capabilities", ReadOnly: true},
-		{Name: "openapi_get", Description: "Read the LoopForge OpenAPI 3.1 contract", Method: "GET", Path: "/api/openapi.yaml", ReadOnly: true},
-		{Name: "bootstrap_get", Description: "Get the Studio bootstrap catalog", Method: "GET", Path: "/api/bootstrap", ReadOnly: true},
-		{Name: "projects_list", Description: "List projects with secrets redacted", Method: "GET", Path: "/api/projects", ReadOnly: true},
-		{Name: "projects_save", Description: "Create or update a project. A new project saved without workflowId is bound to generic-backend-delivery (the generic backend delivery LOOP); pass workflowId to choose generic-product-delivery, generic-frontend-delivery or another LOOP.", Method: "PUT", Path: "/api/projects"},
+		{Name: "health_get", Description: "Check the MuseForge service health", Method: "GET", Path: "/api/health", ReadOnly: true},
+		{Name: "capabilities_get", Description: "List the public API and MCP operations", Method: "GET", Path: "/api/capabilities", ReadOnly: true},
+		{Name: "openapi_get", Description: "Read the MuseForge OpenAPI 3.1 contract", Method: "GET", Path: "/api/openapi.yaml", ReadOnly: true},
+		{Name: "bootstrap_get", Description: "Get the console bootstrap: the account, the projects and the repositories", Method: "GET", Path: "/api/bootstrap", ReadOnly: true},
+		{Name: "account_save", Description: "Record the platform's single account. The personal build has no sign-in: the console calls this once, and an existing account is returned unchanged.", Method: "POST", Path: "/api/account"},
+
+		{Name: "projects_list", Description: "List the projects with secrets redacted", Method: "GET", Path: "/api/projects", ReadOnly: true},
+		{Name: "projects_save", Description: "Create or update a project: its name, identifier, key, colour, owner and default repository.", Method: "PUT", Path: "/api/projects"},
 		{Name: "projects_get", Description: "Get one project with secrets redacted", Method: "GET", Path: "/api/projects/{id}", ReadOnly: true},
-		{Name: "projects_delete", Description: "Delete a project (owner or platform admin). It is archived: hidden from lists, requirements/runs/settings kept, id stays taken, restorable with projects_restore. Fails while it has unfinished runs or enabled schedule jobs.", Method: "DELETE", Path: "/api/projects/{id}"},
-		{Name: "projects_restore", Description: "Restore a deleted project (owner or platform admin)", Method: "POST", Path: "/api/projects/{id}/restore"},
-		{Name: "repositories_list", Description: "List repositories with secrets redacted", Method: "GET", Path: "/api/repositories", ReadOnly: true},
-		{Name: "repositories_save", Description: "Create or update a GitHub repository. Pass projectId and a GitHub web/SSH/clone repoUrl; name and repository identity are derived automatically. integrateBranch is optional; empty skips LOOP merge-conflict checks.", Method: "PUT", Path: "/api/repositories"},
+		{Name: "projects_delete", Description: "Delete a project. It is archived: hidden from lists, its requirements and settings kept, its identifier still taken, restorable with projects_restore.", Method: "DELETE", Path: "/api/projects/{id}"},
+		{Name: "projects_restore", Description: "Restore a deleted project", Method: "POST", Path: "/api/projects/{id}/restore"},
+		{Name: "project_credentials_list", Description: "List a project's credentials with the secrets redacted", Method: "GET", Path: "/api/projects/{id}/credentials", ReadOnly: true},
+		{Name: "project_credentials_save", Description: "Create a project credential. The value is sealed at rest and never returned.", Method: "POST", Path: "/api/projects/{id}/credentials"},
+
+		{Name: "repositories_list", Description: "List the repositories with secrets redacted", Method: "GET", Path: "/api/repositories", ReadOnly: true},
+		{Name: "repositories_save", Description: "Create or update a repository. Pass projectId and a GitHub or GitLab web, SSH or clone address; the name and the repository identity are derived from it. A GitLab project key has the form gitlab:<host>/<group>/<repo>.", Method: "PUT", Path: "/api/repositories"},
 		{Name: "repositories_delete", Description: "Delete a repository", Method: "DELETE", Path: "/api/repositories"},
 		{Name: "repositories_get", Description: "Get one repository with secrets redacted", Method: "GET", Path: "/api/repositories/{id}", ReadOnly: true},
-		{Name: "issues_list", Description: "List issues and requirements. Query: projectId, status, source, q, limit, offset. Omit limit to get Issue[]; with limit returns {items,total,offset,limit,hasMore} (max 200).", Method: "GET", Path: "/api/issues", ReadOnly: true},
-		{Name: "issues_save", Description: "Create or update an issue or requirement", Method: "PUT", Path: "/api/issues"},
-		{Name: "issues_get", Description: "Get one issue and its comments", Method: "GET", Path: "/api/issues/{id}", ReadOnly: true},
-		{Name: "issues_delete", Description: "Delete a local issue. Query force=true also deletes settled execution history, including successful runs, and is required for issues with history or a completed status. Active work blocks deletion.", Method: "DELETE", Path: "/api/issues/{id}"},
-		{Name: "issues_comments_add", Description: "Add a comment to an issue", Method: "POST", Path: "/api/issues/{id}/comments"},
-		{Name: "issues_runs_list", Description: "List runs belonging to an issue", Method: "GET", Path: "/api/issues/{id}/runs", ReadOnly: true},
-		{Name: "issues_clarification_save", Description: "Save an existing work-item clarification and write it back to its external source", Method: "POST", Path: "/api/issues/{id}/clarification"},
-		{Name: "issues_reopen", Description: "Reopen a delivered issue", Method: "POST", Path: "/api/issues/{id}/reopen"},
-		{Name: "issues_dispatch", Description: "Dispatch or rerun the issue's LOOP", Method: "POST", Path: "/api/issues/{id}/dispatch"},
-		{Name: "tasks_list", Description: "List execution tasks", Method: "GET", Path: "/api/tasks", ReadOnly: true},
-		{Name: "tasks_get", Description: "Get one execution task", Method: "GET", Path: "/api/tasks/{id}", ReadOnly: true},
-		{Name: "agents_list", Description: "List Agent definitions", Method: "GET", Path: "/api/agents", ReadOnly: true},
-		{Name: "agents_save", Description: "Create or update an Agent definition", Method: "PUT", Path: "/api/agents"},
-		{Name: "agents_get", Description: "Get one Agent definition", Method: "GET", Path: "/api/agents/{id}", ReadOnly: true},
-		{Name: "agents_revisions_list", Description: "List Agent definition revisions", Method: "GET", Path: "/api/agents/{id}/revisions", ReadOnly: true},
-		{Name: "agents_revision_get", Description: "Get one Agent definition revision", Method: "GET", Path: "/api/agents/{id}/revisions/{revisionId}", ReadOnly: true},
-		{Name: "agents_revision_restore", Description: "Restore an Agent definition revision", Method: "POST", Path: "/api/agents/{id}/revisions/{revisionId}/restore"},
-		{Name: "agents_delete", Description: "Delete an Agent definition that is not shared and not referenced by any workflow", Method: "DELETE", Path: "/api/agents/{id}"},
-		{Name: "rules_list", Description: "List Rule assets", Method: "GET", Path: "/api/rules", ReadOnly: true},
-		{Name: "rules_save", Description: "Create or update a Rule asset", Method: "PUT", Path: "/api/rules"},
-		{Name: "rules_delete", Description: "Delete a Rule that is not shared and not referenced by any agent", Method: "DELETE", Path: "/api/rules"},
-		{Name: "skills_list", Description: "List Skill assets", Method: "GET", Path: "/api/skills", ReadOnly: true},
-		{Name: "skills_save", Description: "Create or update a Skill asset", Method: "PUT", Path: "/api/skills"},
-		{Name: "skills_delete", Description: "Delete a Skill that is not shared and not referenced by any agent", Method: "DELETE", Path: "/api/skills"},
-		{Name: "mcp_servers_list", Description: "List managed external MCP server assets", Method: "GET", Path: "/api/mcp-servers", ReadOnly: true},
-		{Name: "knowledge_connectors_list", Description: "List the current user's personal knowledge connectors (Obsidian, Notion, SiYuan, Feishu, WeKnora, MCP) with secrets redacted", Method: "GET", Path: "/api/knowledge/connectors", ReadOnly: true},
-		{Name: "mcp_servers_save", Description: "Create or update an external MCP server asset", Method: "PUT", Path: "/api/mcp-servers"},
-		{Name: "mcp_servers_import", Description: "Import external MCP server definitions from JSON", Method: "POST", Path: "/api/mcp-servers/import"},
-		{Name: "executors_list", Description: "List executor definitions", Method: "GET", Path: "/api/executors", ReadOnly: true},
-		{Name: "executor_models_list", Description: "List the selectable model IDs, default model and reasoning-effort levels of each built-in CLI. Use a listed id as an Agent's model.", Method: "GET", Path: "/api/executor-models", ReadOnly: true},
-		{Name: "sandboxes_list", Description: "List sandbox profiles with their Dockerfile (docker) or environment variables (native)", Method: "GET", Path: "/api/sandboxes", ReadOnly: true},
-		{Name: "sandboxes_save", Description: "Create or update a sandbox profile. A docker sandbox carries dockerfile {content, files}; a native sandbox carries only environment variables", Method: "PUT", Path: "/api/sandboxes"},
-		{Name: "sandboxes_delete", Description: "Delete a sandbox profile that is not shared and not referenced by any workflow", Method: "DELETE", Path: "/api/sandboxes"},
-		{Name: "workflows_list", Description: "List LOOP workflow definitions. Query: projectId (that project's LOOPs plus generic templates), q (match id/name/description). Always pass projectId when a project is known.", Method: "GET", Path: "/api/workflows", ReadOnly: true},
-		{Name: "workflows_save", Description: "Create or update a LOOP workflow", Method: "PUT", Path: "/api/workflows"},
-		{Name: "workflows_get", Description: "Get one LOOP workflow", Method: "GET", Path: "/api/workflows/{id}", ReadOnly: true},
-		{Name: "workflows_delete", Description: "Delete an unused LOOP workflow", Method: "DELETE", Path: "/api/workflows/{id}"},
-		{Name: "workflows_revisions_list", Description: "List LOOP workflow revisions", Method: "GET", Path: "/api/workflows/{id}/revisions", ReadOnly: true},
-		{Name: "workflows_revision_get", Description: "Get one LOOP workflow revision", Method: "GET", Path: "/api/workflows/{id}/revisions/{revisionId}", ReadOnly: true},
-		{Name: "workflows_revision_restore", Description: "Restore a LOOP workflow revision", Method: "POST", Path: "/api/workflows/{id}/revisions/{revisionId}/restore"},
-		{Name: "workflows_publish", Description: "Publish a LOOP workflow version", Method: "POST", Path: "/api/workflows/{id}/publish"},
-		{Name: "workflows_clone", Description: "Clone a LOOP workflow", Method: "POST", Path: "/api/workflows/{id}/clone"},
-		{Name: "workflow_metrics_get", Description: "Get LOOP workflow operating metrics", Method: "GET", Path: "/api/workflow-metrics", ReadOnly: true},
+
+		{Name: "issues_list", Description: "List the requirements. Query: projectId, status, source, tag, q, limit, offset. Omit limit to get Issue[]; with limit returns {items,total,offset,limit,hasMore} (max 200).", Method: "GET", Path: "/api/issues", ReadOnly: true},
+		{Name: "issues_save", Description: "Create or update a requirement: its title, description, status, priority, project, tags and the repository and issue it links to.", Method: "PUT", Path: "/api/issues"},
+		{Name: "issues_get", Description: "Get one requirement with its comments", Method: "GET", Path: "/api/issues/{id}", ReadOnly: true},
+		{Name: "issues_delete", Description: "Delete a requirement and its comments. Nothing runs in the personal build, so no requirement has history to keep.", Method: "DELETE", Path: "/api/issues/{id}"},
+		{Name: "issues_comments_add", Description: "Add a comment to a requirement", Method: "POST", Path: "/api/issues/{id}/comments"},
+		{Name: "issues_close", Description: "Close a requirement", Method: "POST", Path: "/api/issues/{id}/close"},
+		{Name: "issues_reopen", Description: "Reopen a closed requirement", Method: "POST", Path: "/api/issues/{id}/reopen"},
+
+		{Name: "runners_list", Description: "List the registered machines: their operating system, their CLIs, each CLI's version and login mode, and when each was last seen.", Method: "GET", Path: "/api/runners", ReadOnly: true},
+		{Name: "runner_models_probe", Description: "Probe the models a machine's CLI can reach", Method: "POST", Path: "/api/runners/{id}/models/probe"},
+		{Name: "runner_maintenance_get", Description: "Read a machine's CLI maintenance state", Method: "GET", Path: "/api/runners/{id}/maintenance", ReadOnly: true},
+		{Name: "runner_maintenance_apply", Description: "Update or roll back a machine's CLI", Method: "POST", Path: "/api/runners/{id}/maintenance"},
+
 		{Name: "usage_get", Description: "Get the omp usage console: the tokens, cost, cache hits, trend and reported executions of the work reported from outside the platform", Method: "GET", Path: "/api/usage", ReadOnly: true},
-		{Name: "observability_spec_get", Description: "Get the LoopForge observability contract", Method: "GET", Path: "/api/observability/spec", ReadOnly: true},
-		{Name: "runs_list", Description: "List lightweight Run summaries", Method: "GET", Path: "/api/runs", ReadOnly: true},
-		{Name: "runs_control_get", Description: "Read the run mode (sop or workspace), waiting reason, allowed control actions and delivery acceptance. Node execution progress is separate from test results and user acceptance. Read this before changing a run's state.", Method: "GET", Path: "/api/runs/{id}/control", ReadOnly: true},
-		{Name: "runs_start", Description: "Start a LOOP Run", Method: "POST", Path: "/api/runs"},
-		{Name: "runs_get", Description: "Get one Run", Method: "GET", Path: "/api/runs/{id}", ReadOnly: true},
-		{Name: "runs_wait", Description: "Wait for the LOOP with path.id to succeed, fail, be cancelled, or need human action (waiting/paused). One call waits up to 25 seconds. If timedOut is true, the LOOP is still active or queued; keep waiting on the same run ID if needed.", Method: "GET", Path: "/api/runs/{id}/wait", ReadOnly: true},
-		{Name: "runs_delete", Description: "Delete a finished Run", Method: "DELETE", Path: "/api/runs/{id}"},
-		{Name: "runs_eval_start", Description: "Manually start an LLM quality evaluation of a finished LOOP run. Body: {model}. Uses the current user's credentials for the selected CLI. Use a CLI-prefixed model ID, or omit model to use a configured CLI default.", Method: "POST", Path: "/api/runs/{id}/eval"},
-		{Name: "runs_eval_get", Description: "Get the latest LOOP run evaluation", Method: "GET", Path: "/api/runs/{id}/eval", ReadOnly: true},
-		{Name: "runs_eval_apply", Description: "Apply selected evaluation recommendations to the current LOOP or agent after user confirmation. Body: {evalId, recommendationIds}", Method: "POST", Path: "/api/runs/{id}/eval/apply"},
-		{Name: "runs_telemetry_list", Description: "Page through Run telemetry", Method: "GET", Path: "/api/runs/{id}/telemetry", ReadOnly: true},
-		{Name: "runs_logs_list", Description: "Page through Run worker logs", Method: "GET", Path: "/api/runs/{id}/logs", ReadOnly: true},
-		{Name: "runs_logs_download", Description: "Download complete Run worker logs", Method: "GET", Path: "/api/runs/{id}/logs.txt", ReadOnly: true},
-		{Name: "runs_artifact_get", Description: "Read an immutable Run artifact", Method: "GET", Path: "/api/runs/{id}/artifacts/{artifactId}", ReadOnly: true},
-		{Name: "runs_approve", Description: "Approve a waiting Run", Method: "POST", Path: "/api/runs/{id}/approve"},
-		{Name: "runs_pass", Description: "Manually pass a failed script node and continue downstream", Method: "POST", Path: "/api/runs/{id}/pass"},
-		{Name: "runs_reject", Description: "Reject a waiting Run back to a node", Method: "POST", Path: "/api/runs/{id}/reject"},
-		{Name: "runs_retry", Description: "Retry a failed or cancelled Run", Method: "POST", Path: "/api/runs/{id}/retry"},
-		{Name: "runs_decline_retry", Description: "Decline a requested Run retry", Method: "POST", Path: "/api/runs/{id}/decline-retry"},
-		{Name: "runs_cancel", Description: "Cancel an active Run", Method: "POST", Path: "/api/runs/{id}/cancel"},
-		{Name: "runs_pause", Description: "Pause an active Run at its current node", Method: "POST", Path: "/api/runs/{id}/pause"},
-		{Name: "runs_resume", Description: "Resume a paused Run with optional human context", Method: "POST", Path: "/api/runs/{id}/resume"},
-		{Name: "runs_refresh_sop", Description: "Update a stopped Run to the latest LOOP definition", Method: "POST", Path: "/api/runs/{id}/refresh-sop"},
-		{Name: "notification_bots_list", Description: "List configured project notification Bots and bound chat names/types. Requires projectId. Bot ID here is a platform reference; credentials are never returned.", Method: "GET", Path: "/api/notification-bots", ReadOnly: true},
-		{Name: "shared_schedule_tasks_list", Description: "List latest immutable shared AI task definitions", Method: "GET", Path: "/api/shared-schedule-tasks", ReadOnly: true},
-		{Name: "shared_schedule_versions_list", Description: "List published versions for a shared AI task", Method: "GET", Path: "/api/shared-schedule-tasks/{id}/versions", ReadOnly: true},
-		{Name: "schedule_jobs_publish", Description: "Publish a credential-free shared AI task version from an independent task. baseVersion is required for optimistic concurrency.", Method: "POST", Path: "/api/schedule-jobs/{id}/publish"},
-		{Name: "schedule_jobs_list", Description: "List scheduled LOOP jobs", Method: "GET", Path: "/api/schedule-jobs", ReadOnly: true},
-		{Name: "schedule_job_executions_list", Description: "List schedule job executions newest first: status, error, durationMs, AI reply summary and the runs[] (issueId, runId) each execution dispatched. Look up a Trace ID copied from the schedule execution panel or a scheduler log line (trace=...) with query.traceId; filter by jobId or status (running/success/failed/waiting). Follow runs[].runId with runs_get.", Method: "GET", Path: "/api/schedule-job-executions", ReadOnly: true},
-		{Name: "schedule_jobs_save", Description: "Create or update a scheduled job. Two exclusive kinds: trigger jobs (skipDispatch=false, require workflowId) scan issues in issueStatuses (backlog/todo/in_progress/in_review/blocked; default backlog+todo), run baseline guard, and dispatch LOOP with optional maxDispatch (1-10 successful issue dispatches per execution; omitted or 0 defaults to 10). AI jobs (skipDispatch=true, require assistantPrompt or sharedTaskId+sharedTaskVersion+parameterValues) run a prompt using the executor and model selected by assistantModel (for example codex:<model>). Omit assistantModel to use the execution account's default. Set timeoutMinutes (1-240; omitted or 0 defaults to 30). Timing is intervalSec or 5-field cron (Asia/Shanghai). Optional notifications bind up to 3 configured project Bots (botId, events succeeded/failed, template, contentMode template/ai, aiInstruction). Use notification_bots_list to select an existing Bot. AI content reuses this task output; {{task.name}}, {{result}} and {{ai.summary}} are supported.", Method: "PUT", Path: "/api/schedule-jobs"},
-		{Name: "schedule_jobs_delete", Description: "Delete a scheduled LOOP job", Method: "DELETE", Path: "/api/schedule-jobs/{id}"},
-		{Name: "schedule_jobs_run", Description: "Start a scheduled job on the server and return immediately (lastStatus=running). Closing the client does not cancel it; poll schedule_jobs_list until lastStatus leaves running.", Method: "POST", Path: "/api/schedule-jobs/{id}/run"},
+		{Name: "usage_sources_list", Description: "List the reporting sources of a project. A source's token is shown once, when it is created.", Method: "GET", Path: "/api/insights/v1/sources", ReadOnly: true},
+		{Name: "usage_source_create", Description: "Create a reporting source for a project and return its token once", Method: "POST", Path: "/api/insights/v1/sources"},
+		{Name: "usage_source_revoke", Description: "Revoke a reporting source", Method: "DELETE", Path: "/api/insights/v1/sources/{id}"},
+
+		{Name: "tracker_import_get", Description: "Read the tracker import's last run and its outcome", Method: "GET", Path: "/api/tracker/import", ReadOnly: true},
+		{Name: "tracker_import_run", Description: "Import the open issues of every bound GitHub or GitLab repository. One repository whose credential fails is recorded with its reason; the others still import.", Method: "POST", Path: "/api/tracker/import"},
+
+		{Name: "model_catalog_get", Description: "Get the personal model catalogue: the CLIs the account may run with and the models each offers", Method: "GET", Path: "/api/model-catalog", ReadOnly: true},
+		{Name: "executor_models_list", Description: "List the selectable model IDs, the default model and the reasoning-effort levels of each built-in CLI", Method: "GET", Path: "/api/executor-models", ReadOnly: true},
+		{Name: "observability_spec_get", Description: "Get the MuseForge observability contract", Method: "GET", Path: "/api/observability/spec", ReadOnly: true},
 	}
 }

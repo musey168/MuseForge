@@ -29,8 +29,11 @@ func TestPublicOperationsAreUniqueAndExcludeInternalControlPlane(t *testing.T) {
 			}
 		}
 	}
-	if len(seen) < 70 {
-		t.Fatalf("public operation count = %d, want at least 70", len(seen))
+	// The personal build serves the requirement list, the projects, the
+	// credentials, the machine inventory, the usage console, the tracker
+	// import and the model catalogue.
+	if len(seen) < 30 {
+		t.Fatalf("public operation count = %d, want at least 30", len(seen))
 	}
 }
 
@@ -68,21 +71,21 @@ func TestStreamableHTTPInitializeListAndCall(t *testing.T) {
 
 func TestToolCallRendersPathQueryAndBody(t *testing.T) {
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/api/issues/issue-1/dispatch" || r.URL.Query().Get("dryRun") != "true" {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/issues/issue-1/comments" || r.URL.Query().Get("notify") != "true" {
 			t.Fatalf("unexpected request %s %s", r.Method, r.URL.String())
 		}
 		var body map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatal(err)
 		}
-		if body["rerun"] != true {
+		if body["body"] != "a note" {
 			t.Fatalf("unexpected body: %+v", body)
 		}
 		w.WriteHeader(http.StatusCreated)
-		io.WriteString(w, `{"id":"task-1"}`)
+		io.WriteString(w, `{"ok":true}`)
 	})
 	server := New(LocalInvoker{Handler: api})
-	params := json.RawMessage(`{"name":"issues_dispatch","arguments":{"path":{"id":"issue-1"},"query":{"dryRun":"true"},"body":{"rerun":true}}}`)
+	params := json.RawMessage(`{"name":"issues_comments_add","arguments":{"path":{"id":"issue-1"},"query":{"notify":"true"},"body":{"body":"a note"}}}`)
 	result, err := server.callTool(context.Background(), params)
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +100,7 @@ func TestToolCallReturnsStructuredAPIError(t *testing.T) {
 		w.WriteHeader(http.StatusConflict)
 		io.WriteString(w, `{"error":"run is not waiting"}`)
 	})
-	result, err := New(LocalInvoker{Handler: api}).callTool(context.Background(), json.RawMessage(`{"name":"runs_approve","arguments":{"path":{"id":"run-1"},"body":{"nodeId":"develop"}}}`))
+	result, err := New(LocalInvoker{Handler: api}).callTool(context.Background(), json.RawMessage(`{"name":"issues_close","arguments":{"path":{"id":"issue-1"},"body":{"source":"manual"}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,32 +113,20 @@ func TestToolCallReturnsStructuredAPIError(t *testing.T) {
 	}
 }
 
-func TestResourceReadsArtifactAndLogs(t *testing.T) {
-	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/runs/run-1/artifacts/art-1":
-			w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
-			io.WriteString(w, "# report")
-		case "/api/runs/run-1/logs.txt":
-			w.Header().Set("Content-Type", "text/plain")
-			io.WriteString(w, "worker log")
-		default:
-			http.NotFound(w, r)
-		}
-	})
-	server := New(LocalInvoker{Handler: api})
-	for uri, want := range map[string]string{
-		"agentflow://runs/run-1/artifacts/art-1": "# report",
-		"agentflow://runs/run-1/logs":            "worker log",
+// The personal build publishes no resources: every one it had pointed at a
+// run, and nothing runs. Reading one is refused rather than answered with the
+// 404 body of a route that no longer exists.
+func TestResourceReadsAreRefused(t *testing.T) {
+	server := New(LocalInvoker{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("a resource read must not reach the API: %s", r.URL.Path)
+	})})
+	for _, uri := range []string{
+		"agentflow://runs/run-1/artifacts/art-1",
+		"agentflow://runs/run-1/logs",
 	} {
 		raw, _ := json.Marshal(map[string]string{"uri": uri})
-		result, err := server.readResource(context.Background(), raw)
-		if err != nil {
-			t.Fatal(err)
-		}
-		encoded, _ := json.Marshal(result)
-		if !bytes.Contains(encoded, []byte(want)) {
-			t.Fatalf("%s result = %s", uri, encoded)
+		if _, err := server.readResource(context.Background(), raw); err == nil {
+			t.Fatalf("%s was answered", uri)
 		}
 	}
 }

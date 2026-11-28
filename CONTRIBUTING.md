@@ -1,40 +1,35 @@
 # Contributing
 
-LoopForge has a platform at the repository root and a complementary local workflow edition in `local/`. Read the applicable `AGENTS.md` before changing either.
+MuseForge is a personal project board: a Go platform at the repository root and a separate local workflow edition in `local/`. Read the applicable `AGENTS.md` before changing either.
 
-For platform changes, preserve upstream engine, repository and handler boundaries. Keep identity, provider and deployment adaptations explicit. Add a regression test for a behavioral fix and document schema or runner-protocol compatibility changes.
+For platform changes, keep the repository and handler boundaries `AGENTS.md` describes. Keep identity, provider and deployment adaptations explicit. Add a regression test for a behavioural fix and document any schema or runner-protocol change.
 
-The platform binary embeds the chatbot frontend from `web/native-chat`, so build it (Node 22+) before the Go checks; this also runs the chatbot tests.
+The platform serves a console embedded from `web/`; it is not built separately. The checks:
 
 ```bash
-bash scripts/build-chatbot.sh
-go test -p=2 ./... -count=1 -timeout=180s
+go build ./...
 go vet ./...
+go test ./internal/... ./cmd/... ./web/ -count=1 -timeout=900s
+npm --prefix webtest ci --no-audit --no-fund && npm --prefix webtest test
 python3 scripts/check-public.py
 bash scripts/scan-secrets.sh
 ```
 
-Community contributions do not require private source manifests or hash updates. Maintainers keep source synchronization records locally, separate from the public CI checks. See [the maintenance policy](docs/upstream-sync.md).
+The live end-to-end suite under `e2e/` runs against a platform you start: `cd e2e && ./local.sh api` builds the current checkout, starts it on a temporary SQLite file with no sign-in, and runs the API scenarios. State passed, failed, skipped and not-run checks accurately.
 
-Run the [public browser acceptance suite](e2e/public/README.md) for authentication, preferences or execution changes. Paid model and external knowledge tests require explicit operator configuration; state passed, failed, skipped and not-run checks accurately.
+Platform pull requests run the `core` job, which is the gate above. A repository administrator marks it as a required status check in GitHub branch protection; this repository does not change that setting.
 
-Platform pull requests run the `core`, `browser`, and `first-run` jobs. The stable check `platform-required` fails unless all three succeed. A repository administrator has to mark `platform-required` as a required status check in GitHub branch protection. This repository does not change that GitHub setting.
+For the local workflow edition, work inside `local/` and follow [local agent instructions](local/AGENTS.md). Identify whether a change affects Classic, Portable or shared behaviour contracts. Keep these workflow assets independent from the platform and each other. Change Portable assets in `local/skills/`; rebuild generated Classic Cursor/Claude bundles with `python3 scripts/build-classic-hosts.py --write` from `local/`. Keep workflow templates generic; optional tools under `local/tools/` are distributed separately.
 
-For LoopForge Local, work inside `local/` and follow [local agent instructions](local/AGENTS.md). Identify whether a change affects Classic, Portable or shared behavior contracts. Keep these workflow assets independent from the platform and each other. Change Portable assets in `local/skills/`; rebuild generated Classic Cursor/Claude bundles with `python3 scripts/build-classic-hosts.py --write` from `local/`. Keep workflow templates generic; optional tools under `local/tools/` are distributed separately.
-
-Run local checks from `local/`:
+Run the local checks from `local/`:
 
 ```bash
 python3 scripts/build-classic-hosts.py --check
 bash scripts/validate.sh
 bash scripts/smoke-install.sh
-bash scripts/smoke-npm.sh
-bash scripts/smoke-curl-install.sh
 bash scripts/e2e.sh
-bash scripts/test-observability.sh
-bash scripts/scan-secrets.sh
 ```
 
-The [local E2E suite](local/tests/e2e/README.md) uses a fake host and recorded outputs, without model credentials. Describe the impact on each affected edition. Preserve existing permission behavior and user-file protection. Commit messages should follow Conventional Commits.
+The [local E2E suite](local/tests/e2e/README.md) uses a fake host and recorded outputs, without model credentials. Describe the impact on each affected edition. Preserve existing permission behaviour and user-file protection. Commit messages follow Conventional Commits.
 
-Public pull requests must not contain credentials, private infrastructure, employee access defaults or production datasets. Preserve existing user files. Keep source attribution and third-party licenses. Describe the problem, resulting behavior and the validation actually performed in the PR.
+Public pull requests must not contain credentials, private infrastructure, employee access defaults or production datasets. Preserve existing user files. Keep source attribution and third-party licences. Describe the problem, the resulting behaviour and the validation actually performed in the PR.

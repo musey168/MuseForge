@@ -8,11 +8,11 @@ import (
 
 func TestContractOperationMatchesRenamedPathParameter(t *testing.T) {
 	ToolInputSchema(application.Operation{}) // load the contract
-	route, method := contractOperation(application.Operation{Method: "GET", Path: "/api/issues/{id}/runs"})
+	route, method := contractOperation(application.Operation{Method: "GET", Path: "/api/issues/{id}"})
 	if route == nil || method == nil {
 		t.Fatalf("documented route not found: route=%v method=%v", route != nil, method != nil)
 	}
-	if got := method["operationId"]; got != "listIssueRuns" {
+	if got := method["operationId"]; got != "getIssue" {
 		t.Fatalf("operationId = %v", got)
 	}
 	route, method = contractOperation(application.Operation{Method: "GET", Path: "/api/no-such-route/{id}"})
@@ -52,8 +52,8 @@ func TestQueryParameterSchemaWithoutContract(t *testing.T) {
 
 func TestContractOperationIgnoresPathParameterNames(t *testing.T) {
 	ToolInputSchema(application.Operation{}) // load the contract
-	// The contract documents /api/issues/{issueId}; manifests may use {id}.
-	route, method := contractOperation(application.Operation{Method: "GET", Path: "/api/issues/{id}"})
+	// The contract may spell a path parameter differently from the manifest.
+	route, method := contractOperation(application.Operation{Method: "GET", Path: "/api/issues/{issueId}"})
 	if route == nil || method == nil {
 		t.Fatalf("renamed path parameter not matched: route=%v method=%v", route != nil, method != nil)
 	}
@@ -89,7 +89,7 @@ func TestQueryParameterSchemaResolvesContractRefs(t *testing.T) {
 		t.Fatalf("required = %#v", required)
 	}
 	// Path parameters referenced at the route level must not leak into query.
-	route, method = contractOperation(application.Operation{Method: "GET", Path: "/api/issues/{id}/runs"})
+	route, method = contractOperation(application.Operation{Method: "GET", Path: "/api/tracker/import"})
 	fields, required = queryParameterSchema(route, method)
 	if len(fields) != 0 || len(required) != 0 {
 		t.Fatalf("path parameter leaked into query: fields=%v required=%v", fields, required)

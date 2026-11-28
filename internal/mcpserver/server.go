@@ -408,13 +408,14 @@ func toolError(message string, status int) map[string]any {
 	return map[string]any{"content": []map[string]any{{"type": "text", "text": string(raw)}}, "structuredContent": data, "isError": true}
 }
 
+// The personal build runs nothing, so it publishes no run resources: a
+// resource URI would point at a route that does not exist.
 func resourceTemplates() []map[string]any {
-	return []map[string]any{
-		{"uriTemplate": "agentflow://runs/{runId}/artifacts/{artifactId}", "name": "Run artifact", "description": "Immutable artifact captured from a Run", "mimeType": "text/markdown"},
-		{"uriTemplate": "agentflow://runs/{runId}/logs", "name": "Run worker logs", "description": "Complete worker log export for a Run", "mimeType": "text/plain"},
-	}
+	return []map[string]any{}
 }
 
+// readResource answers nothing: the personal build publishes no resources,
+// because every resource it ever had pointed at a run.
 func (s *Server) readResource(ctx context.Context, raw json.RawMessage) (map[string]any, error) {
 	var params struct {
 		URI string `json:"uri"`
@@ -422,36 +423,7 @@ func (s *Server) readResource(ctx context.Context, raw json.RawMessage) (map[str
 	if err := json.Unmarshal(raw, &params); err != nil {
 		return nil, err
 	}
-	parsed, err := url.Parse(params.URI)
-	if err != nil || parsed.Scheme != "agentflow" || parsed.Host != "runs" {
-		return nil, errors.New("unsupported resource URI")
-	}
-	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
-	var op application.Operation
-	input := ToolInput{Path: map[string]string{}}
-	switch {
-	case len(parts) == 2 && parts[1] == "logs":
-		op = s.operations["runs_logs_download"]
-		input.Path["id"] = parts[0]
-	case len(parts) == 3 && parts[1] == "artifacts":
-		op = s.operations["runs_artifact_get"]
-		input.Path["id"] = parts[0]
-		input.Path["artifactId"] = parts[2]
-	default:
-		return nil, errors.New("unsupported resource URI")
-	}
-	result, err := s.invoker.Invoke(ctx, op, input)
-	if err != nil {
-		return nil, err
-	}
-	if result.Status < 200 || result.Status >= 300 {
-		return nil, fmt.Errorf("LoopForge API returned %d: %s", result.Status, strings.TrimSpace(string(result.Body)))
-	}
-	mime := strings.TrimSpace(strings.Split(result.ContentType, ";")[0])
-	if mime == "" {
-		mime = "text/plain"
-	}
-	return map[string]any{"contents": []map[string]any{{"uri": params.URI, "mimeType": mime, "text": string(result.Body)}}}, nil
+	return nil, errors.New("unsupported resource URI: the personal build publishes no resources")
 }
 
 func buildPath(pathTemplate string, input ToolInput) (string, error) {

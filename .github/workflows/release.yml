@@ -74,7 +74,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       # arm64 lets Apple silicon and arm servers pull the image; only the final
-      # stage runs under emulation, the Go and chatbot builds cross-compile.
+      # stage runs under emulation, the Go build cross-compiles.
       - uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
