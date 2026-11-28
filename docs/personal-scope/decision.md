@@ -275,19 +275,25 @@ RepositoryProviderHTTP  = "http"   // 只走 git 传输，无托管平台 API
 （`internal/tracker/github.go:260`）。GitLab 的 Issues API
 （`GET /projects/:id/issues`）与 GitHub 形状不同，是新工作量。
 
-**定案**：仓库连接（GitHub + GitLab）**全部保留，零新代码**。
-需求导入**只做 GitHub**（上游现成）。GitLab 需求同步不写 ——
-它不在「去掉团队功能」的范围内，属于新功能。
-如果以后要，按 GitLab Issues API 新写即可，不影响本次裁剪。
+**定案（裁剪当时）**：仓库连接（GitHub + GitLab）**全部保留，零新代码**；
+需求导入只做 GitHub（上游现成）。
+
+**后来变了**：ticket #15 把 GitLab 需求导入做了出来 —— 它复用同一条导入路径
+（一个 `IssueProvider` 接口、一次凭据查询、一条本地写入路径），GitLab 用
+`GET /projects/:id/issues` + `PRIVATE-TOKEN`，状态映射到本地词表，类型映射到
+`requirement` / `issue`。仓库绑定因此也要接受 `gitlab:<host>/<group>/<repo>` 这个
+项目键。这是本记录里唯一一处「裁剪之后新增、而非删除」的能力。
 
 ### Q-B. 标签：上游没有这个字段
 
 `internal/domain/issue.go` 的 `Issue` 结构体全字段里没有 tag/label。
 「优先级」有（`priority`），「备注」有（`issue_comments` 表的评论）。
 
-**定案**：需求字段按上游已有结构保留 ——
-标题、描述、状态、优先级、项目归属、备注（评论）。
-**不新建标签字段** —— 那是新功能，不属于裁剪。
+**定案（裁剪当时）**：需求字段按上游已有结构保留 ——
+标题、描述、状态、优先级、项目归属、备注（评论）；不新建标签字段。
+
+**后来变了**：ticket #10 加了 `tags`（需求上的字符串列表，按项目、状态、标签筛选）。
+它和 GitLab 导入一样是「裁剪之后新增」的能力，本记录保留当时的判断作为历史。
 
 ### Q-C. MCP API：保留
 

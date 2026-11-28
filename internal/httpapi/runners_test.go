@@ -7,6 +7,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+
+	"agentflow/internal/repo"
+	"agentflow/internal/tracker"
 )
 
 // requestWithHeaders issues a JSON request with extra headers (runner session
@@ -65,4 +68,40 @@ func TestIsRunnerAgentPath(t *testing.T) {
 		}
 	}
 	_ = os.Environ
+}
+
+// A machine that registers with the server's bootstrap token belongs to the
+// platform's one account, so the console lists it. Registering it ownerless
+// would hide it from the only person who can see anything.
+func TestBootstrapRegisteredMachineBelongsToTheAccount(t *testing.T) {
+	s, err := repo.OpenTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	h := New(s, tracker.NewService(), "", "")
+	requestJSON[map[string]any](t, h, http.MethodPost, "/api/account", map[string]any{}, http.StatusOK)
+	t.Setenv("AGENTFLOW_RUNNER_BOOTSTRAP_TOKEN", "boot-test")
+
+	registered := requestWithHeaders(t, h, http.MethodPost, "/api/runners/register", map[string]any{
+		"name": "my machine", "os": "darwin", "arch": "arm64", "runnerVersion": "0.13.2",
+	}, map[string]string{"X-Bootstrap-Token": "boot-test"})
+	if registered.Code != http.StatusOK {
+		t.Fatalf("register = %d %s", registered.Code, registered.Body.String())
+	}
+
+	list := requestWithHeaders(t, h, http.MethodGet, "/api/runners", nil, nil)
+	var machines []map[string]any
+	if err := json.Unmarshal(list.Body.Bytes(), &machines); err != nil {
+		t.Fatal(err)
+	}
+	if len(machines) != 1 {
+		t.Fatalf("the machine list = %d machines, want the registered one", len(machines))
+	}
+	if machines[0]["name"] != "my machine" {
+		t.Fatalf("machine = %+v", machines[0])
+	}
+	if owner, _ := machines[0]["ownerUserId"].(float64); owner != 1 {
+		t.Fatalf("the machine must belong to the account: %+v", machines[0])
+	}
 }

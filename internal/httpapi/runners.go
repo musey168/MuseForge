@@ -359,6 +359,11 @@ func (h *runnersHandlers) resolveRunnerRegistrant(r *http.Request) (ownerUserID 
 		return userID, true
 	}
 	if bootstrap := runnerBootstrapToken(); bootstrap != "" && constantTimeEqual(provided, bootstrap) {
+		// The personal build has one account. A machine that registers with the
+		// server's bootstrap token belongs to it, so the console lists it.
+		if account, found := h.repo.Account(); found {
+			return account.ID, true
+		}
 		return 0, true
 	}
 	if user, userOK := h.requestUser(r); userOK && user.ID > 0 {

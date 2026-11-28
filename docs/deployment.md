@@ -34,7 +34,7 @@ personal build needs it.
 | setting | meaning |
 |---|---|
 | `-datasource` / `AGENTFLOW_DATASOURCE_DSN` | `file:/path/to/museforge.db`, a bare path, or a MySQL DSN. The platform tells the three forms apart. |
-| `-addr` / `AGENTFLOW_HTTP_PORT` | the listen address. **Loopback only.** A non-loopback bind is refused at startup — the platform is unauthenticated, so a public interface would expose your requirements, credentials and cost data. |
+| `-addr` / `AGENTFLOW_HTTP_PORT` | the listen address. **Loopback only.** A non-loopback bind is refused at startup — the platform is unauthenticated, so a public interface would expose your requirements, credentials and cost data. The one exception is a container deployment, which sets `AGENTFLOW_CONTAINER_BIND=1`: inside the container's own network namespace the wildcard reaches only the container, and the published port on the host's loopback interface is the exposure boundary. A host deployment never sets it. |
 | `AGENTFLOW_SESSION_SECRET` | required. |
 | `AGENTFLOW_AUTH_REQUIRED` | `false` for the personal build. There is no login. |
 | `AGENTFLOW_CREDENTIAL_KEYS` | optional; without it the platform stores credentials unencrypted and reports `credential_key_missing` when a new secret is saved. |

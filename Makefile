@@ -1,4 +1,4 @@
-.PHONY: run test test-mysql clean-mysql build coverage coverage-go coverage-web coverage-e2e test-omp-extension
+.PHONY: run test test-mysql clean-mysql build coverage coverage-go coverage-web e2e test-omp-extension
 
 GOCACHE ?= /tmp/agentflow-gocache
 # Use the local toolchain; go.mod requires go >= 1.26.11.
@@ -27,10 +27,10 @@ coverage-web:
 	[ -d webtest/node_modules/c8 ] || npm --prefix webtest ci --include=dev --no-audit --no-fund
 	npm --prefix webtest run coverage
 
-# coverage-e2e runs e2e/local.sh all against a throwaway platform and reports
-# route coverage plus web/ unit+browser coverage. Not part of CI.
-coverage-e2e:
-	bash e2e/coverage/report.sh
+# e2e runs the live verification: it builds this checkout, starts it on a
+# temporary SQLite file, and checks every surface end to end.
+e2e:
+	bash e2e/verify-personal.sh
 
 # test-mysql runs the gorm integration tests against a throwaway local MySQL
 # container. It never touches any externally configured database: the DSN is

@@ -1,17 +1,10 @@
 {
-  "name": "agentflow-live-e2e",
+  "name": "museforge-live-e2e",
   "private": true,
   "type": "module",
-  "description": "Live end-to-end suite that exercises a real AgentFlow deployment (default: the test environment). See README.md.",
+  "description": "Live verification of the MuseForge personal build: the platform end to end, and the pure helpers. See README.md.",
   "scripts": {
-    "test": "bash ./run.sh",
-    "test:unit": "node --test --test-reporter=spec 'unit/*.test.mjs'",
-    "test:layout": "bash ./run.sh layout",
-    "test:api": "node --test --test-concurrency=1 --test-reporter=spec 'api/*.test.mjs'",
-    "test:ui": "playwright test",
-    "cleanup": "node ./cleanup.mjs"
-  },
-  "devDependencies": {
-    "@playwright/test": "1.64.1"
+    "test": "bash ./verify-personal.sh",
+    "test:unit": "node --test --test-reporter=spec 'unit/*.test.mjs'"
   }
 }
