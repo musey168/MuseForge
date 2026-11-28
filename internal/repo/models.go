@@ -476,27 +476,21 @@ type definitionRevisionRow struct {
 func (definitionRevisionRow) TableName() string { return "definition_revisions" }
 
 type runnerRow struct {
-	ID                     string     `gorm:"column:id;primaryKey;size:64"`
-	Name                   string     `gorm:"column:name;size:255"`
-	Status                 string     `gorm:"column:status;index:idx_runners_status;size:32"`
-	OS                     string     `gorm:"column:os;size:32"`
-	Arch                   string     `gorm:"column:arch;size:32"`
-	RunnerVersion          string     `gorm:"column:runner_version;size:64"`
-	NativeSandboxAvailable bool       `gorm:"column:native_sandbox_available"`
-	Labels                 []byte     `gorm:"column:labels;type:json"`
-	MaxConcurrency         int        `gorm:"column:max_concurrency"`
-	RunLimit               *int       `gorm:"column:run_limit"`
-	OwnerUserID            *int64     `gorm:"column:owner_user_id;index:idx_runners_owner"`
-	SharedProjectIDs       []byte     `gorm:"column:shared_project_ids;type:json"`
-	LoginModels            []byte     `gorm:"column:login_model_catalogs;type:json"`
-	SessionTokenHash       string     `gorm:"column:session_token_hash;index:idx_runners_session;size:64"`
-	SessionExpiresAt       *time.Time `gorm:"column:session_expires_at"`
-	Runtimes               []byte     `gorm:"column:runtimes;type:json"`
-	LastSeenAt             *time.Time `gorm:"column:last_seen_at"`
-	Created                *time.Time `gorm:"column:created_at"`
-	Updated                *time.Time `gorm:"column:updated_at"`
-
-	AllowPrivilegedSandbox bool `gorm:"column:allow_privileged_sandbox;default:false"`
+	ID               string     `gorm:"column:id;primaryKey;size:64"`
+	Name             string     `gorm:"column:name;size:255"`
+	Status           string     `gorm:"column:status;index:idx_runners_status;size:32"`
+	OS               string     `gorm:"column:os;size:32"`
+	Arch             string     `gorm:"column:arch;size:32"`
+	RunnerVersion    string     `gorm:"column:runner_version;size:64"`
+	Labels           []byte     `gorm:"column:labels;type:json"`
+	OwnerUserID      *int64     `gorm:"column:owner_user_id;index:idx_runners_owner"`
+	LoginModels      []byte     `gorm:"column:login_model_catalogs;type:json"`
+	SessionTokenHash string     `gorm:"column:session_token_hash;index:idx_runners_session;size:64"`
+	SessionExpiresAt *time.Time `gorm:"column:session_expires_at"`
+	Runtimes         []byte     `gorm:"column:runtimes;type:json"`
+	LastSeenAt       *time.Time `gorm:"column:last_seen_at"`
+	Created          *time.Time `gorm:"column:created_at"`
+	Updated          *time.Time `gorm:"column:updated_at"`
 }
 
 func (runnerRow) TableName() string { return "runners" }
@@ -544,17 +538,6 @@ type userProjectRunnerPrefRow struct {
 }
 
 func (userProjectRunnerPrefRow) TableName() string { return "user_project_runner_prefs" }
-
-type platformRunnerSettingsRow struct {
-	ID        int64      `gorm:"column:id;primaryKey;autoIncrement:false"`
-	RunLimit  int        `gorm:"column:run_limit;not null"`
-	UpdatedBy int64      `gorm:"column:updated_by;not null;default:0"`
-	Updated   *time.Time `gorm:"column:updated_at"`
-
-	AllowPrivilegedSandbox bool `gorm:"column:allow_privileged_sandbox;default:false"`
-}
-
-func (platformRunnerSettingsRow) TableName() string { return "platform_runner_settings" }
 
 type engineInstanceRow struct {
 	InstanceID    string    `gorm:"column:instance_id;primaryKey;size:255"`
@@ -711,7 +694,7 @@ func allModels() []any {
 		insightSourceRow{}, insightExecutionRow{},
 		projectRow{}, projectCredentialRow{}, repositoryRow{},
 		issueRow{}, issueCommentRow{}, issueImageRow{},
-		runnerRow{}, userRunnerPrefRow{}, userProjectRunnerPrefRow{}, platformRunnerSettingsRow{},
+		runnerRow{}, userRunnerPrefRow{}, userProjectRunnerPrefRow{},
 		trackerImportRunRow{},
 	}
 }

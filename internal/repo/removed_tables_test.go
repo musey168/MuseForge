@@ -64,6 +64,7 @@ var removedTables = []string{
 	"platform_git_https_hosts",
 	"platform_git_ssh_hosts",
 	"platform_settings",
+	"platform_runner_settings",
 	"preview_blobs",
 	"preview_sessions",
 	"project_join_requests",
