@@ -32,7 +32,8 @@ test('the requirement list renders the surviving columns and no dispatch control
   await settle(3);
   const head = app.document.querySelector('.issue-table-head').textContent;
   assert.match(head, /编号/);
-  assert.match(head, /当前环节/);
+  assert.match(head, /状态/);
+  assert.equal(head.includes('当前环节'), false);
   assert.equal(head.includes('关联 LOOP'), false);
   assert.equal(head.includes('进度'), false);
   assert.equal(app.document.querySelector('#dispatchIssue'), null);

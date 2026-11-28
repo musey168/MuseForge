@@ -1095,3 +1095,28 @@ Object.assign(window.LF_I18N_EN, {
   "在对话里澄清和改代码": "Clarify and change code in chat",
   "这条需求不使用 LOOP，在对话里澄清需求、直接改代码；定时任务不会自动认领它。": "This requirement uses no LOOP: clarify and change code in chat; scheduled jobs won't pick it up.",
 });
+
+// 个人版：没有 LOOP、没有交付，界面只说需求、状态和机器。
+Object.assign(window.LF_I18N_EN, {
+  "MuseForge · 个人项目工作台": "MuseForge · Personal project workbench",
+  "／ 个人项目工作台": "／ Personal project workbench",
+  "机器": "Machines",
+  "我的机器": "My machines",
+  "登记你自己的电脑或云主机，一台机器只属于你一个人。": "Register your own computer or cloud host; a machine belongs to one person.",
+  "你要做的事都在这里：写下需求、标注状态，做完就把它关掉。": "Everything you have to do is here: write it down, mark the status, close it when it is done.",
+  "导入需求": "Import requirements",
+  "按当前项目已绑定的 GitHub / GitLab 仓库导入需求，使用你在个人设置里配置的访问令牌。": "Import the requirements of the GitHub / GitLab repositories bound to this project, using the access token you saved in Personal settings.",
+  "从 GitHub 或 GitLab 导入，或在本平台新建需求。": "Import from GitHub or GitLab, or create the requirement here.",
+  "已阻塞": "Blocked",
+  "进行中": "In progress",
+  "最近完成": "Recently done",
+  "未完成": "Not finished",
+  "需求": "Requirements",
+  "没有阻塞的需求": "No blocked requirement",
+  "当前没有进行中的需求": "No requirement is in progress",
+  "还没有完成的需求": "No requirement is done yet",
+  "当前项目还没有绑定仓库，去「项目配置」添加。": "This project has no repository yet; add one in Project settings.",
+  "重新打开后，这条需求回到待处理状态。确定继续？": "Reopening puts this requirement back to do. Continue?",
+  "需求已重新打开": "The requirement is open again",
+  "尚未导入": "Not imported yet",
+});

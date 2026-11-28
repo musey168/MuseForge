@@ -33,10 +33,10 @@ function renderIssueDetailTab(){
   $('#issueDetailKey').textContent=issueKeyLabel(issue);
   $('#issueDetailTitle').textContent=issue.title||'';
   $('#issueDetailSubtitle').textContent=`${project?.name||'—'} · ${issuePriorityLabel(issue.priority)} · ${issueStatusText(issue)} · 更新于 ${new Date(issue.updatedAt).toLocaleString()}`;
-  const panes={overview:overviewPane(issue,data),operations:operationsPane(issue),delivery:deliveryPane(issue,data),activity:activityPane(issue,data)};
+  const panes={overview:overviewPane(issue,data),operations:operationsPane(issue),activity:activityPane(issue,data)};
   host.innerHTML=panes[state.issueDetailTab]||'<div class="detail-empty">暂无内容</div>';
   host.querySelectorAll('[data-edit-issue]').forEach(b=>b.onclick=()=>{closeIssueDrawer();openIssue(issue)});
-  host.querySelectorAll('[data-reopen-issue]').forEach(b=>b.onclick=()=>reopenDeliveredIssue(b.dataset.reopenIssue));
+  host.querySelectorAll('[data-reopen-issue]').forEach(b=>b.onclick=()=>reopenIssue(b.dataset.reopenIssue));
   host.querySelectorAll('[data-delete-issue]').forEach(b=>b.onclick=()=>deleteIssueById(b.dataset.deleteIssue||issue.id));
   bindIssueDeletionContext(host);
   host.querySelectorAll('[data-close-issue]').forEach(b=>b.onclick=()=>closeIssueById(b.dataset.closeIssue||issue.id));
@@ -58,7 +58,7 @@ function overviewPane(issue,data){
   const project=(state.data.projects||[]).find(p=>p.id===issue.projectId),repo=(state.data.repositories||[]).find(r=>r.id===(issue.repositoryId||project?.defaultRepositoryId));
   const out=issueOutcome(issue);
   let actions='';
-  if(issueReopenable(issue))actions=reopenDeliveredButton(issue)+deliveryMRButtons(issue);
+  if(issueReopenable(issue))actions=reopenIssueButton(issue);
   actions+=issueProgressActionsHTML(issue,{includeIssueActions:true});
   const banner=`<div class="issue-outcome ${out.key}"><b>${escapeHTML(out.title)}</b><p>${escapeHTML(out.body)}</p><div class="issue-outcome-actions">${actions}</div></div>`;
   const facts=`<div class="detail-grid">${drawerFact('责任人',issueAssigneeName(issue)||'未指定')}${drawerFact('优先级',issuePriorityLabel(issue.priority))}${drawerFact('来源',issueSourceLabel(issue))}${metricsIssueSource(issue)==='local'?drawerFact('统计关联 TAPD',escapeHTML(issue.tapdId||'未绑定（仍参与统计）')):''}${drawerFact('状态',escapeHTML(issueStatusLabel(issue.status)))}${drawerFact('标签',issueTagList(issue).map(t=>escapeHTML(t)).join('、'))}${drawerFact('代码仓库',escapeHTML(repo?.name||'未绑定'))}${drawerFact('继续开发分支',escapeHTML(storedIssueWorkBranch(issue)||'自动新建'))}</div>`;
@@ -96,12 +96,6 @@ async function closeIssueById(issueId){
   }catch(err){
     toast(err.message,'err');
   }
-}
-// 需求绑定的代码仓库与分支，以及已经提过的 MR。
-function deliveryPane(issue,data){
-  const repos=(state.data.repositories||[]).filter(r=>r.projectId===issue.projectId);
-  const rows=repos.map(r=>`<div class="issue-action-group"><span>${escapeHTML(r.name||r.id)}</span><div class="issue-action-group-buttons"><span class="muted mono">${escapeHTML(r.defaultBranch||'—')}</span></div></div>`).join('');
-  return `<div class="detail-section"><h3>代码仓库<span class="sub">需求关联的仓库与分支</span></h3>${rows||'<div class="detail-empty">当前项目还没有绑定代码仓库</div>'}<div class="issue-outcome-actions">${deliveryMRButtons(issue)}</div></div>`;
 }
 function formatActivityTime(ts){
   const d=new Date(ts);

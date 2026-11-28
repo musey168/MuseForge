@@ -9,9 +9,9 @@ function renderProjectContext(projectIssues){
   const projects=state.data.projects||[],project=projects.find(p=>p.id===state.projectFilter);renderProjectSwitcher();
   $('#projectContextMark').textContent=(project?.key||project?.name||'P').slice(0,2).toUpperCase();$('#projectContextMark').style.background=safeColor(project?.color);
   $('#projectContextName').textContent=project?.name||'暂无项目';$('#projectContextDescription').textContent=project?.description||'工作台数据会按项目整体切换';
-  const active=projectIssues.filter(i=>issueCurrentStage(i).key==='active').length,attention=projectIssues.filter(i=>issueCurrentStage(i).key==='attention').length,pendingMRs=projectIssues.reduce((n,i)=>n+pendingDeliveryMRCount(i),0),repo=(state.data.repositories||[]).find(r=>r.id===project?.defaultRepositoryId);
+  const open=projectIssues.filter(i=>issueOpen(i)).length,repo=(state.data.repositories||[]).find(r=>r.id===project?.defaultRepositoryId);
   const repoCount=(state.data.repositories||[]).filter(r=>r.projectId===project?.id).length;
-  $('#projectContextMetrics').innerHTML=`<button type="button" data-issue-filter="" class="${!state.issueDeliveryFilter?'on':''}"><span>工作项</span><b>${projectIssues.length}</b></button><button type="button" data-issue-filter="active" class="${state.issueDeliveryFilter==='active'?'on':''}"><span>正在推进</span><b>${active}</b></button><button type="button" data-issue-filter="attention" class="${attention?'danger':''} ${state.issueDeliveryFilter==='attention'?'on':''}" title="点此只看待确认澄清结论、门禁失败、运行失败或已中断的工作项"><span>需要介入</span><b>${attention}</b></button><button type="button" data-issue-filter="mr" class="${state.issueDeliveryFilter==='mr'?'on':''}" title="已提 MR 但还没合入的 MR 数（按 MR 计，点击只看涉及的需求）"><span>待处理 MR</span><b>${pendingMRs}</b></button><div class="project-default-sop"><span>代码仓库（${repoCount}）</span><b title="${escapeHTML(repo?.gongfengProjectId||'未绑定')}">默认：${escapeHTML(repo?.name||'未绑定')}</b></div>`;
+  $('#projectContextMetrics').innerHTML=`<button type="button" data-issue-filter="" class="${!state.issueDeliveryFilter?'on':''}"><span>需求</span><b>${projectIssues.length}</b></button><button type="button" data-issue-filter="open" class="${state.issueDeliveryFilter==='open'?'on':''}" title="点此只看还没完成的需求"><span>未完成</span><b>${open}</b></button><div class="project-default-sop"><span>代码仓库（${repoCount}）</span><b title="${escapeHTML(repo?.gongfengProjectId||'未绑定')}">默认：${escapeHTML(repo?.name||'未绑定')}</b></div>`;
   $('#projectContextMetrics').querySelectorAll('[data-issue-filter]').forEach(btn=>btn.onclick=()=>{state.issueDeliveryFilter=btn.dataset.issueFilter;resetListPage('issues');renderIssues()});
 }
 function userCombobox(name,selected,emptyLabel='请选择用户',attributes=''){
@@ -117,7 +117,7 @@ function projectCardHTML(p,ctx={}){
     <div class="pa-card-top"><span class="pa-mark" style="background:${safeColor(p.color)}">${escapeHTML(key.slice(0,2).toUpperCase())}</span><div class="pa-card-m"><h3><span title="${escapeHTML(p.name||'')}">${escapeHTML(p.name||p.id)}</span>${p.id===ctx.currentId?'<span class="pa-chip cur">当前</span>':''}</h3><div class="pa-card-sub" title="${escapeHTML(p.id)} · ${escapeHTML(p.key||'')}">${escapeHTML(p.id)} · ${escapeHTML(p.key||'—')}</div></div><span class="pa-go">${paIcon('arrow',16)}</span></div>
     <p class="pa-card-desc${p.description?'':' none'}">${escapeHTML(p.description||'暂无项目说明')}</p>
     <div class="pa-facts">${repoFact}${p.tapdWorkspaceId?`<span class="pa-fact" title="TAPD Workspace ${escapeHTML(p.tapdWorkspaceId)}">${paIcon('tapd',12)}<span>TAPD</span></span>`:''}</div>
-    <div class="pa-card-foot"><div class="pa-stats"><span><b>${issues.length}</b> 需求</span>${active?`<span class="pa-live"><i></i><b>${active}</b> 推进中</span>`:''}</div></div>
+    <div class="pa-card-foot"><div class="pa-stats"><span><b>${issues.length}</b> 需求</span>${active?`<span class="pa-live"><i></i><b>${active}</b> 进行中</span>`:''}</div></div>
   </article>`;
 }
 function projectAdminEmptyHTML(icon,title,text,action){return `<div class="pa-empty"><div class="pa-empty-ic">${paIcon(icon,22)}</div><b>${title}</b><p>${text}</p>${action||''}</div>`}
@@ -191,7 +191,7 @@ function renderProjectAdminHead(){
   const crumb=$('#projectAdminCrumb');if(crumb){crumb.textContent=creating?'新建项目':name;crumb.title=crumb.textContent}
   const head=$('#projectAdminHead');if(!head)return;
   const issues=(state.data.issues||[]).filter(i=>!creating&&i.projectId===state.projectAdminDetailId),active=issues.filter(i=>issueCurrentStage(i).key==='active').length;
-  head.innerHTML=`<span class="pa-mark lg" style="background:${safeColor(d.color)}">${escapeHTML((key||(creating?'NEW':name)||'P').slice(0,2).toUpperCase())}</span><div class="pa-dhd-m"><h1><span title="${escapeHTML(name)}">${escapeHTML(name)}</span>${key?`<span class="pa-chip">${escapeHTML(key)}</span>`:''}${!creating&&saved?.id===state.projectFilter?'<span class="pa-chip cur">当前工作台项目</span>':''}</h1><p>${escapeHTML(creating?'填写项目名称并创建，之后即可绑定代码仓库。':(d.description||''))}</p>${creating?'':`<div class="pa-dmeta"><span><b>${issues.length}</b> 个需求</span><span><b>${active}</b> 个推进中</span></div>`}</div>`;
+  head.innerHTML=`<span class="pa-mark lg" style="background:${safeColor(d.color)}">${escapeHTML((key||(creating?'NEW':name)||'P').slice(0,2).toUpperCase())}</span><div class="pa-dhd-m"><h1><span title="${escapeHTML(name)}">${escapeHTML(name)}</span>${key?`<span class="pa-chip">${escapeHTML(key)}</span>`:''}${!creating&&saved?.id===state.projectFilter?'<span class="pa-chip cur">当前工作台项目</span>':''}</h1><p>${escapeHTML(creating?'填写项目名称并创建，之后即可绑定代码仓库。':(d.description||''))}</p>${creating?'':`<div class="pa-dmeta"><span><b>${issues.length}</b> 个需求</span><span><b>${active}</b> 个进行中</span></div>`}</div>`;
 }
 function syncProjectAdminTabs(){
   const bar=$('#projectAdminTabs');if(!bar)return;

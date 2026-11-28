@@ -60,19 +60,6 @@ function onReqDescriptionPaste(event){
   onReqDescriptionInput();
   if(error)toast(error,'err');
 }
-function projectTAPDReady(project){
-  project=project||currentProject();
-  if(!project)return false;
-  if(!(project.tapdWorkspaceId||'').trim()||!(project.tapdIterationId||'').trim())return false;
-  const cfg=state.data.syncConfig||{};
-  if((cfg.tapdMcpUrl||'').trim())return true;
-  return (state.data.mcpServers||[]).some(s=>{
-    if(s.scope==='project'&&s.projectId&&s.projectId!==project.id)return false;
-    const market=String(s.marketId||'');
-    if(market==='70'||market==='tapd')return true;
-    return /tapd/i.test(`${s.id||''} ${s.name||''} ${s.url||''}`);
-  });
-}
 function reqProjectRepositories(){
   const project=currentProject();
   return (state.data.repositories||[]).filter(r=>r.projectId===project?.id);
@@ -198,34 +185,6 @@ function renderReqFooter(){
   if(note)note.textContent=reqFooterNote();
   hydrateReqIcons($('#reqFooter'));
 }
-function renderReqTarget(){
-  const tapdReady=projectTAPDReady();
-  if(state.reqTarget==='tapd'&&!tapdReady)state.reqTarget='local';
-  const target=state.reqTarget||'local';
-  $$('#reqTarget [data-req-target]').forEach(btn=>{
-    const on=btn.dataset.reqTarget===target;
-    btn.classList.toggle('is-on',on);
-    btn.setAttribute('aria-checked',String(on));
-    const ind=btn.querySelector('.req-choice-ind');
-    if(ind)ind.innerHTML=on?reqIcon('check',11):'';
-    if(btn.dataset.reqTarget==='tapd'){
-      btn.disabled=!tapdReady;
-      btn.hidden=!tapdReady;
-      btn.classList.toggle('is-unavailable',!tapdReady);
-    }
-  });
-  const field=$('#reqTarget')?.closest('.req-field');
-  if(field)field.hidden=!tapdReady;
-  const hint=$('#reqTargetTAPDHint');
-  if(hint)hint.textContent=tapdReady?'先在平台建单，再同步到 TAPD':'未配置';
-  hydrateReqIcons($('#reqTarget'));
-}
-function setReqTarget(target){
-  if(target==='tapd'&&!projectTAPDReady())return;
-  state.reqTarget=target==='tapd'?'tapd':'local';
-  renderReqTarget();
-  persistRequirementComposer();
-}
 function updateReqCharCount(){
   const count=$('#reqCharCount'),len=($('#chatInput')?.value||'').length;
   if(count)count.textContent=len?`${len} 字`:'';
@@ -259,7 +218,6 @@ function persistRequirementComposer(){
     open:requirementComposerOpen(),
     projectId:currentProject()?.id||'',
     input:$('#chatInput')?.value||'',
-    target:state.reqTarget||'local',
     repoIds:selectedReqRepositoryIds(),
     baseBranch:selectedReqBaseBranch(),
   };
@@ -269,13 +227,12 @@ function clearRequirementComposer(){
   try{sessionStorage.removeItem('agentflow.requirementComposer')}catch{}
 }
 function resetRequirementComposer(){
-  Object.assign(state,{reqCreating:'',reqTarget:'local'});
+  Object.assign(state,{reqCreating:''});
   ['#reqBaseBranch','#chatInput'].forEach(id=>{const el=$(id);if(el)el.value=''});
   reqImages.splice(0).forEach(({url})=>URL.revokeObjectURL(url));
   renderReqImages();
   setReqPreview(false);
   renderReqContext();
-  renderReqTarget();
   updateReqCharCount();
   renderReqFooter();
 }
@@ -286,13 +243,11 @@ function readRequirementComposerDraft(){
   }catch{return null}
 }
 function applyRequirementComposerDraft(raw){
-  state.reqTarget=raw.target==='tapd'?'tapd':'local';
   renderReqContext();
   if(Array.isArray(raw.repoIds))setReqRepositoryIds(raw.repoIds);
   const baseBranch=$('#reqBaseBranch');if(baseBranch)baseBranch.value=baseBranch.disabled?'':(raw.baseBranch||'');
   renderReqRepoChip();
   const input=$('#chatInput');if(input)input.value=raw.input||'';
-  renderReqTarget();
   updateReqCharCount();
   renderReqFooter();
 }
@@ -361,17 +316,11 @@ function rememberIssue(saved, prevId){
   if(idx>=0)state.data.issues[idx]=saved;else state.data.issues.unshift(saved);
   return saved;
 }
-async function pushExistingIssueToTAPD(issue){
-  const updated=await api('/api/sync/create',{method:'POST',body:JSON.stringify({issueId:issue.id,target:'tapd'})});
-  return rememberIssue(updated, issue.id);
-}
 // createIssueFromChat 直接建单，不再在弹窗里澄清。
-async function createIssueFromChat(target){
-  target=target||state.reqTarget||'local';
-  if(target!=='local'&&target!=='tapd')return toast('请选择平台或 TAPD');
+// 个人版没有 LOOP：需求只在平台里建单，不绑定流程。
+async function createIssueFromChat(){
   const draft=collectRequirementDraft();
   if(!draft.description&&!reqImages.length){$('#chatInput')?.focus();return toast('先写一句需求')}
-  if(target==='tapd'&&!projectTAPDReady())return toast('当前项目未配置 TAPD');
   if(state.reqCreating)return toast('正在建单，请勿重复点击');
   state.reqCreating='issue';
   renderReqFooter();
@@ -381,9 +330,8 @@ async function createIssueFromChat(target){
       projectId:project?.id,
       status:'backlog',
       kind:'requirement',
-      sopMode:useSOP?'':'none',
-      workflowId,
-        repositoryId:selectedReqRepositoryId(),
+      sopMode:'none',
+      repositoryId:selectedReqRepositoryId(),
       repositoryIds:selectedReqRepositoryIds(),
       baseBranch:selectedReqBaseBranch(),
       assigneeUserId:Number(state.currentUser?.id)||0,
@@ -397,20 +345,14 @@ async function createIssueFromChat(target){
       for(const {file} of reqImages)form.append('images',file,file.name||'image');
       body=form;
     }
-    let issue=await api('/api/issues',{method:'POST',body});
+    const issue=await api('/api/issues',{method:'POST',body});
     rememberIssue(issue);
-    let syncError='';
-    if(target==='tapd'){
-      try{issue=await pushExistingIssueToTAPD(issue)}catch(err){syncError=err.message}
-    }
     state.reqCreating='';
     clearRequirementComposer();
     $('#requirementModal').classList.remove('open');
     resetRequirementComposer();
     renderIssues();
-    if(syncError)toast('已在平台建单，TAPD 同步失败：'+syncError,'err');
-    else if(target==='tapd')toast(`已创建需求并同步 TAPD ${issue.externalRef?.externalId||''}`,'ok');
-    else toast('已创建需求','ok');
+    toast('已创建需求','ok');
     openIssueDetail(issue.id);
   }catch(err){toast(err.message,'err')}
   finally{state.reqCreating='';renderReqFooter()}

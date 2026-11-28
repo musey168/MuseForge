@@ -905,15 +905,10 @@ function bind(){
 	$('#refreshDashboard').onclick=refreshDashboard;
 	$('#refreshIssues').onclick=refreshIssues;
   $('#newIssue').onclick=openRequirementWizard;
-  $('#importGitHubIssues').onclick=syncNow;
-  $('#importTAPDIssue')&&($('#importTAPDIssue').onclick=openImportTAPDModal);
-  $$('.import-tapd-close').forEach(b=>b.onclick=()=>$('#importTAPDModal').classList.remove('open'));
-  $('#importTAPDForm')&&($('#importTAPDForm').onsubmit=importTAPDStory);
   bindProjectAdmin();bindRepoDrawer();
   $$('.requirement-close').forEach(b=>b.onclick=()=>closeRequirementComposer());
   $('#reqCreate').onclick=()=>createIssueFromChat();
   $('#reqRepoChipToggle').onclick=e=>{e.stopPropagation();toggleReqRepoPopover()};
-  $$('#reqTarget [data-req-target]').forEach(b=>b.onclick=()=>setReqTarget(b.dataset.reqTarget));
   document.addEventListener('pointerdown',e=>{
     const pop=$('#reqRepoPopover');
     if(pop&&!pop.hidden&&!e.target.closest?.('#reqRepoChip, .hui-select-panel'))toggleReqRepoPopover(false);
@@ -934,16 +929,10 @@ function bind(){
   $('#issueSearch').oninput=e=>{state.issueQuery=e.target.value.trim().toLowerCase();resetListPage('issues');renderIssues()};
   $$('.issue-close').forEach(b=>b.onclick=()=>$('#issueModal').classList.remove('open'));
   $('#issueForm').onsubmit=saveIssue;
-  $('#syncNowBtn').onclick=syncNow;
   $('#trackerImportBtn').onclick=triggerTrackerImport;
-  $('#saveSyncConfig').onclick=saveSyncConfig;
-  $('#pushToGongfeng').onclick=()=>pushIssue('gongfeng');
-  $('#pushToTAPD').onclick=()=>pushIssue('tapd');
-  $('#openSyncModal').onclick=()=>{$('#syncModal').classList.add('open');refreshSyncStatus()};
-  bindIssueHeadingMenu();
+  $('#openSyncModal').onclick=()=>{$('#syncModal').classList.add('open');loadTrackerImport()};
   enhanceIssueFilters();
   $$('.sync-close').forEach(b=>b.onclick=()=>$('#syncModal').classList.remove('open'));
-  $('#syncAutoEnabledInline').onchange=e=>{$('#syncAutoEnabled').checked=e.target.checked;saveSyncConfig()};
   $$('.modal').forEach(modal=>modal.addEventListener('pointerdown',e=>{
     if(e.target!==modal)return;
     if(modal.id==='requirementModal')return;
@@ -991,7 +980,6 @@ function bind(){
     handle.ondblclick=()=>{localStorage.removeItem(KEY);apply()};
     handle.onkeydown=ev=>{const cur=sidebar.getBoundingClientRect().width;if(ev.key==='ArrowRight'){ev.preventDefault();save(cur+16)}if(ev.key==='ArrowLeft'){ev.preventDefault();save(cur-16)}};
   })();
-  $('#dashImportTAPD')&&($('#dashImportTAPD').onclick=openImportTAPDModal);
   $('#dashNewRequirement').onclick=openRequirementWizard;
   $('#dashNewRun').onclick=()=>switchView('issues');
   $$('[data-jump]').forEach(el=>el.onclick=()=>switchView(el.dataset.jump));

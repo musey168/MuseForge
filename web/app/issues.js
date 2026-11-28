@@ -9,51 +9,6 @@ function enhanceIssueFilters(){
   ['#issueStatusFilter','#issueAssigneeFilter','#sourceFilter','#issueTagFilter'].forEach(sel=>window.enhanceSelect?.($(sel)));
 }
 
-// Items keep the click handlers app.js assigns; the menu only adds open/close
-// and keyboard behaviour around them.
-function bindIssueHeadingMenu(){
-  const trigger=$('#issueHeadingMore'),menu=$('#issueHeadingMenu');
-  if(!trigger||!menu||trigger.dataset.menuBound)return;
-  trigger.dataset.menuBound='1';
-  const items=()=>[...menu.querySelectorAll('[role="menuitem"]')].filter(el=>!el.hidden&&!el.disabled);
-  let open=false;
-  const close=focusTrigger=>{
-    if(!open)return;
-    open=false;
-    window.HuiSelect?.release(close);
-    menu.classList.remove('is-open');
-    menu.inert=true;
-    trigger.setAttribute('aria-expanded','false');
-    if(focusTrigger)trigger.focus();
-  };
-  const show=(focusLast=false)=>{
-    if(open)return;
-    window.HuiSelect?.claim(close);
-    open=true;
-    menu.inert=false;
-    menu.classList.add('is-open');
-    trigger.setAttribute('aria-expanded','true');
-    const list=items();
-    (focusLast?list[list.length-1]:list[0])?.focus();
-  };
-  trigger.addEventListener('click',e=>{e.stopPropagation();open?close(true):show()});
-  trigger.addEventListener('keydown',e=>{
-    if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();show(e.key==='ArrowUp')}
-  });
-  menu.addEventListener('keydown',e=>{
-    const list=items(),at=list.indexOf(document.activeElement);
-    if(e.key==='Escape'){e.preventDefault();close(true)}
-    else if(e.key==='Tab')close(false);
-    else if(e.key==='ArrowDown'){e.preventDefault();list[(at+1)%list.length]?.focus()}
-    else if(e.key==='ArrowUp'){e.preventDefault();list[(at-1+list.length)%list.length]?.focus()}
-    else if(e.key==='Home'){e.preventDefault();list[0]?.focus()}
-    else if(e.key==='End'){e.preventDefault();list[list.length-1]?.focus()}
-  });
-  menu.addEventListener('click',e=>{if(e.target.closest('[role="menuitem"]'))close(false)});
-  document.addEventListener('pointerdown',e=>{if(open&&!trigger.contains(e.target)&&!menu.contains(e.target))close(false)});
-  window.addEventListener('resize',()=>close(false),{passive:true});
-}
-
 function renderIssueAssigneeFilter(projectIssues=[]){
   const sel=$('#issueAssigneeFilter');if(!sel)return;
   const current=state.issueAssigneeFilter||'';
@@ -121,9 +76,10 @@ function filteredIssues(){
   }
   if(state.issueTagFilter)issues=issues.filter(i=>issueTagList(i).includes(state.issueTagFilter));
   const issueFilter=state.issueDeliveryFilter||'';
-  if(issueFilter==='mr')issues=issues.filter(i=>pendingDeliveryMRCount(i)>0);
-  else if(issueFilter==='active')issues=issues.filter(i=>['in_progress','in_review'].includes(i.status));
-  else if(issueFilter==='attention')issues=issues.filter(i=>issueCurrentStage(i).key==='attention');
+  if(issueFilter==='open')issues=issues.filter(i=>issueOpen(i));
+  else if(issueFilter==='closed')issues=issues.filter(i=>!issueOpen(i));
+  else if(issueFilter==='blocked')issues=issues.filter(i=>issueStatusKey(i)==='blocked');
+  else if(issueFilter==='progress')issues=issues.filter(i=>issueInProgress(i));
   if(state.issueQuery){
     issues=issues.filter(i=>issueMatchesQuery(i,projects.find(x=>x.id===i.projectId),state.issueQuery));
   }
@@ -132,7 +88,6 @@ function filteredIssues(){
 }
 
 function renderIssues(){
-  const tapdImport=document.querySelector("#importTAPDIssue");if(tapdImport)tapdImport.hidden=!currentProject()?.tapdWorkspaceId;
   const projectIssues=(state.data.issues||[]).filter(i=>!state.projectFilter||i.projectId===state.projectFilter);
   renderProjectContext(projectIssues);
   renderIssueAssigneeFilter(projectIssues);
@@ -153,10 +108,10 @@ function renderIssues(){
     return;
   }
   const emptyTitle='当前项目没有匹配的工作项';
-  const emptyHint='从 GitHub 同步，或在本平台新建需求。';
+  const emptyHint='从 GitHub 或 GitLab 导入，或在本平台新建需求。';
   const keyWidth=issueKeyColumnWidth(paged.items);
   const pager=pagerHTML('issues',paged)||(paged.total?`<nav class="pager pager-summary" aria-label="分页"><span class="pager-meta">共 ${paged.total} 条</span></nav>`:'');
-  board.innerHTML=`<div class="issue-table-card"><div class="issue-table-scroll"><div class="issue-table${state.issueSelectionMode?' issue-table-selectable':''}" data-page-anchor="issues" style="--issue-col-key:${keyWidth}"><div class="issue-table-row issue-table-head" role="row">${state.issueSelectionMode?`<div class="issue-select-cell">${issueSelectAllCheckbox('全选本页可删除的需求')}</div>`:''}<span>编号</span><span>标题</span><span>来源</span><span>责任人</span><span>仓库</span><span>优先级</span><span>当前环节</span><span>操作</span></div><div class="issue-table-body">${paged.items.map(issueRow).join('')||`<div class="issue-table-empty">${huiIcon('search')}<b>${emptyTitle}</b><p>${emptyHint}</p></div>`}</div></div></div>${pager}</div>`;
+  board.innerHTML=`<div class="issue-table-card"><div class="issue-table-scroll"><div class="issue-table${state.issueSelectionMode?' issue-table-selectable':''}" data-page-anchor="issues" style="--issue-col-key:${keyWidth}"><div class="issue-table-row issue-table-head" role="row">${state.issueSelectionMode?`<div class="issue-select-cell">${issueSelectAllCheckbox('全选本页可删除的需求')}</div>`:''}<span>编号</span><span>标题</span><span>来源</span><span>责任人</span><span>仓库</span><span>优先级</span><span>状态</span><span>操作</span></div><div class="issue-table-body">${paged.items.map(issueRow).join('')||`<div class="issue-table-empty">${huiIcon('search')}<b>${emptyTitle}</b><p>${emptyHint}</p></div>`}</div></div></div>${pager}</div>`;
   $$('.issue-table-row[data-id]').forEach(el=>el.onclick=()=>openIssueDetail(el.dataset.id));
   bindIssueRowActions(board);
   bindPager(board);
@@ -236,6 +191,11 @@ function issueCurrentStage(i){
   if(status==='in_progress'||status==='in_review')return{key:'active',label:issueStatusLabel(status),hint:'需求正在推进'};
   return{key:'not_started',label:issueStatusLabel(status),hint:'需求尚未开始'};
 }
+// A requirement stays open until it is done, closed or cancelled.
+function issueOpen(i){return !['done','closed','cancelled'].includes(String(i?.status||'').toLowerCase())}
+// A requirement is in progress while it is being worked on or reviewed.
+function issueInProgress(i){return ['in_progress','in_review'].includes(String(i?.status||'').toLowerCase())}
+function issueStatusKey(i){return String(i?.status||'').toLowerCase()}
 function issueStatusIcon(value){return ({backlog:'circle',todo:'clock',in_progress:'user-hold',in_review:'pending-review',done:'check',closed:'close',blocked:'alert',cancelled:'close'}[value]||'circle')}
 function huiIcon(name,cls=''){return `<svg class="agent-icon harness-icon${cls?` ${cls}`:''}" data-icon="${escapeHTML(name)}" width="14" height="14" aria-hidden="true" focusable="false"></svg>`}
 // stage.key alone is not enough: 「已关闭」 shares closed with a finished requirement.
@@ -434,26 +394,16 @@ function openIssue(issue=null){
   $('#issueRepoChecks').onchange=refreshIssueBaseBranchInput;
   $('#issueModalTitle').textContent=issue?`${(projects.find(p=>p.id===v.projectId)?.key||'ISS')}-${v.number} ${v.title}`:'新建工作项';
   let stateHtml='';
-  const delivery=deliveryLockedLabel(v);
-  if(delivery==='MR 已合入'||delivery==='已合入基线')stateHtml+=`交付状态：<b>${escapeHTML(delivery)}</b>`;
   if(v.externalRef){stateHtml+=`<br>外部来源: <b>${escapeHTML(v.externalRef.source)}</b> · <a href="${escapeHTML(safeURL(v.externalRef.externalUrl))}" target="_blank" rel="noopener noreferrer">${escapeHTML(v.externalRef.externalId||v.externalRef.externalUrl)}</a>`;}
-  const reopenBtn=$('#reopenDeliveredIssue');
+  const reopenBtn=$('#reopenIssue');
   if(reopenBtn){
     const locked=issue&&issueReopenable(v);
     reopenBtn.hidden=!locked;
-    reopenBtn.onclick=locked?()=>reopenDeliveredIssue(issue.id):null;
+    reopenBtn.onclick=locked?()=>reopenIssue(issue.id):null;
   }
-  const isNew=!issue?.id,box=$('#issueSyncTargetBox'),note=$('#issueBoundNote');
+  const isNew=!issue?.id,note=$('#issueBoundNote');
   const manualBinding=$('#issueManualTapdBinding');
   const showManualBinding=()=>{if(manualBinding)manualBinding.hidden=true};
-  if(box){
-    box.hidden=true;
-    box.querySelectorAll('input[name="syncTarget"]').forEach(el=>{
-      el.checked=isNew&&el.value==='local';
-      el.required=isNew;
-      el.onchange=()=>showManualBinding();
-    });
-  }
   showManualBinding();
   if(note){note.hidden=isNew||!v.externalRef;const text=$('#issueBoundNoteText');if(text&&v.externalRef){const src=v.externalRef.source==='github'?'GitHub Issue':v.externalRef.source==='tapd'?'TAPD':v.externalRef.source==='gongfeng'?'工蜂 Issue':'外部';const id=v.externalRef.externalIid||v.externalRef.externalId||'';text.innerHTML=`已关联 ${src} <b>${escapeHTML(String(id))}</b>。保存只改本平台记录，不会回写外部单据。`}}
   const submit=document.querySelector('#issueForm button[type="submit"]');
@@ -463,8 +413,7 @@ function openIssue(issue=null){
 function issueFromForm(){
   const f=$('#issueForm'),id=f.elements.id.value,old=canonicalIssue(id);
   const assigneeUserId=Number(f.elements.assigneeUserId?.value)||0;
-  const syncTarget=document.querySelector('#issueForm [name="syncTarget"]:checked')?.value||'';
-  const source=old.source||(id?'local':syncTarget);
+  const source=old.source||'local';
   const repositoryIds=selectedIssueRepositoryIds(),status=f.elements.status.value;
   const closeSource=status==='closed'?(old.status==='closed'?old.closeSource||'manual':'manual'):'';
   return {...old,id,projectId:f.elements.projectId.value,title:f.elements.title.value.trim(),description:f.elements.description.value,priority:f.elements.priority.value,status,closeSource,source,tags:parseIssueTags(f.elements.tags?.value),repositoryId:repositoryIds[0]||'',repositoryIds,baseBranch:f.elements.baseBranch.value.trim(),repositoryBranches:selectedIssueRepositoryBranches(f.elements.baseBranch,$('#issueRepositoryBranches')),assigneeUserId,tapdId:source==='local'?f.elements.tapdId.value.trim():'',externalRef:trackerRefOf(old)||old.externalRef||undefined};
@@ -475,16 +424,44 @@ function issueFromForm(){
 // repoDisplayPath shows host/path for a parsed repository, e.g. github.com/owner/name.
 function repoDisplayPath(info,fallback=''){return info?.provider==='ssh'?(info.project||info.cloneUrl||fallback):info?.webUrl?String(info.webUrl).replace(/^https?:\/\//,''):String(fallback||'')}
 function repoProviderLabel(info){
-  const labels={ssh:'Git SSH',http:'Git HTTP',https:'Git HTTPS',github:'GitHub',gongfeng:'工蜂'};
+  const labels={ssh:'Git SSH',http:'Git HTTP',https:'Git HTTPS',github:'GitHub',gitlab:'GitLab',gongfeng:'工蜂'};
   return labels[info?.provider]||'Git';
 }
+// A GitLab project is bound by its project key: "gitlab:<host>/<group>/<repo>".
+// The group path may carry subgroups, and the host is the one the URL names.
+function parseGitLabProject(host,path){
+  const parts=path.replace(/^\/+|\/+$/g,'').split('/').filter(Boolean).map(part=>part.replace(/\.git$/,''));
+  if(parts.length<2)return null;
+  if(parts.some(part=>!part||part==='.'||part==='..'||!/^[A-Za-z0-9_.-]+$/.test(part)))return null;
+  const projectPath=parts.join('/'),name=parts[parts.length-1];
+  return {project:`gitlab:${host}/${projectPath}`,name,webUrl:`https://${host}/${projectPath}`,cloneUrl:`https://${host}/${projectPath}.git`,provider:'gitlab'};
+}
+// GitLab hosts the console recognises by name. A GitLab on any other host is
+// still bindable: paste its project key ("gitlab:host/group/repo").
+function gitLabHost(hostname){
+  const host=String(hostname||'').toLowerCase();
+  return host==='gitlab.com'||host.startsWith('gitlab.')||host.includes('.gitlab.')||host.includes('-gitlab.')?host:'';
+}
 function parseGongfengRepoURL(raw){
+  const projectKey=String(raw||'').trim().match(/^gitlab:(\S+)$/i);
+  if(projectKey){const slash=projectKey[1].indexOf('/');return slash>0?parseGitLabProject(projectKey[1].slice(0,slash),projectKey[1].slice(slash+1)):null}
   const sshInfo=globalThis.LoopForgeGitSSH?.(raw);if(sshInfo)return sshInfo;
   if(globalThis.LoopForgeExplicitHTTPClone(raw))return globalThis.LoopForgeGitHTTPRepository(raw);
   const managed=globalThis.LoopForgeGongfengRepository?.(raw,state.data?.gongfengHost);if(managed)return managed;
   let publicURL=String(raw||'').trim().replace(/^git clone /,'').replace(/^github:/,'https://github.com/').replace(/^(?:git@github\.com:|ssh:\/\/git@github\.com(?::22)?\/)/,'https://github.com/');
-  if(publicURL.startsWith('github.com/'))publicURL='https://'+publicURL;
-  try{const u=new URL(publicURL);if(u.hostname==='github.com'&&!u.username&&!u.password&&['http:','https:'].includes(u.protocol)){const parts=u.pathname.split('/').filter(Boolean),owner=parts[0],name=(parts[1]||'').replace(/\.git$/,'');if(parts.length>=2&&/^[A-Za-z0-9_.-]+$/.test(owner)&&/^[A-Za-z0-9_.-]+$/.test(name)&&!['.','..'].includes(owner)&&!['.','..'].includes(name))return {project:'github:'+owner+'/'+name,name,webUrl:'https://github.com/'+owner+'/'+name,cloneUrl:'https://github.com/'+owner+'/'+name+'.git',provider:'github'}}}catch(_){}
+  if(publicURL.startsWith('github.com/')||publicURL.startsWith('gitlab.com/'))publicURL='https://'+publicURL;
+  try{
+    const u=new URL(publicURL);
+    if(!u.username&&!u.password&&['http:','https:'].includes(u.protocol)){
+      if(u.hostname==='github.com'){
+        const parts=u.pathname.split('/').filter(Boolean),owner=parts[0],name=(parts[1]||'').replace(/\.git$/,'');
+        if(parts.length>=2&&/^[A-Za-z0-9_.-]+$/.test(owner)&&/^[A-Za-z0-9_.-]+$/.test(name)&&!['.','..'].includes(owner)&&!['.','..'].includes(name))return {project:'github:'+owner+'/'+name,name,webUrl:'https://github.com/'+owner+'/'+name,cloneUrl:'https://github.com/'+owner+'/'+name+'.git',provider:'github'};
+      }else{
+        const host=gitLabHost(u.hostname);
+        if(host){const info=parseGitLabProject(u.host,u.pathname);if(info)return info}
+      }
+    }
+  }catch(_){}
 
   return globalThis.LoopForgeGitHTTPRepository(raw);
 }
@@ -521,73 +498,6 @@ function fillRepositoryForm(repo={}){const f=$('#repositoryForm');['id','name','
   const nameField=$('#repositoryNameField');if(nameField)nameField.hidden=!repo.id;f.elements.defaultBranch.value=repo.defaultBranch||'master';f.elements.integrateBranch.value=repo.integrateBranch||'';const project=(state.data.projects||[]).find(p=>p.id===state.projectFilter);f.elements.makeDefault.checked=!project?.defaultRepositoryId||project.defaultRepositoryId===repo.id;if(f.elements.repoUrl){f.elements.repoUrl.oninput=renderRepositoryCredentialHint;f.elements.repoUrl.onchange=()=>{renderRepositoryCredentialHint();const form=f.elements,fill={name:form.name.value,gongfengProjectId:form.gongfengProjectId.value,webUrl:form.webUrl.value,cloneUrl:form.cloneUrl.value};if(fillRepositoryFromLink(form.repoUrl.value,fill)){form.name.value=fill.name;form.gongfengProjectId.value=fill.gongfengProjectId;form.webUrl.value=fill.webUrl;form.cloneUrl.value=fill.cloneUrl}}};renderRepositoryCredentialHint()}
 function openRepositoryModal(){if(!state.projectFilter)return toast('请先选择项目');gitSSHKeyCache=null;fillRepositoryForm();renderRepositoryList();$('#repositoryModal').classList.add('open')}
 async function saveRepository(e){e.preventDefault();const f=e.currentTarget,project=(state.data.projects||[]).find(p=>p.id===state.projectFilter);if(f.elements.repoUrl){const fill={name:f.elements.name.value,gongfengProjectId:f.elements.gongfengProjectId.value,webUrl:f.elements.webUrl.value,cloneUrl:f.elements.cloneUrl.value};if(fillRepositoryFromLink(f.elements.repoUrl.value,fill)){f.elements.name.value=fill.name;f.elements.gongfengProjectId.value=fill.gongfengProjectId;f.elements.webUrl.value=fill.webUrl;f.elements.cloneUrl.value=fill.cloneUrl}}const payload={id:f.elements.id.value,projectId:state.projectFilter,provider:(parseGongfengRepoURL(f.elements.repoUrl?.value)?.provider||'gongfeng'),name:f.elements.name.value.trim(),gongfengProjectId:f.elements.gongfengProjectId.value.trim(),webUrl:f.elements.webUrl.value.trim(),cloneUrl:f.elements.cloneUrl.value.trim(),defaultBranch:f.elements.defaultBranch.value.trim(),integrateBranch:f.elements.integrateBranch.value.trim(),localPath:f.elements.localPath.value.trim(),repoUrl:f.elements.repoUrl?f.elements.repoUrl.value.trim():''};try{const repo=await api('/api/repositories',{method:payload.id?'PUT':'POST',body:JSON.stringify(payload)}),idx=(state.data.repositories||[]).findIndex(r=>r.id===repo.id);if(idx>=0)state.data.repositories[idx]=repo;else(state.data.repositories||(state.data.repositories=[])).push(repo);if(f.elements.makeDefault.checked&&project){const saved=await api('/api/projects',{method:'PUT',body:JSON.stringify({...project,defaultRepositoryId:repo.id})});if(saved&&saved.id){const pi=(state.data.projects||[]).findIndex(p=>p.id===saved.id);if(pi>=0)state.data.projects[pi]=saved;project.defaultRepositoryId=repo.id}else project.defaultRepositoryId=repo.id}fillRepositoryForm(repo);renderRepositoryList();renderIssues();toast(repo.provider==='ssh'?'仓库已保存；检出和推送使用 Git SSH 密钥。':(userById(state.currentUser?.id)||{}).gitHubCredentialConfigured?'Git 仓库绑定已保存':'仓库已保存；配置 Git 访问令牌 后才能进行代码交付。')}catch(err){toast(err.message)}}
-function fillImportTAPDRepository(){
-  const host=$('#importTAPDRepository');
-  if(!host)return;
-  host.dataset.ids='[]';
-  const branches=$('#importTAPDRepositoryBranches');if(branches)branches.innerHTML='';
-  renderImportTAPDRepositoryPicker();
-}
-function selectedImportTAPDRepositoryIds(){
-  try{return JSON.parse($('#importTAPDRepository')?.dataset.ids||'[]')}catch{return []}
-}
-function setImportTAPDRepositoryIds(ids){
-  const host=$('#importTAPDRepository');
-  if(!host)return;
-  const repos=(state.data.repositories||[]).filter(r=>r.projectId===state.projectFilter);
-  const known=new Set(repos.map(r=>r.id));
-  host.dataset.ids=JSON.stringify([...new Set((ids||[]).filter(id=>known.has(id)))]);
-  renderImportTAPDRepositoryPicker();
-}
-function renderImportTAPDRepositoryPicker(){
-  const host=$('#importTAPDRepository');
-  if(!host)return;
-  const repos=(state.data.repositories||[]).filter(r=>r.projectId===state.projectFilter);
-  const selected=selectedImportTAPDRepositoryIds();
-  const chosen=new Set(selected);
-  const leftover=repos.filter(r=>!chosen.has(r.id));
-  const tags=selected.map(id=>{
-    const name=repos.find(r=>r.id===id)?.name||id;
-    return `<button type="button" class="repo-picker-tag" data-remove-repo="${escapeHTML(id)}">${escapeHTML(name)}<span aria-hidden="true">×</span></button>`;
-  }).join('');
-  const options=leftover.map(r=>`<option value="${escapeHTML(r.id)}">${escapeHTML(r.name)}</option>`).join('');
-  const placeholder=!repos.length?'暂无可选仓库':(!leftover.length?'已全部选择':'选择仓库');
-  host.innerHTML=`<div class="repo-picker-field">${tags}<select class="repo-picker-select"${leftover.length?'':' disabled'}><option value="">${placeholder}</option>${options}</select></div>`;
-  host.querySelectorAll('[data-remove-repo]').forEach(b=>b.onclick=()=>setImportTAPDRepositoryIds(selected.filter(id=>id!==b.dataset.removeRepo)));
-  const sel=host.querySelector('select');
-  if(sel)sel.onchange=()=>{if(!sel.value)return;setImportTAPDRepositoryIds([...selected,sel.value])};
-  renderIssueRepositoryBranchInputs($('#importTAPDBaseBranch'),$('#importTAPDBaseBranchHint'),$('#importTAPDRepositoryBranches'),selected);
-}
-function openImportTAPDModal(){
-  if(!state.projectFilter)return toast('请先在顶部选择一个项目');
-  const input=$('#importTAPDURL');if(input)input.value='';
-  const baseBranch=$('#importTAPDBaseBranch');if(baseBranch)baseBranch.value='';
-  fillImportTAPDRepository();
-  $('#importTAPDModal').classList.add('open');
-  setTimeout(()=>input?.focus(),0);
-}
-async function importTAPDStory(e){
-  e.preventDefault();
-  const url=$('#importTAPDURL')?.value.trim();
-  if(!url)return toast('请粘贴 TAPD 工作项链接或分享文本');
-  if(!state.projectFilter)return toast('请先选择项目');
-  const repositoryIds=selectedImportTAPDRepositoryIds();
-  if(!repositoryIds.length)return toast('请至少选择一个代码仓库');
-  const button=$('#confirmImportTAPD');
-  try{
-    if(button){button.disabled=true;button.textContent='正在导入…'}
-    const baseBranch=$('#importTAPDBaseBranch')?.value.trim()||'';
-    const repositoryBranches=selectedIssueRepositoryBranches($('#importTAPDBaseBranch'),$('#importTAPDRepositoryBranches'));
-    const issue=await api('/api/issues/import-tapd',{method:'POST',body:JSON.stringify({projectId:state.projectFilter,url,repositoryIds,repositoryId:repositoryIds[0],baseBranch,repositoryBranches})});
-    const idx=(state.data.issues||[]).findIndex(i=>i.id===issue.id);
-    if(idx>=0)state.data.issues[idx]=issue;else (state.data.issues||(state.data.issues=[])).unshift(issue);
-    $('#importTAPDModal').classList.remove('open');
-    renderIssues();
-    toast(`已导入 TAPD 工作项：${issue.title||issue.id}`,'ok');
-    if(issue.id)openIssueDetail(issue.id);
-  }catch(err){toast(err.message)}
-  finally{if(button){button.disabled=false;button.textContent='导入'}}
-}
 function canonicalIssue(id){
   id=String(id||'').trim();
   if(!id)return {};
@@ -607,30 +517,24 @@ async function persistIssue(issue){
   if(bound)payload.externalRef=bound;
   else if(payload.externalRef&&!(payload.externalRef.externalId||payload.externalRef.externalIid))delete payload.externalRef;
   delete payload.syncTarget;
-  const isNew=!id;
-  if(isNew){
-    const target=issue.syncTarget||document.querySelector('#issueForm [name="syncTarget"]:checked')?.value;
-    if(!target)throw new Error('新建必须选择创建方式');
-    payload.syncTarget=target;
-  }
-  const saved=await api('/api/issues',{method:isNew?'POST':'PUT',body:JSON.stringify(payload)});
+  const saved=await api('/api/issues',{method:id?'PUT':'POST',body:JSON.stringify(payload)});
   rememberIssue(saved, id);
   return saved;
 }
 async function saveIssue(e){e.preventDefault();const button=e.currentTarget.querySelector('button[type="submit"]');try{button.disabled=true;button.textContent='正在保存…';const saved=await persistIssue(issueFromForm());state.selectedIssue=saved.id;$('#issueModal').classList.remove('open');renderIssues();toast('需求已保存')}catch(err){toast(err.message)}finally{button.disabled=false;button.textContent='保存'}}
-async function reopenDeliveredIssueSilent(issueId){
+async function reopenIssueSilent(issueId){
   const issue=await api(`/api/issues/${encodeURIComponent(issueId)}/reopen`,{method:'POST',body:'{}'});
   const idx=(state.data.issues||[]).findIndex(i=>i.id===issue.id);
   if(idx>=0)state.data.issues[idx]=issue;
   return issue;
 }
-async function reopenDeliveredIssue(issueId){
-  if(!await afConfirm({title:'重新打开确认',message:'重新打开后，该工作项可以再次触发 LOOP。确定继续？',confirmText:'确认重新打开'}))return;
+async function reopenIssue(issueId){
+  if(!await afConfirm({title:'重新打开确认',message:'重新打开后，这条需求回到待处理状态。确定继续？',confirmText:'确认重新打开'}))return;
   try{
-    const issue=await reopenDeliveredIssueSilent(issueId);
+    const issue=await reopenIssueSilent(issueId);
     renderIssues();
     $('#issueModal')?.classList.remove('open');
     if(state.drawerOpen&&state.selectedIssue===issue.id)openIssueDetail(issue.id);
-    toast('工作项已重新打开，可以再次触发 LOOP');
+    toast('需求已重新打开');
   }catch(err){toast(err.message)}
 }

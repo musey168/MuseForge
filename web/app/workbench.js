@@ -1428,17 +1428,14 @@ function credentialWizardStepTwoHTML(kind){
   // The network environment decides where the key comes from, so it is chosen first.
   const baseField=kind.baseURL?credentialBaseURLFieldHTML(wizard.baseUrl):'';
   const fields=(kind.extra?.options?extraField+secretField:secretField+extraField+protocolField)+baseField;
-  const runtimeNotice=kind.agentCli==='zcode'?`<div class="credential-note credential-runtime-note" data-credential-runtime role="status">
-    ${credentialGlyph('info',14)}<span><b>需要预装 ZCode CLI</b><span>请确认所选执行机器或 Docker 工作区镜像已安装官方 CLI。</span></span>
-  </div>`:'';
   if(isDirectExecutorForm(wizard)){
     const error=wizard.error?`<p class="credential-vline is-err" role="alert">${escapeHTML(wizard.error)}</p>`:'';
     return `<div class="credential-direct-heading">${credentialLogo(kind)}<h3>新增 ${escapeHTML(kind.name)}</h3></div>
-      ${runtimeNotice || credentialRuntimeStatus(kind)}
+      ${credentialRuntimeStatus(kind)}
       <fieldset class="credential-fields"${wizard.saving?' disabled':''}>${fields}</fieldset>
       <details class="credential-direct-help"><summary>如何获取密钥</summary><ol class="credential-guide">${guide}</ol></details>${error}`;
   }
-  return `<div class="credential-question">${credentialLogo(kind,'is-mini')}<span>${github?'使用访问令牌':'配置 '+escapeHTML(kind.short)}</span><small class="credential-description">${escapeHTML(kind.description)}</small></div>${runtimeNotice}${methods}<ol class="credential-guide">${guide}</ol><div class="credential-fields">
+  return `<div class="credential-question">${credentialLogo(kind,'is-mini')}<span>${github?'使用访问令牌':'配置 '+escapeHTML(kind.short)}</span><small class="credential-description">${escapeHTML(kind.description)}</small></div>${methods}<ol class="credential-guide">${guide}</ol><div class="credential-fields">
     ${fields}
   </div>`;
 }
@@ -1485,19 +1482,6 @@ function paintCredentialWizard(direction){
   if(old&&direction){old.className=`credential-pane is-leaving ${direction>0?'is-forward':'is-back'}`;old.querySelectorAll('input,textarea').forEach(input=>{input.value=''});setTimeout(()=>old.remove(),180)}
   else old?.remove();
   body.append(pane);
-  const runtimeNotice=pane.querySelector('[data-credential-runtime]');
-  if(runtimeNotice)api('/api/assistant/cli-install?engine=zcode',{silent:true}).then(({status})=>{
-    const heading=runtimeNotice.querySelector('b'),detail=heading.nextElementSibling;
-    if(status==='installed'){
-      heading.textContent='平台服务器已检测到 ZCode CLI';
-      detail.textContent='使用独立执行机器或 Docker 工作区时，请确认该环境也已预装。';
-    }
-    if(status==='missing'){
-      runtimeNotice.classList.add('is-warn');
-      heading.textContent='平台服务器缺少 ZCode CLI';
-      detail.textContent='请管理员在任务所用环境安装官方 CLI，并将 zcode 加入 PATH。';
-    }
-  }).catch(()=>{});
   const secretInput=pane.querySelector('[name="secret"]');if(secretInput)secretInput.value=wizard.secret||'';
   if(before&&direction){body.style.height=before+'px';requestAnimationFrame(()=>{body.style.height=pane.offsetHeight+'px';setTimeout(()=>{body.style.height=''},300)})}
   scrim.querySelectorAll('.credential-dots span').forEach((dot,index)=>{dot.className=wizard.done||index+1<wizard.step?'is-done':index+1===wizard.step?'is-current':''});
@@ -1642,8 +1626,8 @@ function listenForGongfengOAuth(){
 // Patch only the Gongfeng row: re-rendering the panel would drop inputs typed into other rows.
 async function refreshGongfengGrant(){
   const user=state.currentUser;if(!user||user.isGuest||!$('#credentialPanel'))return;
-  const users=await api('/api/users',{silent:true});
-  const fresh=(Array.isArray(users)?users:[]).find(u=>Number(u.id)===Number(user.id));
+  const shell=await api('/api/bootstrap',{silent:true});
+  const fresh=(Array.isArray(shell?.users)?shell.users:[]).find(u=>Number(u.id)===Number(user.id));
   const panel=$('#credentialPanel'),row=panel?.querySelector('[data-credential-row="gitToken"]');
   if(!fresh||!panel||Number(state.currentUser?.id)!==Number(user.id))return;
   storeCredentialUser(fresh);
@@ -1879,15 +1863,15 @@ function renderUserBadge(){
 function renderDashboard(){
   const issues=state.data.issues||[];
   const projectIssues=issues.filter(i=>!state.projectFilter||i.projectId===state.projectFilter);
-  const stageOf=i=>issueCurrentStage(i);
-  const attention=projectIssues.filter(i=>stageOf(i).key==='attention');
-  const active=projectIssues.filter(i=>stageOf(i).key==='active');
-  const closed=projectIssues.filter(i=>stageOf(i).key==='closed');
-  const needMe=[...attention];
+  const blocked=projectIssues.filter(i=>issueStatusKey(i)==='blocked');
+  const active=projectIssues.filter(i=>issueInProgress(i));
+  const done=projectIssues.filter(i=>issueStatusKey(i)==='done');
+  const closed=projectIssues.filter(i=>issueClosed(i));
+  const open=projectIssues.filter(i=>issueOpen(i)).length;
   const statCards=[
-    {label:'需要介入',value:attention.length,foot:'被阻塞的需求',color:'#c63c4b',filter:'attention'},
-    {label:'正在推进',value:active.length,foot:'需求正在推进',color:'#5b8cff',filter:'active'},
-    {label:'已经完成',value:closed.length,foot:'本项目已闭环',color:'#34d399',filter:'closed'},
+    {label:'需求',value:projectIssues.length,foot:'当前项目的全部需求',color:'#5b8cff',filter:''},
+    {label:'未完成',value:open,foot:'还没完成的需求',color:'#f59e0b',filter:'open'},
+    {label:'已完成',value:done.length+closed.length,foot:'已完成或已关闭的需求',color:'#34d399',filter:'closed'},
   ];
   const statsHost=$('#dashStats');
   statsHost.innerHTML=statCards.map(c=>`<div class="stat-card" ${c.filter!=null?`data-issue-filter="${c.filter}"`:`data-jump="${c.to}"`} style="--accent:${c.color}"><div class="label">${c.label}</div><div class="value">${c.value}</div><div class="foot">${c.foot}</div></div>`).join('');
@@ -1897,14 +1881,9 @@ function renderDashboard(){
     return `<div class="row-item ${out.key}" data-issue="${escapeHTML(i.id)}"><span class="dot ${out.key}"></span><div style="flex:1;min-width:0"><div class="strong ellipsis">${escapeHTML(i.title)}</div><div class="muted">${escapeHTML(issueKeyLabel(i))} · ${escapeHTML(stage.label)}</div></div><span class="status ${out.key}">${escapeHTML(out.short)}</span></div>`;
   };
   const bindIssueRows=host=>{host.querySelectorAll('[data-issue]').forEach(el=>el.onclick=()=>openIssueDetail(el.dataset.issue))};
-  $('#dashAttention').innerHTML=needMe.length?needMe.slice(0,8).map(row).join(''):'<div class="empty-box">没有需要你处理的需求</div>';
+  $('#dashAttention').innerHTML=blocked.length?blocked.slice(0,8).map(row).join(''):'<div class="empty-box">没有阻塞的需求</div>';
   $('#dashActive').innerHTML=active.length?active.slice(0,8).map(row).join(''):'<div class="empty-box">当前没有进行中的需求</div>';
-  const results=closed.filter(i=>!issueClosed(i)).sort((a,b)=>new Date(b.updatedAt||0)-new Date(a.updatedAt||0)).slice(0,8);
-  $('#dashResults').innerHTML=results.length?results.map(row).join(''):'<div class="empty-box">还没有跑完的需求</div>';
+  const results=done.sort((a,b)=>new Date(b.updatedAt||0)-new Date(a.updatedAt||0)).slice(0,8);
+  $('#dashResults').innerHTML=results.length?results.map(row).join(''):'<div class="empty-box">还没有完成的需求</div>';
   bindIssueRows($('#dashAttention'));bindIssueRows($('#dashActive'));bindIssueRows($('#dashResults'));
-  const cfg=state.data.syncConfig||{},logs=state.data.syncLogs||[];
-  const synced=knownTime(cfg.lastSyncAt),syncResult=logs[0]?.status==='success'?'成功':logs[0]?.status==='failed'?'失败':'';
-  $('#dashFeedHint').textContent=synced?`最近同步 ${synced.toLocaleString()}${syncResult?` · ${syncResult}`:''}`:'从未同步';
-  const feed=logs.slice(0,8).map(l=>`<div class="tl-item"><div><b>${l.direction==='pull'?'拉取':'推送'} · ${l.source==='github'?'GitHub':l.source==='gongfeng'?'工蜂':l.source==='tapd'?'TAPD':escapeHTML(l.source||'')}</b> <span class="muted">${escapeHTML(l.message||l.action)}</span></div><div class="muted" style="font-size:10.5px;margin-top:2px">${new Date(l.startedAt).toLocaleString()} · ${l.status==='success'?'成功':`失败 ${escapeHTML(l.message||'')}`}</div></div>`).join('');
-  $('#dashFeed').innerHTML=feed||'<div class="tl-item"><div class="muted">尚未同步。绑定 GitHub 仓库后，可在「需求列表」里点击「同步 GitHub」。</div></div>';
 }
