@@ -25,13 +25,13 @@ jobs:
         run: npm ci --no-audit --no-fund && npm test
         working-directory: webtest
       - name: Live-suite unit checks
-        run: npm ci --no-audit --no-fund && node --test 'unit/*.test.mjs'
+        run: node --test 'unit/*.test.mjs'
         working-directory: e2e
-      - name: Live-suite isolated layout checks
-        run: |
-          npm ci --no-audit --no-fund
-          npx playwright install --with-deps chromium
-          node --test 'layout/*.test.mjs'
+      - name: The omp extension's tests
+        run: node --test 'tests/*.test.mjs'
+        working-directory: omp-extension
+      - name: Live verification against a real platform
+        run: ./verify-personal.sh
         working-directory: e2e
       - name: Public-surface check
         run: python3 scripts/check-public.py
