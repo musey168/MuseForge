@@ -296,8 +296,8 @@ button.issue-stat:hover{border-color:var(--line-strong);color:var(--text)}
 .dash-list .row-item.attention{background:color-mix(in srgb,var(--amber) 8%,transparent)}
 .dash-list .row-item .button.small{flex:0 0 auto;margin-right:6px}
 
-.issue-table{min-width:max(100%,calc(var(--issue-col-key,76px) + 840px));width:100%;max-width:100%;box-sizing:border-box;overflow:visible;background:transparent;border:0;box-shadow:none;--issue-col-key:76px;--issue-cols:var(--issue-col-key,76px) minmax(160px,1.2fr) minmax(68px,.45fr) minmax(80px,.5fr) 60px minmax(110px,.65fr) minmax(120px,.75fr) minmax(96px,104px) 144px}
-.issue-table.issue-table-selectable{min-width:max(100%,calc(var(--issue-col-key,76px) + 880px));--issue-cols:40px var(--issue-col-key,76px) minmax(160px,1.2fr) minmax(68px,.45fr) minmax(80px,.5fr) 60px minmax(110px,.65fr) minmax(120px,.75fr) minmax(96px,104px) 144px}
+.issue-table{min-width:max(100%,calc(var(--issue-col-key,76px) + 760px));width:100%;max-width:100%;box-sizing:border-box;overflow:visible;background:transparent;border:0;box-shadow:none;--issue-col-key:76px;--issue-cols:var(--issue-col-key,76px) minmax(160px,1.2fr) minmax(68px,.45fr) 60px minmax(110px,.65fr) minmax(120px,.75fr) minmax(96px,104px) 144px}
+.issue-table.issue-table-selectable{min-width:max(100%,calc(var(--issue-col-key,76px) + 800px));--issue-cols:40px var(--issue-col-key,76px) minmax(160px,1.2fr) minmax(68px,.45fr) 60px minmax(110px,.65fr) minmax(120px,.75fr) minmax(96px,104px) 144px}
 .issue-select-label{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:24px;cursor:pointer}
 .issue-select-checkbox{margin:0;cursor:pointer}
 .issue-select-checkbox:disabled{cursor:not-allowed;opacity:.45}

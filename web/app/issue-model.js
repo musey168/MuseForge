@@ -48,9 +48,6 @@ function isRequirementWorkItem(issue){
   if(source==='gongfeng'||kind==='issue')return false;
   return kind==='requirement'||source==='tapd'||source==='local'||source==='';
 }
-function issueOwnerSummary(i){
-  return issueAssigneeName(i)||'未指定';
-}
 // A requirement is closed when its own status says so; nothing else can close it.
 function issueClosed(i){return String(i?.status||'').toLowerCase()==='closed'}
 function issueOutcome(i){

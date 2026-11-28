@@ -32,7 +32,6 @@ test('the requirement model derives stages, outcomes, and action markup from the
         closed:issueActionButtons(closed),
         open:issueActionButtons(base),
       },
-      owner:issueOwnerSummary(base),
       reopen:reopenIssueButton(closed),
       reopenOpen:reopenIssueButton(base),
       removed:['clientIssueLanes','issueActor','issueRunHealth','triggerSOPButton','canRetriggerIssue',
@@ -40,7 +39,8 @@ test('the requirement model derives stages, outcomes, and action markup from the
                'issueClarifying','clarificationNeedsConfirm','issueTrackerClosed','issueMergedDelivery',
                'issueManuallyClosed','deliveryLocked','gongfengIssueClosed',
                'deliveryMRLinked','pendingDeliveryMRCount','deliveryMRList','deliveryMRButtons',
-               'deliveryLockedLabel','reopenDeliveredButton','deliveryPane']
+              'deliveryLockedLabel','reopenDeliveredButton','deliveryPane',
+              'issueOwnerSummary','issueAssigneeName','issueOwnerAvatar']
         .filter(name=>typeof window[name]!=='undefined'),
     };
   })()`));
@@ -60,6 +60,5 @@ test('the requirement model derives stages, outcomes, and action markup from the
   assert.equal(result.actions.closed.includes('查看'), false, 'a closed requirement shows only its menu');
   assert.match(result.reopen, /重新打开/);
   assert.equal(result.reopenOpen, '', 'an open requirement has nothing to reopen');
-  assert.equal(result.owner, '未指定');
   assert.deepEqual([...result.removed], []);
 });

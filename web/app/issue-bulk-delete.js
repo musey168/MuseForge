@@ -7,7 +7,7 @@ function setIssueSelectionMode(enabled){
 }
 
 function issueSelectionFilterKey(){
-  return JSON.stringify([state.projectFilter||'',state.sourceFilter||'',state.issueStatusFilter||'',state.issueAssigneeFilter||'',state.issueTagFilter||'',state.issueDeliveryFilter||'',state.issueQuery||'']);
+  return JSON.stringify([state.projectFilter||'',state.sourceFilter||'',state.issueStatusFilter||'',state.issueTagFilter||'',state.issueDeliveryFilter||'',state.issueQuery||'']);
 }
 
 function syncIssueSelection(issues){

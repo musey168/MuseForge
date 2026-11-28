@@ -136,13 +136,18 @@ func TestIssueTableShowsSourceColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 	code := string(js)
-	head := `<span>编号</span><span>标题</span><span>来源</span><span>责任人</span>`
+	// A requirement has one owner — the operator — so the table has no
+	// assignee column between 来源 and 仓库.
+	head := `<span>编号</span><span>标题</span><span>来源</span><span>仓库</span>`
 	if !strings.Contains(code, head) {
-		t.Fatal("issue table head must list 来源 between 标题 and 责任人")
+		t.Fatal("issue table head must list 来源 between 标题 and 仓库")
 	}
-	row := `<div class="issue-title-cell">${issueTagsMarkup(i)}${issueTitleMarkup(i.title)}</div><div class="issue-source-cell">${issueSourceMarkup(i)}</div><div class="issue-assignee-cell"`
+	row := `<div class="issue-title-cell">${issueTagsMarkup(i)}${issueTitleMarkup(i.title)}</div><div class="issue-source-cell">${issueSourceMarkup(i)}</div><div class="issue-repository-cell"`
 	if !strings.Contains(code, row) {
-		t.Fatal("issue row must render the 来源 cell between 标题 and 责任人")
+		t.Fatal("issue row must render the 来源 cell between 标题 and 仓库")
+	}
+	if strings.Contains(code, "issue-assignee-cell") {
+		t.Fatal("the table still renders an assignee cell")
 	}
 }
 

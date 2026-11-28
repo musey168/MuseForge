@@ -950,16 +950,20 @@ func TestIssueFilterAndManualCloseUI(t *testing.T) {
 	html := string(htmlBytes)
 	for _, want := range []string{
 		`id="issueStatusFilter"`,
-		`id="issueAssigneeFilter"`,
 		`<option value="backlog">待规划</option>`,
 		`<option value="todo">待处理 / 待执行</option>`,
 		`<option value="done">已完成</option>`,
 		`<option value="closed">已关闭</option>`,
 		`data-dtab="operations"`,
-		`未指定责任人`,
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("index.html is missing %q", want)
+		}
+	}
+	// One operator, one identity: the assignee filter and its label are gone.
+	for _, gone := range []string{`id="issueAssigneeFilter"`, `未指定责任人`} {
+		if strings.Contains(html, gone) {
+			t.Fatalf("index.html still carries %q", gone)
 		}
 	}
 
@@ -970,10 +974,7 @@ func TestIssueFilterAndManualCloseUI(t *testing.T) {
 	app := string(appBytes)
 	for _, want := range []string{
 		"issueStatusFilter:''",
-		"issueAssigneeFilter:''",
 		"$('#issueStatusFilter')",
-		"$('#issueAssigneeFilter')",
-		"renderIssueAssigneeFilter",
 		"closeIssueById",
 		"data-close-issue",
 		"/api/issues/${encodeURIComponent(issueId)}/close",
@@ -992,6 +993,11 @@ func TestIssueFilterAndManualCloseUI(t *testing.T) {
 	}
 	if strings.Contains(app, "submit.textContent=isNew?'同步并保存':'保存 Issue'") {
 		t.Fatalf("app.js still contains '保存 Issue' in submit button")
+	}
+	for _, gone := range []string{"issueAssigneeFilter", "renderIssueAssigneeFilter", "issueAssigneeName"} {
+		if strings.Contains(app, gone) {
+			t.Fatalf("app bundle still carries %q", gone)
+		}
 	}
 
 	node, err := exec.LookPath("node")

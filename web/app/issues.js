@@ -6,32 +6,7 @@ function setIssueView(view, rerender=true){
 }
 
 function enhanceIssueFilters(){
-  ['#issueStatusFilter','#issueAssigneeFilter','#sourceFilter','#issueTagFilter'].forEach(sel=>window.enhanceSelect?.($(sel)));
-}
-
-function renderIssueAssigneeFilter(projectIssues=[]){
-  const sel=$('#issueAssigneeFilter');if(!sel)return;
-  const current=state.issueAssigneeFilter||'';
-  const project=(state.data.projects||[]).find(p=>p.id===state.projectFilter);
-  const userMap=new Map();
-  const owner=project?userById(project.ownerId):null;
-  if(owner)userMap.set(String(owner.id),userDisplay(owner));
-  projectIssues.forEach(i=>{
-    if(!i.assigneeUserId)return;
-    const uid=String(i.assigneeUserId);
-    if(userMap.has(uid))return;
-    const u=userById(i.assigneeUserId);
-    userMap.set(uid, u?userDisplay(u):`用户 ${uid}`);
-  });
-  const owns=(i,id)=>String(i.assigneeUserId)===id;
-  const meta=n=>n?` data-meta="${n} 条"`:'';
-  const unassigned=projectIssues.filter(i=>!i.assigneeUserId).length;
-  let html=`<option value="">全部责任人</option><option value="unassigned"${meta(unassigned)}${current==='unassigned'?' selected':''}>未指定责任人</option>`;
-  for(const [id, label] of userMap.entries()){
-    html+=`<option value="${escapeHTML(id)}"${meta(projectIssues.filter(i=>owns(i,id)).length)}${current===id?' selected':''}>${escapeHTML(label)}</option>`;
-  }
-  sel.innerHTML=html;
-  sel.value=current;
+  ['#issueStatusFilter','#sourceFilter','#issueTagFilter'].forEach(sel=>window.enhanceSelect?.($(sel)));
 }
 
 function renderIssueTagFilter(projectIssues=[]){
@@ -67,13 +42,6 @@ function filteredIssues(){
   let issues=(state.data.issues||[]).filter(i=>!state.projectFilter||i.projectId===state.projectFilter);
   if(state.sourceFilter)issues=issues.filter(i=>(i.source||'local')===state.sourceFilter);
   if(state.issueStatusFilter)issues=issues.filter(i=>issueMatchesStatusFilter(i,state.issueStatusFilter));
-  if(state.issueAssigneeFilter){
-    if(state.issueAssigneeFilter==='unassigned'){
-      issues=issues.filter(i=>!i.assigneeUserId);
-    }else{
-      issues=issues.filter(i=>String(i.assigneeUserId)===state.issueAssigneeFilter);
-    }
-  }
   if(state.issueTagFilter)issues=issues.filter(i=>issueTagList(i).includes(state.issueTagFilter));
   const issueFilter=state.issueDeliveryFilter||'';
   if(issueFilter==='open')issues=issues.filter(i=>issueOpen(i));
@@ -90,7 +58,6 @@ function filteredIssues(){
 function renderIssues(){
   const projectIssues=(state.data.issues||[]).filter(i=>!state.projectFilter||i.projectId===state.projectFilter);
   renderProjectContext(projectIssues);
-  renderIssueAssigneeFilter(projectIssues);
   renderIssueTagFilter(projectIssues);
   const statusSel=$('#issueStatusFilter');if(statusSel&&statusSel.value!==state.issueStatusFilter)statusSel.value=state.issueStatusFilter||'';
   const issues=filteredIssues();
@@ -111,7 +78,7 @@ function renderIssues(){
   const emptyHint='从 GitHub 或 GitLab 导入，或在本平台新建需求。';
   const keyWidth=issueKeyColumnWidth(paged.items);
   const pager=pagerHTML('issues',paged)||(paged.total?`<nav class="pager pager-summary" aria-label="分页"><span class="pager-meta">共 ${paged.total} 条</span></nav>`:'');
-  board.innerHTML=`<div class="issue-table-card"><div class="issue-table-scroll"><div class="issue-table${state.issueSelectionMode?' issue-table-selectable':''}" data-page-anchor="issues" style="--issue-col-key:${keyWidth}"><div class="issue-table-row issue-table-head" role="row">${state.issueSelectionMode?`<div class="issue-select-cell">${issueSelectAllCheckbox('全选本页可删除的需求')}</div>`:''}<span>编号</span><span>标题</span><span>来源</span><span>责任人</span><span>仓库</span><span>优先级</span><span>状态</span><span>操作</span></div><div class="issue-table-body">${paged.items.map(issueRow).join('')||`<div class="issue-table-empty">${huiIcon('search')}<b>${emptyTitle}</b><p>${emptyHint}</p></div>`}</div></div></div>${pager}</div>`;
+  board.innerHTML=`<div class="issue-table-card"><div class="issue-table-scroll"><div class="issue-table${state.issueSelectionMode?' issue-table-selectable':''}" data-page-anchor="issues" style="--issue-col-key:${keyWidth}"><div class="issue-table-row issue-table-head" role="row">${state.issueSelectionMode?`<div class="issue-select-cell">${issueSelectAllCheckbox('全选本页可删除的需求')}</div>`:''}<span>编号</span><span>标题</span><span>来源</span><span>仓库</span><span>优先级</span><span>状态</span><span>操作</span></div><div class="issue-table-body">${paged.items.map(issueRow).join('')||`<div class="issue-table-empty">${huiIcon('search')}<b>${emptyTitle}</b><p>${emptyHint}</p></div>`}</div></div></div>${pager}</div>`;
   $$('.issue-table-row[data-id]').forEach(el=>el.onclick=()=>openIssueDetail(el.dataset.id));
   bindIssueRowActions(board);
   bindPager(board);
@@ -220,23 +187,14 @@ function issuePriorityMarkup(value){
 function issueSourceLabel(i){
   const s=metricsIssueSource(i);
   if(s==='github')return 'GitHub';
-  if(s==='gongfeng')return '工蜂';
-  if(s==='tapd')return 'TAPD';
+  if(s==='gitlab')return 'GitLab';
   return '平台新建';
 }
 function issueSourceMarkup(i){
   const s=metricsIssueSource(i)||'local';
-  const tone=s==='github'?'github':s==='gongfeng'?'gongfeng':s==='tapd'?'tapd':'local';
+  const tone=s==='github'||s==='gitlab'?'github':'local';
   const label=issueSourceLabel(i);
   return `<span class="issue-source-chip tone-${tone}" title="需求来源：${escapeHTML(label)}">${escapeHTML(label)}</span>`;
-}
-// 与顶栏、项目成员保持一致：复用统一头像组件（真实头像 + 首字回退），不再自绘姓氏。
-function issueOwnerAvatar(i){
-  // 未指定责任人时只留「未指定」文字，不再额外画一个占位头像框。
-  if(!i.assigneeUserId)return '';
-  const user=i.assigneeUserId?userById(i.assigneeUserId):null;
-  if(!user)return `<span class="hui-avatar is-empty" aria-hidden="true">${huiIcon('user')}</span>`;
-  return `<span class="issue-assignee-avatar">${userAvatarHTML(user,48)}</span>`;
 }
 function issueStatusText(issue){
   return issueStatusLabel(issueStatusBucket(issue));
@@ -308,10 +266,9 @@ function issueRow(i){
   const repo=issueRepos[0],repoLabel=issueRepos.length>1?`${repo?.name||'未绑定'} 等${issueRepos.length}个`:repo?.name||'未绑定';
   const stage=issueCurrentStage(i);
   const rowTone=stage.key==='attention'?' needs-attention':'';
-  const owner=issueOwnerSummary(i);
   const pri=i.priority||'medium';
   const stageCell=`<div class="issue-stage-cell"><span class="issue-stage-pill ${stage.key}" title="${escapeHTML(stage.hint||'')}">${escapeHTML(stage.label)}</span></div>`;
-  return `<div class="issue-table-row${rowTone}" role="row" data-id="${escapeHTML(i.id)}">${state.issueSelectionMode?`<div class="issue-select-cell">${issueSelectionCheckbox(i)}</div>`:''}<div class="issue-key-cell" title="${escapeHTML(String(issueKeyLabel(i)||''))}">${issueKeyMarkup(i)}</div><div class="issue-title-cell">${issueTagsMarkup(i)}${issueTitleMarkup(i.title)}</div><div class="issue-source-cell">${issueSourceMarkup(i)}</div><div class="issue-assignee-cell" title="${escapeHTML(owner)}">${issueOwnerAvatar(i)}<span class="issue-assignee-name">${escapeHTML(owner)}</span></div><div class="issue-repository-cell" title="${escapeHTML(issueRepos.map(r=>r.name).join('、')||'未绑定')} · ${escapeHTML(i.baseBranch||repo?.defaultBranch||'')}">${escapeHTML(repoLabel)}</div><div class="issue-priority-cell">${issuePriorityMarkup(i.priority)}</div>${stageCell}<div class="issue-actions-cell">${issueActionButtons(i)}</div></div>`;
+  return `<div class="issue-table-row${rowTone}" role="row" data-id="${escapeHTML(i.id)}">${state.issueSelectionMode?`<div class="issue-select-cell">${issueSelectionCheckbox(i)}</div>`:''}<div class="issue-key-cell" title="${escapeHTML(String(issueKeyLabel(i)||''))}">${issueKeyMarkup(i)}</div><div class="issue-title-cell">${issueTagsMarkup(i)}${issueTitleMarkup(i.title)}</div><div class="issue-source-cell">${issueSourceMarkup(i)}</div><div class="issue-repository-cell" title="${escapeHTML(issueRepos.map(r=>r.name).join('、')||'未绑定')} · ${escapeHTML(i.baseBranch||repo?.defaultBranch||'')}">${escapeHTML(repoLabel)}</div><div class="issue-priority-cell">${issuePriorityMarkup(i.priority)}</div>${stageCell}<div class="issue-actions-cell">${issueActionButtons(i)}</div></div>`;
 }
 let refreshIssuesPending=null;
 // One fetch at a time, but never latched: the refresh button, a view change and
@@ -502,8 +459,10 @@ function renderRepositoryCredentialHint(){
   host.hidden=false;
   host.removeAttribute('role');
   const configured=!!user.gitHttpCredentialsConfigured;
-  const title=configured?'已配置 Git 访问令牌':'仓库可以先保存，代码任务还需要 Token';
-  const message=configured?'请确认 Token 已获得目标仓库的访问和写入权限。LOOP 使用需求责任人的 Token，未指定时使用项目 Owner 的 Token。':'使用仓库进行需求分析、访问私有代码或提交 PR 前，请先配置 Git 访问令牌。LOOP 使用需求责任人的 Token，未指定时使用项目 Owner 的 Token。';
+  const title=configured?'已配置 Git 访问令牌':'仓库可以先保存，导入需求还需要 Token';
+  // The platform reads the repository and fetches imports with this one token;
+  // it runs no work of its own, so there is no second identity to fall back on.
+  const message=configured?'请确认 Token 已获得目标仓库的访问和写入权限。导入与刷新需求都使用这一个 Token。':'导入需求、读取私有代码前，请先配置 Git 访问令牌。导入与刷新需求都使用这一个 Token。';
   host.dataset.configured=String(configured);
   host.innerHTML=`<div><b>${escapeHTML(title)}</b><p>${escapeHTML(message)}</p></div><button type="button" class="button ghost small" data-repository-configure-token>${configured?'个人设置':'配置 Git 访问令牌'}</button>`;
   host.querySelector('[data-repository-configure-token]').onclick=()=>{

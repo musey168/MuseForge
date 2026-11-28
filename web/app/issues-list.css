@@ -254,12 +254,6 @@ html[data-theme="dark"] #issuesView .issue-title-cell .issue-title-tag[class*="t
 #issuesView .issue-title-cell .issue-title-tag.tone-danger,
 html[data-theme="dark"] #issuesView .issue-title-cell .issue-title-tag.tone-danger,
 #issuesView .kanban-card .issue-title-tag.tone-danger { background: color-mix(in srgb, var(--hui-error) 9%, transparent); color: var(--hui-error); }
-#issuesView .issue-assignee-cell { display: flex; align-items: center; gap: 8px; color: var(--hui-secondary); font-size: 13px; }
-#issuesView .issue-assignee-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#issuesView .hui-avatar { flex: none; box-sizing: border-box; width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--hui-border); border-radius: 50%; background: var(--hui-soft); color: var(--hui-secondary); font: 600 11px/1 var(--hui-sans); }
-#issuesView .hui-avatar .harness-icon { width: 12px; height: 12px; }
-#issuesView .hui-avatar.is-agent { color: var(--hui-accent); background: var(--hui-accent-soft); border-color: transparent; }
-#issuesView .hui-avatar.is-empty { color: var(--hui-tertiary); border-style: dashed; background: transparent; }
 #issuesView .issue-source-cell { display: flex; align-items: center; min-width: 0; }
 #issuesView .issue-table-row > .issue-source-cell { padding: 0 10px; }
 #issuesView .issue-source-chip {
@@ -277,26 +271,7 @@ html[data-theme="dark"] #issuesView .issue-title-cell .issue-title-tag.tone-dang
   overflow: hidden;
   text-overflow: ellipsis;
 }
-#issuesView .issue-source-chip.tone-tapd { border-color: transparent; background: var(--hui-accent-soft); color: var(--hui-accent); }
-#issuesView .issue-source-chip.tone-gongfeng { border-color: transparent; background: color-mix(in srgb, var(--hui-success) 10%, transparent); color: var(--hui-success); }
 #issuesView .issue-source-chip.tone-github { border-color: transparent; background: color-mix(in srgb, var(--hui-text) 8%, transparent); color: var(--hui-text); }
-/* 责任人头像复用统一头像组件：真实头像填满，未取到照片时回退首字渐变圆。 */
-#issuesView .issue-assignee-avatar {
-  position: relative;
-  flex: none;
-  box-sizing: border-box;
-  width: 22px;
-  height: 22px;
-  overflow: hidden;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, var(--hui-accent), #8b5cf6);
-  color: #fff;
-  font: 600 10px/1 var(--hui-sans);
-}
-#issuesView .issue-assignee-avatar .user-avatar-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
-#issuesView .issue-assignee-avatar .user-avatar-text { font-size: 10px; font-weight: 600; color: #fff; text-transform: uppercase; }
 #issuesView :is(.issue-repository-cell, .issue-workflow-cell) { color: var(--hui-secondary); font-size: 13px; }
 
 #issuesView .issue-priority {

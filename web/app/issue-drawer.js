@@ -61,7 +61,7 @@ function overviewPane(issue,data){
   if(issueReopenable(issue))actions=reopenIssueButton(issue);
   actions+=issueProgressActionsHTML(issue,{includeIssueActions:true});
   const banner=`<div class="issue-outcome ${out.key}"><b>${escapeHTML(out.title)}</b><p>${escapeHTML(out.body)}</p><div class="issue-outcome-actions">${actions}</div></div>`;
-  const facts=`<div class="detail-grid">${drawerFact('责任人',issueAssigneeName(issue)||'未指定')}${drawerFact('优先级',issuePriorityLabel(issue.priority))}${drawerFact('来源',issueSourceLabel(issue))}${metricsIssueSource(issue)==='local'?drawerFact('统计关联 TAPD',escapeHTML(issue.tapdId||'未绑定（仍参与统计）')):''}${drawerFact('状态',escapeHTML(issueStatusLabel(issue.status)))}${drawerFact('标签',issueTagList(issue).map(t=>escapeHTML(t)).join('、'))}${drawerFact('代码仓库',escapeHTML(repo?.name||'未绑定'))}${drawerFact('继续开发分支',escapeHTML(storedIssueWorkBranch(issue)||'自动新建'))}</div>`;
+  const facts=`<div class="detail-grid">${drawerFact('优先级',issuePriorityLabel(issue.priority))}${drawerFact('来源',issueSourceLabel(issue))}${drawerFact('状态',escapeHTML(issueStatusLabel(issue.status)))}${drawerFact('标签',issueTagList(issue).map(t=>escapeHTML(t)).join('、'))}${drawerFact('代码仓库',escapeHTML(repo?.name||'未绑定'))}</div>`;
   const description=issue.description?`<div class="markdown-body">${renderRequirementMarkdown(issue.description)}</div>`:'';
   const images=(data.images||[]).map(image=>{
     const url=`/api/issues/${encodeURIComponent(issue.id)}/images/${encodeURIComponent(image.id)}`;

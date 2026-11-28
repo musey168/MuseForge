@@ -766,7 +766,7 @@ html[data-theme="dark"] .status.paused{color:var(--amber)}
   border:0;
   box-shadow:none;
   --issue-col-key:76px;
-  --issue-cols:var(--issue-col-key,76px) minmax(160px,1.2fr) minmax(68px,.45fr) minmax(80px,.5fr) 60px minmax(110px,.65fr) minmax(120px,.75fr) minmax(96px,104px) 144px;
+  --issue-cols:var(--issue-col-key,76px) minmax(160px,1.2fr) minmax(68px,.45fr) 60px minmax(110px,.65fr) minmax(120px,.75fr) minmax(96px,104px) 144px;
 }
 .issue-table-row{width:100%;box-sizing:border-box}
 .issue-table-row>:last-child,.issue-table-head>:last-child{padding-right:14px;display:flex;align-items:center;justify-content:flex-start}
