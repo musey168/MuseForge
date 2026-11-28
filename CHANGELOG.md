@@ -5,6 +5,20 @@ GitHub release once the `platform` workflow succeeded on that commit. The `local
 edition has its own `local-vX.Y.Z` tags, published by the `release-local` workflow.
 Entries below `1.0.0` describe the platform this repository came from.
 
+## 1.0.3 — 凭据管理删除
+
+这个页面的唯一消费者是 LOOP：凭据在流程里被选用，注入沙箱进程的环境变量。LOOP 已经
+删了，所以这张表、接口、页面和两个 MCP 工具都没有第二个读取方 —— 页面上永远只能是
+「当前项目还没有凭据」。
+
+- 删除 `project_credentials` 表、`projectCredentials` handler、
+  `/api/projects/:id/credentials` 的四条路由、项目凭据页面与脚本、
+  `project_credentials_list` / `project_credentials_save` 两个 MCP 工具。已有部署
+  执行 `migrations/044_drop_project_credentials.sql` 删表；新装不会再建。
+- 个人 Git 凭据（`users.credentials`，GitHub / GitLab 导入与仓库绑定用的那个）不受
+  影响。
+- 决策记录第 05 项从「保留」改为「删」，并记录原因。
+
 ## 1.0.2 — 统计台，以及真正能接进来的 Agent
 
 1.0.0 的「用量台」只数外部上报的执行。没有发送者时它永远是空的，也看不见
