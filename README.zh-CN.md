@@ -1,276 +1,122 @@
-> **MuseForge** — 个人项目工作台。
->
-> 源自 [Tencent/LoopForge](https://github.com/Tencent/LoopForge)，是一个**单人精简版**：
-> 去掉团队协作面（成员账号、项目成员与加入申请、共享任务市场、企业 IM 机器人、
-> 业务域报表、SSO/网关身份），只保留一个人长期用得上的能力
-> （需求清单、项目分组、凭据配置、执行机器的 CLI 环境、omp 用量台、MCP/HTTP API）。
->
-> 本仓库是**独立仓库**，不再跟随上游，也不自动同步上游更新。
-> 分支约定：`dev` 用于开发，`stable` 发布稳定版本。
-> 上游 MIT 许可证与原始版权声明保留在 [LICENSE](./LICENSE)。
->
-> 分叉点：上游 `Tencent/LoopForge` 的 `v0.4.3`（提交 `fd039e51`），
-> 在本仓库标记为 tag `upstream-v0.4.3`。
->
-> 本 README 以下内容为上游原文，尚未按个人版重写。
+# MuseForge
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/hero-zh-dark.svg">
-    <img src="docs/assets/readme/hero-zh.svg" alt="LoopForge —— 从想法，到合入的代码。在沙箱对话工作区里与编码 Agent 协作，用 LOOP 固化交付流程，关键节点由人把关。" width="100%">
-  </picture>
-</p>
+**一个人的项目工作台。它记录你的工作，不替你执行。**
 
-<p align="center">
-  <a href="https://github.com/Tencent/LoopForge/actions/workflows/platform.yml"><img src="https://img.shields.io/github/actions/workflow/status/Tencent/LoopForge/platform.yml?branch=main&label=CI&style=flat-square" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-7b61ff?style=flat-square" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/自主部署-Docker-526ce8?style=flat-square&logo=docker&logoColor=white" alt="Docker 自主部署">
-  <a href="https://github.com/Tencent/LoopForge/stargazers"><img src="https://img.shields.io/github/stars/Tencent/LoopForge?style=flat-square&color=f59e0b" alt="GitHub stars"></a>
-</p>
+MuseForge 是 [Tencent/LoopForge](https://github.com/Tencent/LoopForge) 的
+**单人精简版**。团队协作面已经删除 —— 成员账号、项目成员与加入申请、共享任务市场、
+企业 IM 机器人、业务域报表、SSO 与网关身份；Agent 执行面同样删除。留下来的是一个人
+真正会用的东西：
 
-<p align="center">
-  <a href="https://trendshift.io/repositories/300138?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-300138" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/300138" alt="Tencent%2FLoopForge | Trendshift" width="250" height="55"/></a>
-</p>
+- **需求清单** —— 你的待办条目，带项目、状态、优先级、标签、备注，以及指向
+  GitHub / GitLab 工单的链接
+- **项目分组** —— 需求的归属容器，没有成员名册
+- **个人配置** —— 模型 API Key、GitHub 设备码授权、SSH 与 HTTP Git 凭据
+- **执行机器** —— 你的机器上装了哪些 Agent CLI、版本号、登录态、能触达哪些模型
+- **omp 用量台** —— 你的 Agent 从外部上报回来的工作用量与成本
+- **MCP / HTTP API** —— 外部 Agent（omp、Claude Code、Codex、Cursor、OpenCode）
+  读写你需求的正式通道
 
-<p align="center">
-  <a href="README.md">English</a> · <b>简体中文</b>
-</p>
+**它不执行任何东西。** 没有 LOOP、没有沙箱、没有执行机器任务队列、没有产物预览、
+没有定时任务、没有知识库、没有聊天工作台。工作发生在你自己的 Agent 里；MuseForge
+只负责记账。
 
-<p align="center">
-  <a href="#两种工作方式">两种工作方式</a> ·
-  <a href="#快速开始">快速开始</a> ·
-  <a href="#loop-如何运行">LOOP</a> ·
-  <a href="#功能一览">功能</a> ·
-  <a href="#loopforge-local">本地版（旧版）</a> ·
-  <a href="#常见问题">FAQ</a> ·
-  <a href="#文档">文档</a>
-</p>
+这是一个**独立仓库**。不再跟随上游，也不同步上游更新。分支约定：`dev` 开发，
+`stable` 发布。上游 MIT 许可证与腾讯原始版权声明保留在 [LICENSE](./LICENSE)；
+MuseForge 自己的版权覆盖个人改动部分。
 
-https://github.com/user-attachments/assets/10b8ae2e-d7e7-4b78-8876-c45818d4a08f
+Fork 点：上游 `Tencent/LoopForge` 的 `v0.4.3`（commit `fd039e51`），在本仓库以
+标签 `upstream-v0.4.3` 标记。
 
-<p align="center"><sub>80 秒产品演示（1080p，有声）。</sub></p>
-
-**LoopForge** 是一个可自主部署的团队工作台，让你和编程 Agent 一起交付软件。在对话里把需求告诉 **Main Bot**：它会按需打开 Docker 沙箱、检出项目仓库、把任务分派给项目角色，最后提交 PR。某种做法被验证有效后，把它存成 **LOOP**（由 Agent、脚本和人工关口组成的可复用交付流程），下一个需求就按同样的方式交付，评审和验收都在流程里。
-
-干活的是编程 Agent CLI：CodeBuddy、Codex、Claude Code、OpenCode、Cursor CLI、Antigravity、Kimi Code、Pi、DeepSeek Harness 和 ZCode；LoopForge 负责它们外面的角色、沙箱、检查点和留痕，全部运行在你自己的环境里，MIT 开源。
-
-## 两种工作方式
-
-| | **与 Main Bot 对话** | **运行 LOOP** |
-| --- | --- | --- |
-| 适合 | 探索、快速修复、与 Agent 反复迭代 | 阶段固定、需要签字确认的可重复交付 |
-| 如何运行 | Main Bot 按需打开[对话工作区](docs/conversation-workspaces.md)（带项目仓库的 Docker 沙箱），并把项目角色作为子 Agent 调用 | 引擎按顺序执行 Agent、脚本、人工关口和子 LOOP 节点，每次运行有独立沙箱 |
-| 你如何把控 | 回复中途排队或「引导」消息；在对话里暂停、恢复或接管正在运行的 LOOP | 在人工关口审批；打回到指定环节返工；从任意节点重试或重跑 |
-| 交付物 | PR/MR，或直推合入共享分支（`mode=direct`） | 文档、代码或 PR，以及每个节点的产物和日志 |
-
-两种方式都挂在同一套**需求**上：无论改动来自对话还是 LOOP，都能追溯到原始需求，并计入交付与成本统计。
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/chat-home-dark.svg">
-    <img src="docs/assets/readme/chat-home.svg" alt="LoopForge 对话工作台：在输入框中描述需求，@ 面板列出角色、技能、需求和 LOOP" width="100%">
-  </picture>
-</p>
-
-<p align="center"><sub>对话首页：描述需求，用 <code>@</code> 引用角色、技能、需求、LOOP 或仓库；每个会话可单独选择执行器、模型和确认模式。</sub></p>
-
-## 为什么需要 LoopForge
-
-让编程 Agent "修一下这个 Bug"，结果往往取决于这一次的运行：可能跳过方案，可能忘了跑测试，可能自己评审自己的代码，也可能做到一半停下而没人发现。做演示没问题，但团队交付不能这样。
-
-- **可重复。** 同一条 LOOP、同样的阶段、同样的检查，每个需求都一样。内置后端、前端、缺陷修复、产品方案四类 LOOP 可直接起步。
-- **角色分离。** 方案、实现、评审、测试各有独立的角色提示词、执行器、模型、规则、Skills 和 MCP 工具；同一个角色既能做 LOOP 节点，也能在对话中作为子 Agent 调用。
-- **人在回路之上。** Agent 自主运行，你负责监督：随时暂停、引导或接管；需要人拍板的地方由人工关口拦下，看完报告再放行，或打回到指定环节返工。
-- **可观测、可续跑。** 节点状态、工具轨迹、日志和产物集中呈现；支持暂停、重试失败步骤、从任意节点重跑。
-- **技术栈和服务器都是你的。** 执行器支持 10 种编程 Agent CLI，从 CodeBuddy、Codex、Claude Code 到 OpenCode、Cursor CLI 等；工具接入 GitHub、Skills、MCP；运行环境可选 Docker 沙箱或你自己的机器。
+---
 
 ## 快速开始
 
-先准备 **Git** 并克隆仓库。安装脚本会检查 Docker、Compose、Python 3 和 curl，并在获得确认后补装缺少的组件：Linux 的 Python/curl 支持 apt、dnf、yum，Compose 插件支持 x86_64/arm64 并校验官方发行文件的 SHA-256；macOS 需要可运行的 Python 3 和 Docker Desktop，可通过 Homebrew 补装缺少的组件。支持普通用户运行，需要时通过 Docker 组或 sudo 操作 Docker。设置 `LOOPFORGE_YES=1` 可接受安装提示；安装和拉取镜像需要可用的外网连接。
+一个容器、一个 SQLite 文件，不需要数据库服务。
 
 ```bash
-git clone https://github.com/Tencent/LoopForge.git
-cd LoopForge
-./start.sh
+# 从源码构建并运行
+make build
+./bin/agentflow -datasource file:./museforge.db -addr 127.0.0.1:8080
 ```
 
-`./start.sh` 直接拉取 `compose.yaml` 中 pin 的 GHCR 发布镜像，不在本地构建（`bash scripts/install.sh` 效果相同）。安装流程会创建 MySQL 和平台服务，生成配置与会话密钥，并导入内置沙箱、通用 LOOP 和体验项目；无需在宿主机安装 Go 或 Node.js。模型 API Key 和 GitHub 授权在启动后由用户配置。用 `./start.sh logs`、`stop`、`restart`、`pull` 管理服务；需要从源码构建时用 `./start.sh dev`。
+首次启动时平台按模型清单建表 —— 没有迁移步骤。打开
+<http://127.0.0.1:8080> 直接进入需求清单，没有登录页。
 
-国内拉取 `ghcr.io` 经常中断。`./start.sh` 和 `./start.sh pull` 会并行探测 `ghcr.io` 与南京大学镜像 [ghcr.nju.edu.cn](https://doc.nju.edu.cn/books/e1654/page/ghcr)。只有先从 ghcr.io 拿到 manifest 摘要，且南京返回同一摘要时，才按这个摘要拉取并改回 `compose.yaml` 里的原名；这表示信任该主机，因为下载结果会被标成官方镜像名。拿不到官方摘要、摘要不一致，或镜像拉取失败时，仍走 `ghcr.io`。`MIRROR=ghcr.io` 固定走官方源，`MIRROR=ghcr.nju.edu.cn` 固定走南京，选择不会写入 `.env`。发布说明里有 digest，可用 `docker image inspect --format '{{index .RepoDigests 0}}' ghcr.io/tencent/loopforge:<pin>` 核对，`@` 后面的摘要应一致。`compose.yaml` 不用改。Docker 引擎里的 `registry-mirrors`（包括 `https://docker.nju.edu.cn`）只加速 Docker Hub，不能填在 `MIRROR` 里。
+用 Docker：
 
 ```bash
-./start.sh
-MIRROR=ghcr.io ./start.sh
-MIRROR=ghcr.nju.edu.cn ./start.sh pull
+bash scripts/configure.sh          # 写入 .env：数据源与各项密钥
+docker compose up -d --wait
 ```
 
-打开安装脚本输出的地址创建账号，第一个账号自动成为管理员。服务默认监听 `0.0.0.0:8090`；在云主机上，安装脚本会从云厂商的元数据服务读取公网 IP 并直接打印出来，放通安全组端口即可访问，或配置 HTTPS 反向代理；管理员账号创建前，建议只允许你的 IP 访问。首页的「快速接入」会带你配置模型凭据、绑定仓库并选好默认 LOOP。
+数据源只有一个设置项：
 
-GitLab、Gitea、Gogs 等托管可[配置 Git SSH](docs/deployment.md#git-repositories-over-ssh)，用个人密钥检出和推送分支。Issue 与 PR/MR 自动化需要托管平台的 API Token 或另行配置的 MCP。[CNB 官方仅支持 HTTPS + 访问令牌](https://docs.cnb.cool/zh/guide/git-access.html)。
+| 设置 | 含义 |
+|---|---|
+| `-datasource` / `AGENTFLOW_DATASOURCE_DSN` | SQLite 用 `file:/path/to/museforge.db`，或填 MySQL DSN。`file:` URI、裸路径、MySQL DSN 三种形态平台能自行区分。 |
+| `-addr` / `AGENTFLOW_HTTP_PORT` | 监听地址。**只绑回环地址**，绑定其它地址会被拒绝启动。 |
+| `AGENTFLOW_SESSION_SECRET` | 必填。 |
+| `AGENTFLOW_AUTH_REQUIRED` | 个人版填 `false` —— 没有登录。 |
 
-### 免 API Key 体验
+---
 
-新注册的账号会自动加入 **LoopForge 体验项目**，其中有一条只包含脚本和人工审批的 LOOP：
+## omp 用量台
 
-1. 切换到体验项目，打开 **流程模板**，进入 **平台验收 · 脚本与审批**。
-2. 点击 **运行流程**。真实脚本会生成一份报告，然后在审批节点等你确认。
-3. 在 **待我确认** 或运行详情页审批通过，观察流程继续执行并产出最终产物。
+你的 Agent 会话本来就在花钱；MuseForge 负责把账摆出来。omp 把每次会话的逐模型
+用量记在自己的统计库里，一个小 **omp 扩展**在会话结束时把这次会话汇总成
+**一条执行记录**上报到 MuseForge。
 
-### 真实任务需要准备什么
+```bash
+# 1. 安装扩展
+bash omp-extension/scripts/install.sh --user     # 或 --project /path/to/project
 
-| 我想要… | 需要准备 |
-| --- | --- |
-| 跑通脚本 + 人工审批体验 | 什么都不需要 |
-| 与 Main Bot 对话、生成文档或新项目 | 所选执行器的 API Key |
-| 修改已有仓库（通过对话或 LOOP）并提交 PR | 模型凭据 + GitHub 仓库（在个人设置中连接 GitHub） |
+# 2. 指向平台，并给它一个上报凭据
+bash omp-extension/scripts/install.sh --print-config > ~/.config/museforge/omp-usage.json
+```
 
-<details>
-<summary><b>更多配置说明</b>：执行器、GitHub、沙箱、访问模型</summary>
+上报凭据在用量台的**数据源**对话框里创建 —— 它与登录状态无关，可撤销，也会过期。
 
-<br>
+扩展每次会话结束都重新读取配置，所以换 Token 不需要重装扩展。没有配置凭据时它
+什么也不上报；上报失败也绝不会打断它正在汇报的那次会话。
 
-- **执行器。** 首页对话、需求澄清、Bot 回复、通知汇报、运行评测和静态预览均可选择 CLI 与模型。每个 LOOP 角色可以独立选择 CLI，内置模板仍默认使用 CodeBuddy。定时提示词使用任务所选的 CLI。将使用中的流程配置为其他 CLI 后，平台可在未安装 CodeBuddy、未配置其 Key 的环境中运行。[部署与升级说明](docs/deployment.md#choosing-an-executor)
+安装路径、配置项，以及一次会话的用量如何映射成一条上报记录，详见
+[`omp-extension/README.md`](./omp-extension/README.md)。设计依据见
+[`docs/adr/0003-omp-usage-console.md`](./docs/adr/0003-omp-usage-console.md)。
 
-  | 执行器 | 凭据 | 安装方式 |
-  | --- | --- | --- |
-  | **CodeBuddy** | 个人 Key，或管理员配置的平台共享 Key（覆盖对话和 LOOP 运行） | 默认内置，源码构建时可省略 |
-  | **Codex** | 个人 Key；已连接的执行机器可使用本机登录 | Docker 镜像内置 |
-  | **Claude Code** | 个人 Key；已连接的执行机器可使用本机登录 | 首次使用时从 npm 安装并缓存 |
-  | **OpenCode · Kimi Code · Pi** | 仅个人 Key | 首次使用时从 npm 安装并缓存 |
-  | **DeepSeek Harness** | 仅个人 Key | Docker 镜像内置 |
-  | **Cursor CLI · Antigravity** | 仅个人 Key | 首次在对话中使用时通过厂商安装脚本安装；不会装进 LOOP 沙箱 |
-  | **ZCode** | 仅个人 Key | 未内置，需安装到服务或执行机器的 PATH 中 |
-
-  Claude Code 之后的 7 种 Agent CLI 每次运行都在私有 HOME 目录里生成模型和 MCP 配置，因此始终使用需求责任人在个人设置中填写的 Key 和 Base URL，即使在已连接的执行机器上也一样。团队推广时，每位成员需要各自配置凭据。首次安装需要能访问 npm 或对应厂商；[原生部署](docs/deployment.md#workers-and-runners)需安装所选执行器的 CLI。
-- **企业微信通知。** 从本 Dockerfile 构建的平台镜像内置 `wecom-cli`，发布镜像将在下个版本包含它；原生部署需要另行安装，详见[部署指南](docs/deployment.md#native-development)。
-- **GitHub 可选。** 所有内置通用 LOOP 都可以不绑定仓库运行：产品方案交付文档，前后端新项目在任务工作区交付源码；缺陷修复仍需提供待修代码和复现材料。需要修改已有代码或提交 PR 时再绑定仓库。
-- **交付到仓库。** 在个人设置中点击「连接 GitHub」，用设备码授权后选择自己的仓库（已内置 LoopForge 授权应用，无需申请 PAT，仍可手动填写 PAT），再配置执行器凭据（或绑定本机执行机器），之后既可以运行一条项目 LOOP，也可以直接让 Main Bot 修改代码并提交 PR/MR。
-- **沙箱。** 默认 Compose 安装中，LOOP 运行和对话工作区都使用 Docker 沙箱容器，由平台通过宿主机 Docker socket 启动；默认沙箱复用已安装的运行镜像，安装后无需再构建；自定义 Dockerfile 仍单独构建。Docker socket 赋予平台控制宿主机 Docker 的权限，因此只适用于可信团队，不构成不可信多租户隔离边界；详见[部署边界](docs/deployment.md#accounts)。重复执行安装脚本会保留已有数据。
-- **账号与访问。** 新安装默认监听所有网卡（已有安装保留原配置），面向可信团队：已登录用户可以读取实例内各项目的数据，团队成员可在登录页自助注册（在 `.env` 中设置 `AGENTFLOW_ALLOW_SIGNUP=false` 可关闭）。对团队以外开放前，请先阅读[账号与访问边界](docs/deployment.md#accounts)。
-- **远程访问、HTTPS、独立 Worker。** 见[部署指南](docs/deployment.md)。
-- **参与 LoopForge 本身的开发？** 用 `bash scripts/dev.sh` 原生运行（需要 Go 1.26.11+）。
-
-</details>
-
-<a id="sop-如何运行"></a>
-
-## LOOP 如何运行
-
-**LOOP** 就是每次交付遵循的工作流程。Agent、脚本和人在同一次运行中衔接：
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/sop-flow-zh-dark.svg">
-    <img src="docs/assets/readme/sop-flow-zh.svg" alt="LOOP 流程：需求 → 澄清需求、设计方案、开发实现、独立评审（Agent）→ 运行测试（脚本）→ 人工验收（人工关口）→ 交付；验收不通过可打回开发实现返工" width="100%">
-  </picture>
-</p>
-
-<p align="center">
-  <img src="docs/assets/readme/designer-zh.svg" alt="LoopForge 流程设计器中的内置缺陷修复 LOOP 项目副本，选中「独立评审」节点，右侧检查器显示角色、执行器与失败策略" width="100%">
-</p>
-
-<p align="center"><sub>流程设计器中的内置缺陷修复 LOOP。每个步骤选择一个角色；检查失败时可以打回到前面的步骤。</sub></p>
-
-| 节点 | 作用 |
-| --- | --- |
-| **Agent** | 一个角色（提示词、执行器、模型、规则、Skills、MCP 工具），负责设计、实现、评审或测试。 |
-| **脚本** | 确定性的 Shell 步骤：构建、测试、Lint、生成报告。不需要 AI 的地方就不用 AI。 |
-| **人工关口** | 暂停运行，等人检查产物后放行，或打回到指定环节。 |
-| **子 LOOP** | 把另一条 LOOP 作为子流程复用。 |
-| **预览构建** | 构建静态站点并归档，供评审查看。 |
-
-每个节点声明自己的产物和依赖，依赖完成后引擎自动推进下一步。从内置 LOOP 起步，按项目调整角色、规则和执行环境，随着流程演进发布新版本。
-
-<p align="center">
-  <img src="docs/assets/readme/run-approval-zh.svg" alt="LoopForge 运行详情：报告脚本已完成，流程停在人工关口，提供确认通过、补充信息重跑、退回上游三种操作" width="100%">
-</p>
-
-<p align="center"><sub>停在人工关口的运行：确认通过继续下游、补充信息重跑当前节点，或退回上游重做。</sub></p>
-
-**我们实际跑过的一次交付：** 四个 CodeBuddy 角色依次完成 Python 修复的规划、实现、独立评审和交付汇总；三个真实测试通过，运行等待人工批准，批准后再次验证代码与验收时一致。这条链路已沉淀为[可复用验收用例](e2e/api/45-delivery-model.test.mjs)，覆盖范围和未联调项见[实测记录](docs/validation.md)。
-
-## 功能一览
-
-| 方向 | 能力 |
-| --- | --- |
-| **对话工作台** | Main Bot 支持按会话选择执行器、模型和确认模式；`@` 引用角色、技能、需求、LOOP 和仓库；回复进行中发送的消息进入排队托盘，「引导」可打断当前回复立即发送；生成的文件在侧边产物抽屉中预览、看源码和下载。 |
-| **对话工作区** | 按需创建带项目仓库的 Docker 沙箱，把项目角色作为原生子 Agent 调用，并能直接控制正在运行的 LOOP 工作区：暂停、恢复或接管。 |
-| **流程设计器** | 在画布上编排 Agent、脚本、人工关口、子 LOOP 和预览构建节点；支持失败打回、配置检查、版本历史与发布。内置后端、前端、缺陷修复和产品方案 LOOP。 |
-| **角色** | 可复用的角色定义：提示词、执行器、模型、规则、Skills、MCP 工具、产物与门禁，LOOP 节点和对话子 Agent 共用。 |
-| **需求到交付** | 无论通过 LOOP 还是直接在对话中交付，需求都全程跟踪；支持 PR/MR 状态跟踪、合入检测和共享分支直推。 |
-| **运行与审批** | 实时节点状态、工具轨迹、Worker 日志、节点产物快照和工作区预览；所有等你处理的关口集中在 **待我确认**。 |
-| **AI 定时任务** | 周期性 Agent 任务，具备完整的工作区、LOOP 与 MCP 权限；共享任务市场提供带版本和参数的任务模板；新需求可自动派发 LOOP。 |
-| **统计与成本** | 研发效能指标、业务领域报表（可导出静态 HTML/SVG），以及按公开标准价核算的 LOOP 与对话 Token 成本。 |
-| **执行环境** | 平台 Worker、Docker 沙箱，或连接一台使用你自己工具和仓库的本地执行机器。 |
-| **团队协作** | 密码账号、项目与成员、浅色 / 深色 / 跟随系统主题，以及有 OpenAPI 描述的 HTTP 与 MCP API。管理页面支持中英文，对话工作台目前为中文界面。 |
-
-<p align="center">
-  <img src="docs/assets/readme/sops-zh.svg" alt="流程模板页的「内置」标签：通用后端交付、通用前端交付、通用产品方案和通用缺陷修复四条 LOOP" width="100%">
-</p>
-
-<p align="center"><sub>内置 LOOP 是平台维护的只读蓝图，复制到本项目后即可运行和修改。</sub></p>
-
-## LoopForge Local
-
-> **旧版（Legacy）。** 已发布的 LoopForge Local（`loopforge-cli`）版本仍可安装。[Local 使用指南](docs/local/usage.zh-CN.md)介绍如何安装固定版本、继续使用既有工作流并保留产物。
-
-要在编码 Agent 中使用平台项目和 LOOP，请[通过 MCP 将 CodeBuddy 接入 LoopForge 实例](docs/local/usage.zh-CN.md#通过-mcp-连接-loopforge)。Local 仍可在编码 Agent 中独立运行内置工作流，无需启动 LoopForge 服务端。
-
-| | 平台版 | Local（旧版） |
-| --- | --- | --- |
-| 适合 | 团队共享对话工作区、LOOP、审批与运行记录 | 个人开发者在 IDE / CLI 中使用 |
-| 依赖 | Docker + Python 3 | Node.js 20+、Python 3.8+ 和一个编程助手 |
-| 工作流 | 与 Main Bot 对话 + 可视化画布自定义 LOOP | 内置 Classic / Portable 工作流 |
-| 证据留存 | Web 工作台中共享运行详情、审批和指标 | `artifacts/{task_slug}/` 下的产物 + 可选本地看板 |
-
-## 常见问题
-
-**体验需要 API Key 吗？**
-不需要。体验 LOOP 只包含脚本和人工审批。对话和 Agent 步骤需要所选执行器的 Key。平台不附带模型额度，凭据由你自己配置。
-
-**必须接入 GitHub 吗？**
-不必。对话、文档和新项目都在任务工作区完成。需要修改已有仓库或提交 PR 时再接入 GitHub。
-
-**什么时候用对话，什么时候用 LOOP？**
-探索和迭代用对话，Main Bot 同样可以提交 PR。当你希望每个需求都按同一套做法交付，有固定的评审、测试和签字环节，就把它做成 LOOP。Main Bot 可以启动、暂停和接管 LOOP 运行，两种方式可以配合使用。
-
-**和 Dify、n8n、Flowise 有什么区别？**
-它们是通用的 AI / 自动化工作流搭建平台。LoopForge 专注于 **用编程 Agent 做软件交付**：实现者与评审者等角色分工、带真实仓库的 Docker 沙箱、GitHub 交付、人工验收关口和运行证据。
-
-**和直接用 Claude Code / Codex / CodeBuddy 等编程 CLI 有什么区别？**
-LoopForge 不替代它们，而是编排它们。每个 Agent 步骤和每轮对话都运行这些 CLI 之一；LoopForge 补上外面的部分：谁来做、在哪个沙箱里、按什么顺序、经过哪些检查、由谁签字。
-
-**可以直接暴露到公网吗？**
-新安装默认监听所有网卡，面向可信团队。开放前请阅读[账号与访问边界](docs/deployment.md#accounts)并配置 HTTPS。安全漏洞请按[安全政策](SECURITY.zh-CN.md)私密报告。
+---
 
 ## 文档
 
-| 我想了解 | 从这里开始 |
-| --- | --- |
-| 部署、账号、执行机器与凭据 | [部署指南](docs/deployment.md) |
-| 对话工作区、AI 定时任务与 Token 成本口径 | [对话工作区](docs/conversation-workspaces.md) · [AI 定时任务](docs/ai-scheduled-task-capabilities.md) · [Token 成本统计](docs/token-pricing.md) |
-| 继续使用 Local 旧版工作流 | [LoopForge Local](docs/local/usage.zh-CN.md) · [版本差异](docs/local/editions.md) |
-| 扩展平台或接入 HTTP / MCP API | [架构](docs/architecture.md) · [API 参考](docs/api/README.md) · [共享定时任务 API](docs/api/shared-schedules.md) |
-| 参与前端开发 | [前端设计约定](design.md) |
-| 功能覆盖与发布就绪情况 | [实测记录](docs/validation.md) · [验收矩阵](docs/testing/acceptance-matrix.md) · [发布评审](docs/release-readiness.md) |
-| 来源与长期维护方式 | [开源范围](docs/open-source-scope.md) · [上游同步策略](docs/upstream-sync.md) |
+| 文档 | 内容 |
+|---|---|
+| [`docs/personal-scope/spec.md`](./docs/personal-scope/spec.md) | 本次裁剪实现的规格 |
+| [`docs/personal-scope/decision.md`](./docs/personal-scope/decision.md) | 保留了什么、删掉了什么、为什么 —— 范围的权威 |
+| [`docs/personal-scope/baseline-tests.md`](./docs/personal-scope/baseline-tests.md) | 裁剪前实测的测试基线 |
+| [`docs/architecture.md`](./docs/architecture.md) | 个人版是怎么搭起来的 |
+| [`docs/adr/`](./docs/adr/) | 决定这次形态的几个决策：裁剪深度、控制台定位、用量台、只用 SQLite、免登录且只绑回环 |
+| [`docs/api/`](./docs/api/) | HTTP API 及其 OpenAPI 契约 |
+| [`docs/deployment.md`](./docs/deployment.md) | 怎么部署运行 |
+| [`docs/testing/`](./docs/testing/) | 测试套件与运行方式 |
+| [`GLOSSARY.md`](./GLOSSARY.md) | 词汇表，以及本版本不再使用的上游词汇 |
 
-## 交流群
+---
 
-扫描二维码加入 LoopForge 交流群。
+## 开发 MuseForge
 
-<img src="docs/community-wecom-qr.png" alt="LoopForge 交流群二维码" width="200" />
+```bash
+make build          # 平台二进制
+make test           # Go 测试
+npm --prefix webtest test    # 控制台的 DOM 测试
+```
 
-## 参与贡献
+`AGENTS.md` 是仓库的规矩。`docs/personal-scope/decision.md` 是范围的权威：代码和
+决策记录对「应该存在什么」有分歧时，以决策记录为准。
 
-欢迎通过 Issue 和 PR 分享使用场景、报告问题，或改进流程、工具适配和平台体验。请先阅读[贡献指南](CONTRIBUTING.zh-CN.md)；安全问题请按[安全政策](SECURITY.zh-CN.md)私密报告。
+---
 
-如果 LoopForge 对你有帮助，欢迎点个 Star，让更多人看到它。
+## 与上游的关系
 
-<a href="https://star-history.com/#Tencent/LoopForge&Date">
-  <img src="https://api.star-history.com/svg?repos=Tencent/LoopForge&type=Date" alt="Star history" width="600">
-</a>
-
-## 许可证
-
-[MIT](LICENSE)。第三方组件保留各自许可证与版权声明，见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+MuseForge 起始于 [Tencent/LoopForge](https://github.com/Tencent/LoopForge) —— 一个
+团队研发工作台 —— 后来被裁剪成一个人的用法。上游 MIT 许可证与腾讯原始版权声明
+保留在 [LICENSE](./LICENSE)，个人改动部分由 MuseForge 自己的版权覆盖。上游仍然是
+本版本保留下来的需求模型、凭据保管、git 集成与机器探测能力的来源。
