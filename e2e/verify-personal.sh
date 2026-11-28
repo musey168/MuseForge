@@ -23,7 +23,10 @@ echo "== build =="
 ( cd .. && GOCACHE=/tmp/agentflow-gocache go build -o "$BIN" ./cmd/agentflow ) || { echo "build failed"; exit 1; }
 
 echo "== the platform refuses a non-loopback bind =="
-if "$BIN" -datasource "file:$DB.refused" -addr 0.0.0.0:18098 >/tmp/mf-e2e/refused.log 2>&1; then
+# The secret must be given here too: without it the binary exits on its own
+# requirement before it ever looks at the address, and the check passes locally
+# only because the developer's shell happens to export one.
+if AGENTFLOW_SESSION_SECRET=verify AGENTFLOW_AUTH_REQUIRED=false "$BIN" -datasource "file:$DB.refused" -addr 0.0.0.0:18098 >/tmp/mf-e2e/refused.log 2>&1; then
   bad "a public bind must be refused"
 else
   if grep -q "refusing to listen" /tmp/mf-e2e/refused.log; then ok "a public bind is refused with a reason"; else bad "refusal message missing"; fi
