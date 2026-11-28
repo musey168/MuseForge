@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// IssueSOPBinding is one step in a requirement's LOOP chain.
+// IssueSOPBinding is one step in a project's LOOP chain.
 type IssueSOPBinding struct {
 	ID             string   `json:"id,omitempty"`
 	WorkflowID     string   `json:"workflowId"`
@@ -16,16 +16,7 @@ type IssueSOPBinding struct {
 	Handoff        []string `json:"handoff,omitempty"`
 }
 
-// EffectiveSOPBindings returns the explicit chain, or synthesizes a single
-// step from WorkflowID so old tickets keep working.
-func (i Issue) EffectiveSOPBindings() []IssueSOPBinding {
-	if i.SOPBindings != nil {
-		return NormalizeSOPBindings(i.SOPBindings)
-	}
-	return bindingsFromWorkflow(i.WorkflowID, i.AssigneeUserID)
-}
-
-// SOPPlaybook is a named, reusable LOOP combo for requirements in a project.
+// SOPPlaybook is a named, reusable LOOP combo for the requirements of a project.
 type SOPPlaybook struct {
 	ID       string            `json:"id"`
 	Name     string            `json:"name"`
@@ -78,8 +69,8 @@ func NormalizeSOPPlaybooks(in []SOPPlaybook) []SOPPlaybook {
 	return out
 }
 
-// Playbooks returns named combos, wrapping a legacy single SOPBindings chain
-// as one default combo when SOPPlaybooks is empty.
+// Playbooks returns the named combos of the project, wrapping a legacy single
+// SOPBindings chain as one default combo when SOPPlaybooks is empty.
 func (p Project) Playbooks() []SOPPlaybook {
 	if len(p.SOPPlaybooks) > 0 {
 		return NormalizeSOPPlaybooks(p.SOPPlaybooks)
@@ -122,36 +113,6 @@ func (p Project) EffectiveSOPBindings() []IssueSOPBinding {
 		return append([]IssueSOPBinding(nil), book.Bindings...)
 	}
 	return nil
-}
-
-func ResolveSOPBindings(issue Issue, project Project) []IssueSOPBinding {
-	if issue.SOPBindings != nil {
-		return NormalizeSOPBindings(issue.SOPBindings)
-	}
-	return issue.EffectiveSOPBindings()
-}
-
-// SOPBindingForWorkflow returns an explicit chain step for a workflow.
-func (i Issue) SOPBindingForWorkflow(workflowID string) (IssueSOPBinding, bool) {
-	return bindingForWorkflow(NormalizeSOPBindings(i.SOPBindings), workflowID)
-}
-
-// ResolveSOPBinding looks up a step on the resolved (inherited) chain.
-func ResolveSOPBinding(issue Issue, project Project, workflowID string) (IssueSOPBinding, bool) {
-	return bindingForWorkflow(ResolveSOPBindings(issue, project), workflowID)
-}
-
-func bindingForWorkflow(bindings []IssueSOPBinding, workflowID string) (IssueSOPBinding, bool) {
-	workflowID = strings.TrimSpace(workflowID)
-	if workflowID == "" {
-		return IssueSOPBinding{}, false
-	}
-	for _, binding := range bindings {
-		if binding.WorkflowID == workflowID {
-			return binding, true
-		}
-	}
-	return IssueSOPBinding{}, false
 }
 
 func bindingsFromWorkflow(workflowID string, assigneeUserID int64) []IssueSOPBinding {

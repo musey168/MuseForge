@@ -8,6 +8,77 @@ import (
 	"time"
 )
 
+// ScheduleJob is one configured job of the personal platform: it runs on an
+// interval or a cron, and every execution is recorded as a
+// ScheduleJobExecution.
+type ScheduleJob struct {
+	SharedTaskID         string                `json:"sharedTaskId,omitempty"`
+	SharedTaskVersion    int                   `json:"sharedTaskVersion,omitempty"`
+	ParameterValues      map[string]string     `json:"parameterValues,omitempty"`
+	Notifications        []NotificationBinding `json:"notifications,omitempty"`
+	NotificationSnapshot []NotificationBinding `json:"notificationSnapshot,omitempty"`
+	NotificationResult   string                `json:"notificationResult,omitempty"`
+	ID                   string                `json:"id"`
+	Name                 string                `json:"name"`
+	Enabled              bool                  `json:"enabled"`
+	ProjectID            string                `json:"projectId"`
+	// Source limits which issues a trigger job starts.
+	// Empty means every source. "github" or "gitlab" starts only that source.
+	Source           string `json:"source,omitempty"`
+	WorkflowID       string `json:"workflowId,omitempty"`
+	UseIssueWorkflow bool   `json:"useIssueWorkflow,omitempty"`
+	SkipDispatch     bool   `json:"skipDispatch,omitempty"`
+	// IssueStatuses limits trigger jobs to these local issue statuses.
+	// Empty means backlog + todo. AI jobs leave this unused.
+	IssueStatuses []string `json:"issueStatuses,omitempty"`
+	// MaxDispatch caps successful LOOP dispatches per execution. Zero defaults to 10.
+	MaxDispatch     int    `json:"maxDispatch,omitempty"`
+	IntervalSec     int    `json:"intervalSec"`
+	Cron            string `json:"cron,omitempty"`
+	AssistantPrompt string `json:"assistantPrompt,omitempty"`
+	// References are project assets selected for an AI scheduled task. The
+	// executor resolves them at run time so edits to the referenced assets are
+	// reflected on the next run.
+	References     []AssetReference `json:"references,omitempty"`
+	AssistantModel string           `json:"assistantModel,omitempty"`
+	// TimeoutMinutes bounds one AI execution, including tool calls and LOOP waits.
+	// Zero uses the default for jobs saved before this field existed.
+	TimeoutMinutes int `json:"timeoutMinutes,omitempty"`
+	// SessionMode picks the Studio conversation an AI job runs in: empty opens
+	// a new conversation for every execution; "fixed" keeps continuing
+	// FixedSessionID.
+	SessionMode string `json:"sessionMode,omitempty"`
+	// SessionKeep is how many of its newest conversations an AI job that
+	// opens a new one per execution keeps: 10, 50 or 100, or -1 for no
+	// limit. Zero (jobs saved before the setting) means the default, 50.
+	// Ignored in fixed mode.
+	SessionKeep int `json:"sessionKeep,omitempty"`
+	// FixedSessionID is server-managed: the pinned conversation, set by the
+	// first fixed-mode execution and cleared when the mode leaves "fixed".
+	FixedSessionID string `json:"fixedSessionId,omitempty"`
+	OwnerUserID    int64  `json:"ownerUserId,omitempty"`
+	// RunAsUserID is server-managed: the user whose credentials run an AI job,
+	// set by whoever last saved it. Zero keeps the legacy project-owner
+	// selection. RunAsName is for display.
+	RunAsUserID          int64     `json:"runAsUserId,omitempty"`
+	RunAsName            string    `json:"runAsName,omitempty"`
+	LastRunAt            time.Time `json:"lastRunAt,omitempty"`
+	LastStatus           string    `json:"lastStatus,omitempty"` // running, success, failed, waiting
+	LastError            string    `json:"lastError,omitempty"`
+	LastPulled           int       `json:"lastPulled,omitempty"`
+	LastDispatched       int       `json:"lastDispatched,omitempty"`
+	LastAssistantMessage string    `json:"lastAssistantMessage,omitempty"`
+	// LastTraceID identifies the latest execution (ScheduleJobExecution.TraceID).
+	LastTraceID string `json:"lastTraceId,omitempty"`
+	// LastSessionID is the Studio conversation of the latest AI execution.
+	LastSessionID string `json:"lastSessionId,omitempty"`
+	// LastSessionGone is computed on read (never stored) when LastSessionID
+	// has been deleted or pruned by retention.
+	LastSessionGone bool      `json:"lastSessionGone,omitempty"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
 // ScheduleJobExecution is one execution of a schedule job. ScheduleJob only
 // keeps the latest outcome; executions keep the history shown on the
 // execution dashboard. TraceID is generated when the job is claimed and is

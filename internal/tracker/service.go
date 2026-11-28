@@ -62,17 +62,14 @@ func applyExistingIssue(dst *domain.Issue, existing domain.Issue) {
 	if existing.Number > 0 {
 		dst.Number = existing.Number
 	}
-	dst.AssigneeType = existing.AssigneeType
-	dst.AssigneeID = existing.AssigneeID
-	dst.AssigneeUserID = existing.AssigneeUserID
-	dst.WorkflowID = existing.WorkflowID
-	dst.LatestTaskID = existing.LatestTaskID
-	dst.AutomationState = existing.AutomationState
-	dst.DeliveryState = existing.DeliveryState
 	if existing.Kind != "" {
 		dst.Kind = existing.Kind
 	}
-	dst.Clarification = existing.Clarification
+	if len(existing.Tags) > 0 {
+		// Labels are local: the tracker has no equivalent, so an import keeps
+		// the ones the user set.
+		dst.Tags = append([]string(nil), existing.Tags...)
+	}
 	if existing.ExternalRef != nil && existing.ExternalRef.Imported {
 		if dst.ExternalRef == nil {
 			ref := *existing.ExternalRef
