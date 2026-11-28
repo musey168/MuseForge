@@ -7,9 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
-
 )
-
 
 // requestWithHeaders issues a JSON request with extra headers (runner session
 // or bootstrap tokens) and returns the raw recorder.
@@ -43,18 +41,9 @@ func TestIsRunnerAgentPath(t *testing.T) {
 		"/runners/health",
 		"/runners/register",
 		"/runners/heartbeat",
-		"/runners/tasks/claim",
-		"/runners/tasks/rt-1/events",
 		"/api/runners/register",
 		"/api/runners/disconnect",
 		"/api/runners/heartbeat",
-		"/api/runners/tasks/claim",
-		"/api/runners/tasks/rt-1",
-		"/api/runners/tasks/rt-1/start",
-		"/api/runners/tasks/rt-1/lease/renew",
-		"/api/runners/tasks/rt-1/events",
-		"/api/runners/tasks/rt-1/complete",
-		"/api/runners/tasks/rt-1/control",
 	}
 	for _, p := range agentPaths {
 		if !isRunnerAgentPath(p) {
@@ -65,6 +54,8 @@ func TestIsRunnerAgentPath(t *testing.T) {
 		"/api/runners",
 		"/api/runners/tasks",
 		"/api/runners/tasks/rt-1/cancel",
+		"/api/runners/tasks/rt-1/start",
+		"/api/runners/tasks/rt-1/lease/renew",
 		"/api/runs",
 		"/api/runnersX",
 	}

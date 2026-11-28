@@ -9,13 +9,13 @@ import (
 type User struct {
 	// ExecutorDefaults is the model this account runs its work with when no
 	// model is chosen explicitly.
-	ExecutorDefaults          ExecutorDefaults `json:"-"`
-	CodexAPIKey                string            `json:"codexApiKey,omitempty"`
-	CodexAPIKeyConfigured      bool              `json:"codexApiKeyConfigured,omitempty"`
-	CodexBaseURL               string            `json:"codexBaseUrl,omitempty"`
-	ClaudeCodeAPIKey           string            `json:"claudeCodeApiKey,omitempty"`
-	ClaudeCodeAPIKeyConfigured bool              `json:"claudeCodeApiKeyConfigured,omitempty"`
-	ClaudeCodeBaseURL          string            `json:"claudeCodeBaseUrl,omitempty"`
+	ExecutorDefaults           ExecutorDefaults `json:"-"`
+	CodexAPIKey                string           `json:"codexApiKey,omitempty"`
+	CodexAPIKeyConfigured      bool             `json:"codexApiKeyConfigured,omitempty"`
+	CodexBaseURL               string           `json:"codexBaseUrl,omitempty"`
+	ClaudeCodeAPIKey           string           `json:"claudeCodeApiKey,omitempty"`
+	ClaudeCodeAPIKeyConfigured bool             `json:"claudeCodeApiKeyConfigured,omitempty"`
+	ClaudeCodeBaseURL          string           `json:"claudeCodeBaseUrl,omitempty"`
 	// CodexModels and ClaudeCodeModels are the model catalogs AI 对话 offers
 	// for that CLI, in display order. Empty follows the CLI's built-in models
 	// on the official endpoint, or the models the Base URL publishes.
@@ -23,27 +23,27 @@ type User struct {
 	ClaudeCodeModels []CLIModel `json:"claudeCodeModels,omitempty"`
 	// AgentCLICredentials holds the credentials of the agent CLIs
 	// (AgentCLIExecutorKinds) by kind.
-	AgentCLICredentials map[string]AgentCLICredential `json:"agentCliCredentials,omitempty"`
-	ID                  int64                         `json:"id"`
-	StaffID             int                           `json:"staffId"`
-	LoginName           string                        `json:"loginName"`
-	ChineseName         string                        `json:"chineseName"`
-	DeptID              int                           `json:"deptId"`
-	DeptName            string                        `json:"deptName"`
-	GitToken                     string     `json:"gitToken,omitempty"`
-	GitHubCredentialConfigured   bool       `json:"gitHubCredentialConfigured,omitempty"`
-	GitTokenOAuth                bool       `json:"gitTokenOAuth,omitempty"`
-	GitSSHKeyConfigured          bool       `json:"gitSshKeyConfigured,omitempty"`
-	GitHTTPCredentialsConfigured bool       `json:"gitHttpCredentialsConfigured,omitempty"`
-	GongfengRefreshToken         string     `json:"-"`
-	GongfengTokenExpiresAt       time.Time  `json:"-"`
-	CodeBuddyAPIKey              string     `json:"codeBuddyApiKey,omitempty"`
-	CodeBuddyAPIKeyConfigured    bool       `json:"codeBuddyApiKeyConfigured,omitempty"`
-	CodeBuddyBaseURL             string     `json:"codeBuddyBaseUrl,omitempty"`
-	CodeBuddyInternetEnvironment string     `json:"codeBuddyInternetEnvironment,omitempty"`
-	CodeBuddyModels              []CLIModel `json:"codeBuddyModels,omitempty"`
-	CreatedAt                    time.Time  `json:"createdAt"`
-	UpdatedAt                    time.Time  `json:"updatedAt"`
+	AgentCLICredentials          map[string]AgentCLICredential `json:"agentCliCredentials,omitempty"`
+	ID                           int64                         `json:"id"`
+	StaffID                      int                           `json:"staffId"`
+	LoginName                    string                        `json:"loginName"`
+	ChineseName                  string                        `json:"chineseName"`
+	DeptID                       int                           `json:"deptId"`
+	DeptName                     string                        `json:"deptName"`
+	GitToken                     string                        `json:"gitToken,omitempty"`
+	GitHubCredentialConfigured   bool                          `json:"gitHubCredentialConfigured,omitempty"`
+	GitTokenOAuth                bool                          `json:"gitTokenOAuth,omitempty"`
+	GitSSHKeyConfigured          bool                          `json:"gitSshKeyConfigured,omitempty"`
+	GitHTTPCredentialsConfigured bool                          `json:"gitHttpCredentialsConfigured,omitempty"`
+	GongfengRefreshToken         string                        `json:"-"`
+	GongfengTokenExpiresAt       time.Time                     `json:"-"`
+	CodeBuddyAPIKey              string                        `json:"codeBuddyApiKey,omitempty"`
+	CodeBuddyAPIKeyConfigured    bool                          `json:"codeBuddyApiKeyConfigured,omitempty"`
+	CodeBuddyBaseURL             string                        `json:"codeBuddyBaseUrl,omitempty"`
+	CodeBuddyInternetEnvironment string                        `json:"codeBuddyInternetEnvironment,omitempty"`
+	CodeBuddyModels              []CLIModel                    `json:"codeBuddyModels,omitempty"`
+	CreatedAt                    time.Time                     `json:"createdAt"`
+	UpdatedAt                    time.Time                     `json:"updatedAt"`
 }
 
 // HasExecutorCredential reports whether the user has their own key for a CLI.
@@ -63,7 +63,6 @@ func (u User) HasExecutorCredential(kind string) bool {
 	}
 	return strings.TrimSpace(key) != ""
 }
-
 
 // GitSSHKey is the public description of a personal SSH credential.
 type GitSSHKey struct {
@@ -273,4 +272,3 @@ func PublicUsers(items []User) []User {
 	}
 	return out
 }
-

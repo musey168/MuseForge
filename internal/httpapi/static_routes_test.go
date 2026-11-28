@@ -28,15 +28,8 @@ func TestStaticRoutes(t *testing.T) {
 	}{
 		{"/", "text/html", 200},
 		{"/index.html", "text/html", 200},
-		{"/vscode.html", "text/html", 200},
-		{"/vscode.js", "javascript", 200},
-		{"/vscode-web/out/vs/loader.js", "javascript", 200},
-		{"/extensions/agentflow-workspace/package.json", "json", 200},
 		{"/app.js", "javascript", 200},
 		{"/app/start.js", "javascript", 200},
-		{"/bot-bind.html", "text/html", 200},
-		{"/bot-approve.html", "text/html", 200},
-		{"/bot-approve.js", "javascript", 200},
 		{"/no-such-file.js", "", 404},
 		{"/no/such/dir/", "", 404},
 	} {

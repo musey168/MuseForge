@@ -2,7 +2,6 @@ package repo
 
 import (
 	"testing"
-
 )
 
 func TestOpenRequiresDatasource(t *testing.T) {

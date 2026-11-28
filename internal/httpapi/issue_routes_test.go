@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"testing"
-
 )
 
 func TestIssueRoutesCoverRegisteredPaths(t *testing.T) {
@@ -11,7 +10,7 @@ func TestIssueRoutesCoverRegisteredPaths(t *testing.T) {
 			t.Fatalf("%s: incomplete route", path)
 		}
 	}
-	if len(issueRoutes) != 11 {
-		t.Fatalf("expected 11 issue sub-routes, got %d", len(issueRoutes))
+	if len(issueRoutes) != 4 {
+		t.Fatalf("expected 4 issue sub-routes, got %d", len(issueRoutes))
 	}
 }

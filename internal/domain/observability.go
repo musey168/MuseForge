@@ -30,7 +30,7 @@ type TelemetryContext struct {
 	IssueID         string `json:"issueId,omitempty"`
 	// TAPDID is the external requirement key; local IssueID may differ across imports.
 	TAPDID            string `json:"tapdId,omitempty"`
-	ResponsibleUserID int64 `json:"responsibleUserId,omitempty"`
+	ResponsibleUserID int64  `json:"responsibleUserId,omitempty"`
 	// KnowledgeRefs optionally pins the running user's connector bindings for
 	// this SOP Run (nil = follow node KnowledgeRefs / role toggle).
 	KnowledgeRefs *[]KnowledgeRef `json:"knowledgeRefs,omitempty"`

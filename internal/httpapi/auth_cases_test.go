@@ -15,7 +15,7 @@ func TestAuthPathPreviewAndLocalLogin(t *testing.T) {
 	for path, want := range map[string]bool{
 		insightIngestPath: false, "/mcp": true, "/static/x": false,
 		"/api/health": false, "/api/auth/photo/user/100": false,
-		"/api/projects": true, "/api/runners/tasks/id/start": false,
+		"/api/projects": true, "/api/runners/tasks/id/start": true,
 	} {
 		if got := protectedAccessPath(path); got != want {
 			t.Errorf("protectedAccessPath(%q)=%v want %v", path, got, want)

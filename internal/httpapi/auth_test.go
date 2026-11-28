@@ -14,20 +14,6 @@ func init() {
 	gin.SetMode(gin.TestMode)
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 func TestAuthCookieSecureBehindHTTPSProxy(t *testing.T) {
 	s := &Server{deps: &deps{authClient: auth.NewClient(auth.Config{})}}
 	s.auth = &authHandlers{deps: s.deps}
@@ -40,11 +26,3 @@ func TestAuthCookieSecureBehindHTTPSProxy(t *testing.T) {
 		t.Fatalf("HTTPS proxy response must set a Secure cookie: %+v", cookies)
 	}
 }
-
-
-
-
-
-
-
-

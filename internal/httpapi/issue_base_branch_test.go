@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"testing"
-
 )
 
 func TestNormalizeIssueBaseBranch(t *testing.T) {

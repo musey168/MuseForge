@@ -71,8 +71,8 @@ type AnalyticsSummary struct {
 	// of TotalRuns and every run status or duration metric.
 	ConversationWorkspaces int `json:"conversationWorkspaces"`
 	// ConversationLinkedWorkspaces have a requirement linked.
-	ConversationLinkedWorkspaces int `json:"conversationLinkedWorkspaces"`
-	ConversationIssues           int `json:"conversationIssues"`
+	ConversationLinkedWorkspaces      int     `json:"conversationLinkedWorkspaces"`
+	ConversationIssues                int     `json:"conversationIssues"`
 	ConversationIssuesDelivered       int     `json:"conversationIssuesDelivered"`
 	ConversationTokens                int64   `json:"conversationTokens"`
 	ConversationCostUSD               float64 `json:"conversationCostUsd"`
@@ -126,7 +126,6 @@ type AnalyticsSummary struct {
 	WeeklyDeliveredIssues    int     `json:"weeklyDeliveredIssues"`
 	WeeklyActiveContributors int     `json:"weeklyActiveContributors"`
 	WeeklyThroughputPerUser  float64 `json:"weeklyThroughputPerUser"`
-
 }
 
 type AnalyticsTrendPoint struct {

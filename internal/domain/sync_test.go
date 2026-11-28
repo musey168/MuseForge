@@ -70,14 +70,14 @@ func TestNormalizeScheduleSource(t *testing.T) {
 			t.Fatalf("NormalizeScheduleSource(%q)=%q %v", raw, got, err)
 		}
 	}
-	for _, raw := range []string{"gongfeng", " TAPD "} {
+	for _, raw := range []string{"github", " GitLab "} {
 		got, err := NormalizeScheduleSource(raw)
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := "gongfeng"
-		if raw != "gongfeng" {
-			want = "tapd"
+		want := "github"
+		if raw != "github" {
+			want = "gitlab"
 		}
 		if got != want {
 			t.Fatalf("NormalizeScheduleSource(%q)=%q", raw, got)
@@ -87,7 +87,7 @@ func TestNormalizeScheduleSource(t *testing.T) {
 		t.Fatal("unknown source must be rejected")
 	}
 	both := ScheduleJob{}
-	if !both.MatchesIssueSource("gongfeng") || !both.MatchesIssueSource("tapd") || !both.MatchesIssueSource("local") {
+	if !both.MatchesIssueSource("github") || !both.MatchesIssueSource("gitlab") || !both.MatchesIssueSource("local") {
 		t.Fatal("empty source must match every issue")
 	}
 	only := ScheduleJob{Source: "gongfeng"}

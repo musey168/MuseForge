@@ -27,7 +27,7 @@ type SharedScheduleVersion struct {
 	Name              string                `json:"name"`
 	Description       string                `json:"description"`
 	Prompt            string                `json:"prompt"`
-	References        []AssetReference  `json:"references,omitempty"`
+	References        []AssetReference      `json:"references,omitempty"`
 	Assets            []SharedScheduleAsset `json:"assets,omitempty"`
 	Model             string                `json:"model"`
 	Cron              string                `json:"cron"`

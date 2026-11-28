@@ -631,4 +631,3 @@ func (h issuesHandlers) bindRequirementPlaybook(issue *domain.Issue) {
 		issue.WorkflowID = book.Bindings[0].WorkflowID
 	}
 }
-

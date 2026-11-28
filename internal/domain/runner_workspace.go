@@ -255,9 +255,9 @@ type BrowserPoint struct {
 // BrowserInspection is the element under a point of the Agent browser page.
 // Rect is in CSS pixels of the top-level viewport.
 type BrowserInspection struct {
-	Label    string                `json:"label"`
-	Rect     ElementRect           `json:"rect"`
-	Viewport ElementRect           `json:"viewport"`
+	Label    string              `json:"label"`
+	Rect     ElementRect         `json:"rect"`
+	Viewport ElementRect         `json:"viewport"`
 	Element  *BrowserPageElement `json:"element,omitempty"`
 }
 

@@ -19,8 +19,6 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
-
-
 func TestPlatformSSHRevocationPreservesRunnerLocalPin(t *testing.T) {
 	if _, err := exec.LookPath("ssh"); err != nil {
 		t.Skip("OpenSSH client is not installed")
@@ -66,8 +64,6 @@ func TestPlatformSSHRevocationPreservesRunnerLocalPin(t *testing.T) {
 		})
 	}
 }
-
-
 
 func sshTestGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()

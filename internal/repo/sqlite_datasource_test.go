@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
 )
 
 func TestDatasourceKindTellsSQLiteAndMySQLApart(t *testing.T) {
@@ -39,9 +38,9 @@ func TestOpenSQLiteCreatesSchemaFromModelManifest(t *testing.T) {
 		t.Fatalf("storage driver = %v, want %q", driver, datasourceSQLite)
 	}
 	for _, table := range []string{
-		"issues", "issue_comments", "projects", "project_credentials",
-		"users", "user_configs", "runners", "runner_tasks",
-		"insight_sources", "insight_executions",
+		"issues", "issue_comments", "issue_images", "projects", "project_credentials",
+		"repositories", "users", "user_configs", "runners",
+		"insight_sources", "insight_executions", "tracker_import_runs",
 	} {
 		if !s.DB.Migrator().HasTable(table) {
 			t.Fatalf("fresh sqlite database is missing table %q", table)

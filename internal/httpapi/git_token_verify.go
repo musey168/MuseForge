@@ -94,4 +94,3 @@ func verifyGitHubToken(ctx context.Context, token string) gitTokenVerifyResult {
 	// identity only. Repository access is verified when cloning or importing.
 	return gitTokenVerifyResult{Valid: true, Login: user.Login}
 }
-

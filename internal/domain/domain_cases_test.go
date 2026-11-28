@@ -177,7 +177,7 @@ func TestScheduleLaneAndVerificationBranches(t *testing.T) {
 	if got := job.TriggerIssueStatuses(); len(got) != 2 || got[0] != "todo" {
 		t.Fatalf("statuses = %#v", got)
 	}
-	for _, source := range []string{"", "all", "both", "gongfeng", "tapd"} {
+	for _, source := range []string{"", "all", "both", "github", "gitlab"} {
 		if _, err := NormalizeScheduleSource(source); err != nil {
 			t.Fatal(err)
 		}

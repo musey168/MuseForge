@@ -12,10 +12,6 @@ import (
 	"agentflow/internal/tracker"
 )
 
-
-
-
-
 func TestSecurityHeadersAndSameOriginCORS(t *testing.T) {
 	s, err := repo.OpenTest()
 	if err != nil {
@@ -75,8 +71,6 @@ func TestGzipJSONResponses(t *testing.T) {
 	}
 }
 
-
-
 func TestAppendClarificationDescriptionReplacesPreviousBlock(t *testing.T) {
 	got := appendClarificationDescription("原描述", "第一轮结论")
 	if !strings.Contains(got, "原描述") || !strings.Contains(got, "第一轮结论") {
@@ -87,10 +81,6 @@ func TestAppendClarificationDescriptionReplacesPreviousBlock(t *testing.T) {
 		t.Fatalf("replace failed: %q", got)
 	}
 }
-
-
-
-
 
 func requestJSON[T any](t *testing.T, h http.Handler, method, path string, body any, wantStatus int) T {
 	t.Helper()

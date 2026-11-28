@@ -8,10 +8,10 @@ import "time"
 type UsageConsoleSnapshot struct {
 	Summary    UsageConsoleSummary      `json:"summary"`
 	Trend      []UsageConsoleTrendPoint `json:"trend"`
-	Models     []UsageConsoleBreakdown   `json:"models"`
-	Providers  []UsageConsoleBreakdown   `json:"providers"`
-	Workflows  []UsageConsoleWorkflow    `json:"workflows"`
-	Executions []UsageConsoleExecution   `json:"executions"`
+	Models     []UsageConsoleBreakdown  `json:"models"`
+	Providers  []UsageConsoleBreakdown  `json:"providers"`
+	Workflows  []UsageConsoleWorkflow   `json:"workflows"`
+	Executions []UsageConsoleExecution  `json:"executions"`
 	// Empty is true when the scope holds no reported execution, so the
 	// interface can say so instead of showing a page of zeros.
 	Empty       bool      `json:"empty"`
@@ -59,7 +59,7 @@ type UsageConsoleSummary struct {
 	// MalformedReports counts the reports the ingest refused as malformed.
 	MalformedReports int64 `json:"malformedReports"`
 	// SkippedExecutions counts the stored reports the console could not read.
-	SkippedExecutions int `json:"skippedExecutions"`
+	SkippedExecutions int       `json:"skippedExecutions"`
 	GeneratedAt       time.Time `json:"generatedAt"`
 }
 
@@ -117,21 +117,21 @@ type UsageConsoleUsage struct {
 
 // UsageConsoleExecution is one reported execution, newest first.
 type UsageConsoleExecution struct {
-	ID                  string              `json:"id"`
-	ExternalExecutionID string              `json:"externalExecutionId"`
-	WorkflowID          string              `json:"workflowId"`
-	WorkflowName        string              `json:"workflowName"`
-	Status              string              `json:"status"`
-	StartedAt           time.Time           `json:"startedAt"`
-	FinishedAt          time.Time           `json:"finishedAt"`
-	DurationMs          int64               `json:"durationMs"`
-	Tokens              int64               `json:"tokens"`
-	InputTokens         int64               `json:"inputTokens"`
-	OutputTokens        int64               `json:"outputTokens"`
-	CacheReadTokens     int64               `json:"cacheReadTokens"`
-	CacheWriteTokens    int64               `json:"cacheWriteTokens"`
-	CostUSD             float64             `json:"costUsd"`
-	CostCNY             float64             `json:"costCny"`
+	ID                  string    `json:"id"`
+	ExternalExecutionID string    `json:"externalExecutionId"`
+	WorkflowID          string    `json:"workflowId"`
+	WorkflowName        string    `json:"workflowName"`
+	Status              string    `json:"status"`
+	StartedAt           time.Time `json:"startedAt"`
+	FinishedAt          time.Time `json:"finishedAt"`
+	DurationMs          int64     `json:"durationMs"`
+	Tokens              int64     `json:"tokens"`
+	InputTokens         int64     `json:"inputTokens"`
+	OutputTokens        int64     `json:"outputTokens"`
+	CacheReadTokens     int64     `json:"cacheReadTokens"`
+	CacheWriteTokens    int64     `json:"cacheWriteTokens"`
+	CostUSD             float64   `json:"costUsd"`
+	CostCNY             float64   `json:"costCny"`
 	// CostStatus is the execution's cost status: reported, estimated or
 	// unknown.
 	CostStatus string              `json:"costStatus"`
