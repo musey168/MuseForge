@@ -22,10 +22,14 @@ const web = path.join(root, 'web');
 
 async function collectSources() {
   const sources = [await readFile(path.join(web, 'index.html'), 'utf8')];
-  const appDir = path.join(web, 'app');
-  for (const name of await readdir(appDir)) {
-    if (!name.endsWith('.js')) continue;
-    sources.push(await readFile(path.join(appDir, name), 'utf8'));
+  // Every script the console loads: web/*.js and web/app/*.js. The test files
+  // next to them are not loaded by the console, so their copy is not live.
+  for (const dir of [web, path.join(web, 'app')]) {
+    for (const name of await readdir(dir)) {
+      if (!name.endsWith('.js')) continue;
+      if (name.endsWith('_test.js') || name === 'i18n-en.js') continue;
+      sources.push(await readFile(path.join(dir, name), 'utf8'));
+    }
   }
   return sources;
 }
@@ -36,7 +40,8 @@ async function readDictionary() {
   const file = path.join(web, 'i18n-en.js');
   const source = await readFile(file, 'utf8');
   const entries = {};
-  const pattern = /Object\.assign\(window\.LF_I18N_EN\s*,\s*/g;
+  // The first assignment and every Object.assign call hold a JSON object.
+  const pattern = /(?:^|\n)window\.LF_I18N_EN\s*=|Object\.assign\(window\.LF_I18N_EN\s*,\s*/g;
   let match;
   while ((match = pattern.exec(source)) !== null) {
     const start = source.indexOf('{', match.index + match[0].length - 1);

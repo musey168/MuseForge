@@ -54,15 +54,13 @@ type IssueProvider interface {
 }
 
 // trackerKind maps a provider's item kind onto the local requirement kind.
-// One table, so every provider lands on the same vocabulary.
+// One table, so every provider lands on the same vocabulary: a requirement is
+// work to do, an issue is a defect. A provider's own vocabulary — GitLab's
+// "bug", "task", "incident" — never reaches the local model.
 func trackerKind(providerKind string) string {
 	switch strings.ToLower(strings.TrimSpace(providerKind)) {
-	case "bug":
-		return "bug"
-	case "task":
-		return "task"
-	case "issue", "incident", "test_case":
-		return "issue"
+	case "task", "chore", "story", "feature":
+		return "requirement"
 	default:
 		return "issue"
 	}

@@ -76,8 +76,10 @@ func TestGitLabImportCreatesARequirementPerIssue(t *testing.T) {
 	if bug.Number != 1 || bug.Title != "Opened bug" || bug.Description != "Bug brief" {
 		t.Fatalf("imported requirement lost a field: %+v", bug)
 	}
-	if bug.Status != "todo" || bug.Kind != "bug" {
-		t.Fatalf("opened bug mapped to status %q kind %q, want todo/bug", bug.Status, bug.Kind)
+	// A defect stays a defect: GitLab's own "bug" type never reaches the local
+	// vocabulary, which knows a requirement and an issue.
+	if bug.Status != "todo" || bug.Kind != "issue" {
+		t.Fatalf("opened bug mapped to status %q kind %q, want todo/issue", bug.Status, bug.Kind)
 	}
 	if bug.ExternalRef == nil || bug.ExternalRef.Source != "gitlab" || bug.ExternalRef.ExternalURL != "https://gitlab.com/example/repo/-/issues/1" || bug.ExternalRef.ExternalState != "opened" {
 		t.Fatalf("the requirement must link back to GitLab: %+v", bug.ExternalRef)
@@ -86,8 +88,8 @@ func TestGitLabImportCreatesARequirementPerIssue(t *testing.T) {
 	if !ok {
 		t.Fatal("the closed issue did not become a requirement")
 	}
-	if closed.Status != "closed" || closed.CloseSource != "external" || closed.Kind != "task" {
-		t.Fatalf("closed task mapped to status %q close %q kind %q, want closed/external/task", closed.Status, closed.CloseSource, closed.Kind)
+	if closed.Status != "closed" || closed.CloseSource != "external" || closed.Kind != "requirement" {
+		t.Fatalf("closed task mapped to status %q close %q kind %q, want closed/external/requirement", closed.Status, closed.CloseSource, closed.Kind)
 	}
 	for id, want := range map[string]string{"gl-repo-gl-3": "issue", "gl-repo-gl-4": "issue"} {
 		issue, ok := st.Issue(id)
