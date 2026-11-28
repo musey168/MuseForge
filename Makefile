@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-.PHONY: run test test-mysql clean-mysql build coverage coverage-go coverage-web coverage-e2e
-=======
 .PHONY: run test test-mysql clean-mysql build coverage coverage-go coverage-web coverage-e2e test-omp-extension
->>>>>>> feat/ticket-5
 
 GOCACHE ?= /tmp/agentflow-gocache
 # Use the local toolchain; go.mod requires go >= 1.26.11.

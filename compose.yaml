@@ -20,30 +20,17 @@ services:
       interval: 2s
       timeout: 3s
       retries: 60
-  artifact-migration:
-    profiles: [mysql]
-    # Upgrade existing volumes before the platform starts. Fresh schemas are created by the platform.
-    image: mysql:8.4
-    entrypoint: ["sh", "-ec"]
-    command:
-      - exec mysql -h mysql -u loopforge loopforge < /migrations/042_run_artifacts_content_mediumtext.sql
-    environment:
-      MYSQL_PWD: ${LOOPFORGE_DB_PASSWORD:?Run scripts/configure.sh first}
-    volumes:
-      - type: bind
-        source: ./migrations/042_run_artifacts_content_mediumtext.sql
-        target: /migrations/042_run_artifacts_content_mediumtext.sql
-        read_only: true
-        bind:
-          create_host_path: false
-    depends_on:
-      mysql:
-        condition: service_healthy
   platform:
     profiles: [platform]
-    # Published release stack: never builds. Bump the pinned tag (here and in
-    # AGENTFLOW_ISOLATED_IMAGE) with each release; source builds use compose.dev.yaml.
-    image: ${LOOPFORGE_IMAGE:-ghcr.io/tencent/loopforge:0.4.3}
+    # The platform is this checkout: the image is built from the repository.
+    # LOOPFORGE_IMAGE names a tag for an installation that published its own.
+    image: ${LOOPFORGE_IMAGE:-museforge-platform:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        LOOPFORGE_BUILD_JOBS: ${LOOPFORGE_BUILD_JOBS:-}
+        LOOPFORGE_COMMIT: ${LOOPFORGE_COMMIT:-}
     ports:
       - "${LOOPFORGE_BIND:-127.0.0.1}:${AGENTFLOW_HTTP_PORT:-8090}:8080"
     extra_hosts:
@@ -64,7 +51,6 @@ services:
       AGENTFLOW_MCP_TOKEN: ${AGENTFLOW_MCP_TOKEN:-}
       AGENTFLOW_GIT_SSH_KNOWN_HOSTS: ${AGENTFLOW_GIT_SSH_KNOWN_HOSTS:-}
       AGENTFLOW_CREDENTIAL_KEYS: ${AGENTFLOW_CREDENTIAL_KEYS:-}
-      AGENTFLOW_ISOLATED_IMAGE: ${LOOPFORGE_IMAGE:-ghcr.io/tencent/loopforge:0.4.3}
       HOME: ${LOOPFORGE_DATA_DIR:?Run scripts/configure.sh first}/home
       AGENTFLOW_RUNNER_BINARY: /app/bin/agentflow-runner-{os}-{arch}
     command: ["-addr", "0.0.0.0:8080"]
@@ -76,9 +62,6 @@ services:
       # platform runs on its SQLite file and needs no server at all.
       mysql:
         condition: service_healthy
-        required: false
-      artifact-migration:
-        condition: service_completed_successfully
         required: false
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=2).close()"]

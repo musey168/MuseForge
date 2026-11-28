@@ -205,15 +205,6 @@ async function removeRunner(runnerId){
     toast('已移除','ok');refreshRunners(true);
   }catch(err){toast(err.message)}
 }
-// Compares dotted numeric versions; a malformed version counts as older.
-function runnerVersionAtLeast(have,want){
-  const parse=v=>{const parts=String(v||'').trim().replace(/^v/,'').split('.');return parts.every(p=>/^\d+$/.test(p))?parts.map(Number):null};
-  const h=parse(have),w=parse(want);
-  if(!w)return true;
-  if(!h)return false;
-  for(let i=0;i<w.length;i++){const hv=h[i]||0;if(hv!==w[i])return hv>w[i]}
-  return true;
-}
 let runnerPreferenceSaving=false;
 function toggleRunnerRuntime(runnerId,provider,enabled){
   return runnerRuntimeRequest(runnerId,provider,enabled?'online':'disabled');
