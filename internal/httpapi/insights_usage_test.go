@@ -5,14 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
 )
 
@@ -32,7 +29,7 @@ func TestUsageConsoleReadsReportedExecutions(t *testing.T) {
 	if err := s.PutProject(domain.Project{ID: "console-project", Name: "Console", OwnerID: owner.ID}); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	created := requestJSONAuthed[map[string]any](t, h, owner, "POST", "/api/insights/v1/sources", map[string]any{"projectId": "console-project", "name": "CI", "expiresInDays": 30}, 201)
 	token, _ := created["token"].(string)
 	if token == "" {

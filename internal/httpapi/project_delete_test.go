@@ -2,12 +2,9 @@ package httpapi
 
 import (
 	"agentflow/internal/domain"
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -42,7 +39,7 @@ func TestProjectDeleteArchivesAndRestores(t *testing.T) {
 	if err := s.PutIssue(domain.Issue{ID: "okr-1", ProjectID: "okr-system", Title: "初始化", Status: "open"}); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	listed := func() []string {
 		var ids []string
 		for _, p := range requestJSONAuthed[[]domain.Project](t, h, outsider, http.MethodGet, "/api/projects", nil, 200) {

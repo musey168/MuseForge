@@ -5,15 +5,12 @@ import (
 	"maps"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
 )
 
@@ -36,7 +33,7 @@ func TestIssueRepositoryBranchesCreateEditAndReset(t *testing.T) {
 	}
 	t.Cleanup(st.Close)
 	ids := putIssueBranchRepositories(t, st)
-	h := New(st, engine.New(st, runtime.NewManager(t.TempDir())), tracker.NewService(), "", "")
+	h := New(st, tracker.NewService(), "", "")
 	branches := map[string]string{ids[0]: "feature/api", ids[1]: "feature/web"}
 	created := requestJSON[domain.Issue](t, h, http.MethodPost, "/api/issues", map[string]any{
 		"projectId": "platform", "title": "前后端联合开发", "repositoryIds": ids[:2],
@@ -181,72 +178,4 @@ func testImportTAPDRepositoryBranches(t *testing.T, st *repo.Store) {
 	}
 }
 
-func TestDispatchRepositoryBranches(t *testing.T) {
-	st, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(st.Close)
-	ids := putIssueBranchRepositories(t, st)
-	if err := st.PutWorkflow(domain.WorkflowDefinition{ID: "multi-branch-flow", Name: "Approval", SandboxProfileID: "test-native",
-		Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval"}}}); err != nil {
-		t.Fatal(err)
-	}
-	eng := engine.New(st, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces")))
-	d := &deps{repo: st, engine: eng, sync: tracker.NewService()}
-	for _, scheduled := range []bool{false, true} {
-		for _, mixed := range []bool{false, true} {
-			t.Run(fmt.Sprintf("scheduled=%t/mixed=%t", scheduled, mixed), func(t *testing.T) {
-				branches := map[string]string{ids[0]: "feature/api", ids[1]: "feature/web"}
-				if mixed {
-					delete(branches, ids[1])
-				}
-				id := fmt.Sprintf("multi-branch-%t-%t", scheduled, mixed)
-				if err := st.PutIssue(domain.Issue{ID: id, ProjectID: "platform", Title: id, Kind: "issue", RepositoryID: ids[0],
-					RepositoryIDs: ids[:2], RepositoryBranches: branches, WorkflowID: "multi-branch-flow"}); err != nil {
-					t.Fatal(err)
-				}
-				req := dispatchRequest{IssueID: id}
-				if scheduled {
-					req.ScheduleJobID = "multi-branch-job"
-				}
-				task, err := dispatchIssue(d, req)
-				if err != nil {
-					t.Fatal(err)
-				}
-				t.Cleanup(func() { _ = eng.Cancel(task.RunID) })
-				run, _ := st.Run(task.RunID)
-				if len(run.Repositories) != 2 {
-					t.Fatalf("run lost multi-repo context: %+v", run)
-				}
-				for _, rc := range run.Repositories {
-					selected := branches[rc.RepositoryID]
-					repository, _ := st.Repository(rc.RepositoryID)
-					if selected != "" {
-						if rc.WorkBranch != selected || !rc.RequireExistingWorkBranch || rc.BaseBranch != repository.DefaultBranch || rc.IntegrateBranch != "" {
-							t.Fatalf("selected work branch was overridden: %+v", rc)
-						}
-						if !strings.Contains(run.Input, "existing work branch: "+selected) {
-							t.Fatalf("prompt lost per-repository branch %s", selected)
-						}
-					} else {
-						expectedBase := repository.DefaultBranch
-						if scheduled {
-							expectedBase = repository.IntegrateBranch
-						}
-						if rc.RequireExistingWorkBranch || rc.BaseBranch != expectedBase || rc.WorkBranch == "" {
-							t.Fatalf("unselected repository did not create its own branch: %+v", rc)
-						}
-					}
-				}
-			})
-		}
-	}
-	if err := st.PutIssue(domain.Issue{ID: "invalid-multi-branch", ProjectID: "platform", Title: "invalid", Kind: "issue",
-		RepositoryIDs: ids[:2], RepositoryBranches: map[string]string{ids[1]: "release/main-1"}, WorkflowID: "multi-branch-flow"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := dispatchIssue(d, dispatchRequest{IssueID: "invalid-multi-branch"}); err == nil || st.IssueHasTask("invalid-multi-branch") {
-		t.Fatalf("invalid stored branch selection must fail before task creation: %v", err)
-	}
-}
+

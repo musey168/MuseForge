@@ -3,12 +3,9 @@ package httpapi
 import (
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
 )
 
@@ -21,7 +18,7 @@ func TestPlatformAdministratorRoutesAreGone(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 
 	for _, tc := range []struct {
 		method string

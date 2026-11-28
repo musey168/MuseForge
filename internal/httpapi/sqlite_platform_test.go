@@ -11,9 +11,7 @@ import (
 	"time"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
 )
 
@@ -27,7 +25,7 @@ func TestPlatformServesItsSurfacesFromSQLiteFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 
 	if err := s.PutUser(domain.User{StaffID: 11, LoginName: "muse", ChineseName: "缪斯"}); err != nil {
 		t.Fatal(err)

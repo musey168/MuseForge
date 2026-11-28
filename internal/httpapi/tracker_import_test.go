@@ -3,13 +3,10 @@ package httpapi
 import (
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
 )
 
@@ -59,7 +56,7 @@ func TestTrackerImportRunsOnDemandAndReportsTheLastRun(t *testing.T) {
 	if err := s.PutRepository(domain.Repository{ID: "repo-broken", ProjectID: "project-1", Provider: "github", Name: "broken", GongfengProjectID: "github:example/broken", DefaultBranch: "main"}); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 
 	// Before the first run there is nothing to show.
 	empty := requestJSON[trackerImportResponse](t, h, http.MethodGet, "/api/tracker/import?provider=github", nil, http.StatusOK)
@@ -161,7 +158,7 @@ func TestGitLabTrackerImportRunsOnDemandAndReportsTheLastRun(t *testing.T) {
 	if err := s.PutRepository(domain.Repository{ID: "repo-gl", ProjectID: "project-1", Provider: "gitlab", Name: "repo", GongfengProjectID: "gitlab:gitlab.com/example/repo", DefaultBranch: "main"}); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 
 	// Before the first run there is nothing to show for GitLab.
 	empty := requestJSON[trackerImportResponse](t, h, http.MethodGet, "/api/tracker/import?provider=gitlab", nil, http.StatusOK)
@@ -217,6 +214,6 @@ func TestTrackerImportRefusesAnUnknownProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	requestJSON[map[string]any](t, h, http.MethodPost, "/api/tracker/import", map[string]any{"provider": "bitbucket"}, http.StatusBadRequest)
 }

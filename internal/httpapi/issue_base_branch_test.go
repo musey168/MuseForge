@@ -1,18 +1,14 @@
 package httpapi
 
 import (
-	"errors"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
 )
 
@@ -40,7 +36,7 @@ func TestIssueBaseBranchCreateEditAndDefault(t *testing.T) {
 	if err := st.PutRepository(repository); err != nil {
 		t.Fatal(err)
 	}
-	h := New(st, engine.New(st, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
+	h := New(st, tracker.NewService(), "", "")
 	created := requestJSON[domain.Issue](t, h, http.MethodPost, "/api/issues", map[string]any{
 		"projectId": "platform", "title": "继续已有开发", "repositoryId": repository.ID, "baseBranch": " feature/continue-work ",
 	}, http.StatusOK)
@@ -183,54 +179,7 @@ func TestImportTAPDBaseBranchSelectionAndReimport(t *testing.T) {
 	}
 }
 
-func TestDispatchCustomBaseBranchSkipsScheduledIntegration(t *testing.T) {
-	st, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(st.Close)
-	if err := st.PutRepository(domain.Repository{ID: "dispatch-branch-repo", ProjectID: "platform", Name: "Repo", DefaultBranch: "master", IntegrateBranch: "agentflow/integration"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := st.PutWorkflow(domain.WorkflowDefinition{ID: "branch-flow", Name: "Branch flow", SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval"}}}); err != nil {
-		t.Fatal(err)
-	}
-	eng := engine.New(st, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces")))
-	d := &deps{repo: st, engine: eng, sync: tracker.NewService()}
-	for _, scheduled := range []bool{false, true} {
-		id := "custom-manual"
-		req := dispatchRequest{IssueID: id}
-		if scheduled {
-			id, req.IssueID, req.ScheduleJobID = "custom-scheduled", "custom-scheduled", "branch-job"
-		}
-		if err := st.PutIssue(domain.Issue{ID: id, ProjectID: "platform", Title: id, Kind: "issue", RepositoryID: "dispatch-branch-repo", BaseBranch: "feature/continue-work", WorkflowID: "branch-flow"}); err != nil {
-			t.Fatal(err)
-		}
-		task, err := dispatchIssue(d, req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = eng.Cancel(task.RunID) })
-		run, _ := st.Run(task.RunID)
-		if task.Repository.BaseBranch != "master" || run.Repository.BaseBranch != "master" || run.Repository.WorkBranch != "feature/continue-work" || !run.Repository.RequireExistingWorkBranch || run.Repository.IntegrateBranch != "" {
-			t.Fatalf("custom selection was overridden: task=%+v run=%+v", task.Repository, run.Repository)
-		}
-		if !strings.Contains(run.Input, "merge request target branch: master") || !strings.Contains(run.Input, "existing work branch: feature/continue-work") || !strings.Contains(run.Input, "do not create or rename") {
-			t.Fatalf("dispatch must continue the existing branch and target configured main: %s", run.Input)
-		}
-	}
-	if err := st.PutIssue(domain.Issue{ID: "invalid-branch-dispatch", ProjectID: "platform", Title: "invalid", Kind: "issue", RepositoryID: "dispatch-branch-repo", BaseBranch: "feature/foo~1", WorkflowID: "branch-flow"}); err != nil {
-		t.Fatal(err)
-	}
-	_, err = dispatchIssue(d, dispatchRequest{IssueID: "invalid-branch-dispatch"})
-	var he HTTPError
-	if !errors.As(err, &he) || he.Status != http.StatusBadRequest {
-		t.Fatalf("dispatch must reject invalid persisted branch: %v", err)
-	}
-	if st.IssueHasTask("invalid-branch-dispatch") {
-		t.Fatal("invalid branch must be rejected before task creation")
-	}
-}
+
 
 func TestImportTAPDRejectsInvalidLinksBeforeMCP(t *testing.T) {
 	st, err := repo.OpenTest()
@@ -251,7 +200,7 @@ func TestImportTAPDRejectsInvalidLinksBeforeMCP(t *testing.T) {
 	if err := st.PutSyncConfig(domain.SyncConfig{TAPDMCPURL: gateway.URL}); err != nil {
 		t.Fatal(err)
 	}
-	h := New(st, engine.New(st, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
+	h := New(st, tracker.NewService(), "", "")
 	for _, tc := range []struct{ text, errorPart string }{
 		{"只有标题，没有链接", "无法识别"},
 		{"https://example.test/tapd_fe/10000000/story/detail/1010000000100001332", "www.tapd.cn"},
@@ -269,41 +218,7 @@ func TestImportTAPDRejectsInvalidLinksBeforeMCP(t *testing.T) {
 	}
 }
 
-func TestDispatchEmptyBaseBranchUsesCurrentConfiguredMainBranch(t *testing.T) {
-	st, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(st.Close)
-	repository := domain.Repository{ID: "configured-main-repo", ProjectID: "platform", Name: "Service", DefaultBranch: "release/original-main"}
-	if err := st.PutRepository(repository); err != nil {
-		t.Fatal(err)
-	}
-	if err := st.PutWorkflow(domain.WorkflowDefinition{ID: "configured-main-flow", Name: "Main branch flow", SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval"}}}); err != nil {
-		t.Fatal(err)
-	}
-	eng := engine.New(st, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces")))
-	h := New(st, eng, tracker.NewService(), "", "")
-	issue := requestJSON[domain.Issue](t, h, http.MethodPost, "/api/issues", map[string]any{
-		"projectId": "platform", "title": "沿用项目仓库主分支", "kind": "issue", "repositoryId": repository.ID, "baseBranch": "", "workflowId": "configured-main-flow",
-	}, http.StatusOK)
-	if issue.BaseBranch != "" {
-		t.Fatalf("blank baseline must remain dynamic: %+v", issue)
-	}
-	repository.DefaultBranch = "develop/current-main"
-	if err := st.PutRepository(repository); err != nil {
-		t.Fatal(err)
-	}
-	task := requestJSON[domain.Task](t, h, http.MethodPost, "/api/issues/"+issue.ID+"/dispatch", map[string]any{}, http.StatusCreated)
-	t.Cleanup(func() { _ = eng.Cancel(task.RunID) })
-	run, _ := st.Run(task.RunID)
-	if task.Repository.BaseBranch != repository.DefaultBranch || run.Repository.BaseBranch != repository.DefaultBranch || run.Repository.DefaultBranch != repository.DefaultBranch || run.Repository.RequireExistingWorkBranch || run.Repository.WorkBranch == "" {
-		t.Fatalf("blank baseline ignored current configured main branch: task=%+v run=%+v", task.Repository, run.Repository)
-	}
-	if !strings.Contains(run.Input, "merge request target branch: "+repository.DefaultBranch) {
-		t.Fatalf("MR target ignored configured main branch: %s", run.Input)
-	}
-}
+
 
 func TestIssueRejectsExplicitSharedWorkBranchesAndNormalizesLegacyEdits(t *testing.T) {
 	st, err := repo.OpenTest()
@@ -315,7 +230,7 @@ func TestIssueRejectsExplicitSharedWorkBranchesAndNormalizesLegacyEdits(t *testi
 	if err := st.PutRepository(repository); err != nil {
 		t.Fatal(err)
 	}
-	h := New(st, engine.New(st, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
+	h := New(st, tracker.NewService(), "", "")
 	for _, branch := range []string{repository.DefaultBranch, repository.IntegrateBranch, "master", "main"} {
 		response := requestJSON[map[string]string](t, h, http.MethodPost, "/api/issues", map[string]any{
 			"projectId": "platform", "title": "不可直接处理共享分支", "repositoryId": repository.ID, "baseBranch": branch,
@@ -335,37 +250,7 @@ func TestIssueRejectsExplicitSharedWorkBranchesAndNormalizesLegacyEdits(t *testi
 	requestJSON[map[string]string](t, h, http.MethodPut, "/api/issues", map[string]any{"id": legacy.ID, "baseBranch": repository.DefaultBranch}, http.StatusBadRequest)
 }
 
-func TestDispatchLegacyDefaultBranchCreatesNewWorkBranchWithoutChangingRecord(t *testing.T) {
-	st, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(st.Close)
-	repository := domain.Repository{ID: "legacy-dispatch-repo", ProjectID: "platform", Name: "Repo", DefaultBranch: "release/configured-main"}
-	if err := st.PutRepository(repository); err != nil {
-		t.Fatal(err)
-	}
-	if err := st.PutWorkflow(domain.WorkflowDefinition{ID: "legacy-main-flow", Name: "Legacy main", SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval"}}}); err != nil {
-		t.Fatal(err)
-	}
-	issue := domain.Issue{ID: "legacy-main", ProjectID: "platform", Title: "历史主分支", Kind: "issue", RepositoryID: repository.ID, BaseBranch: repository.DefaultBranch, WorkflowID: "legacy-main-flow"}
-	if err := st.PutIssue(issue); err != nil {
-		t.Fatal(err)
-	}
-	eng := engine.New(st, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces")))
-	task, err := dispatchIssue(&deps{repo: st, engine: eng, sync: tracker.NewService()}, dispatchRequest{IssueID: issue.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = eng.Cancel(task.RunID) })
-	if task.Repository.BaseBranch != repository.DefaultBranch || task.Repository.WorkBranch == "" || task.Repository.WorkBranch == repository.DefaultBranch || task.Repository.RequireExistingWorkBranch {
-		t.Fatalf("legacy main value must create a fresh work branch: %+v", task.Repository)
-	}
-	stored, _ := st.Issue(issue.ID)
-	if stored.BaseBranch != issue.BaseBranch {
-		t.Fatalf("dispatch must interpret legacy values without rewriting the record: %+v", stored)
-	}
-}
+
 
 func TestIssueSaveEchoingLegacySharedBranchNormalizes(t *testing.T) {
 	st, err := repo.OpenTest()
@@ -377,7 +262,7 @@ func TestIssueSaveEchoingLegacySharedBranchNormalizes(t *testing.T) {
 	if err := st.PutRepository(repository); err != nil {
 		t.Fatal(err)
 	}
-	h := New(st, engine.New(st, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
+	h := New(st, tracker.NewService(), "", "")
 	for _, legacyBranch := range []string{"develop", "master"} {
 		legacy := domain.Issue{ID: "echo-legacy-" + legacyBranch, ProjectID: "platform", Title: "旧记录", RepositoryID: repository.ID, BaseBranch: legacyBranch}
 		if err := st.PutIssue(legacy); err != nil {

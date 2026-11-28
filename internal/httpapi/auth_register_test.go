@@ -2,9 +2,7 @@ package httpapi
 
 import (
 	"agentflow/internal/domain"
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"bytes"
 	"encoding/json"
 	"net/http/httptest"
@@ -76,7 +74,7 @@ func TestRegisterFirstAccountAndSignupToggle(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(s.Close)
-	h := New(s, engine.New(s, runtime.NewManager(t.TempDir())), nil, "", "")
+	h := New(s, nil, "", "")
 	call := func(method, path, origin, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, "http://localhost"+path, bytes.NewBufferString(body))
 		r.Header.Set("Content-Type", "application/json")

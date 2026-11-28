@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"compress/gzip"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +10,6 @@ import (
 	"testing"
 
 	"agentflow/internal/auth"
-	"agentflow/internal/engine"
 
 	"github.com/gin-gonic/gin"
 )
@@ -120,69 +118,7 @@ func TestRunnerBinaryHelperBranches(t *testing.T) {
 	}
 }
 
-func TestGinMiddlewareAndSmallViews(t *testing.T) {
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	respond(c, engine.ErrExecutionDisabled)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("execution disabled status = %d", rec.Code)
-	}
 
-	router := gin.New()
-	router.Use(securityHeaders(), gzipMaybe())
-	router.GET("/asset.js", func(c *gin.Context) { c.String(http.StatusOK, "javascript") })
-	router.GET("/api/example/stream", func(c *gin.Context) { c.String(http.StatusOK, "event") })
-	req := httptest.NewRequest(http.MethodGet, "/asset.js?v=1", nil)
-	req.Header.Set("Accept-Encoding", "gzip")
-	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	if rec.Header().Get("Content-Encoding") != "gzip" ||
-		!strings.Contains(rec.Header().Get("Cache-Control"), "immutable") {
-		t.Fatalf("asset headers: %#v", rec.Header())
-	}
-	req = httptest.NewRequest(http.MethodGet, "/api/example/stream", nil)
-	req.Header.Set("Accept-Encoding", "gzip")
-	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	if rec.Header().Get("Content-Encoding") != "" {
-		t.Fatal("stream was compressed")
-	}
-	rawRecorder := httptest.NewRecorder()
-	testContext, _ := gin.CreateTestContext(rawRecorder)
-	compressor := gzip.NewWriter(rawRecorder)
-	writer := &gzipWriter{ResponseWriter: testContext.Writer, gz: compressor}
-	if _, err := writer.WriteString("compressed"); err != nil {
-		t.Fatal(err)
-	}
-	writer.Flush()
-	if err := compressor.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	f := cvBNewHTTPFixture(t)
-	verify := &usersHandlers{deps: &deps{repo: f.s}}
-	invalidID := httptest.NewRecorder()
-	invalidContext, _ := gin.CreateTestContext(invalidID)
-	invalidContext.Request = httptest.NewRequest(http.MethodPost, "/api/users/nope/git-token/verify", strings.NewReader("{}"))
-	invalidContext.Params = gin.Params{{Key: "id", Value: "nope"}}
-	verify.verifyGitToken(invalidContext)
-	if invalidID.Code != http.StatusBadRequest {
-		t.Fatalf("invalid token user id = %d", invalidID.Code)
-	}
-	malformedToken := httptest.NewRecorder()
-	malformedContext, _ := gin.CreateTestContext(malformedToken)
-	malformedRequest := httptest.NewRequest(http.MethodPost, "/api/users/1/git-token/verify", strings.NewReader("{"))
-	malformedContext.Request = malformedRequest.WithContext(context.WithValue(malformedRequest.Context(), requestUserContextKey{}, domainUserToAuth(f.user)))
-	malformedContext.Params = gin.Params{{Key: "id", Value: "1"}}
-	verify.verifyGitToken(malformedContext)
-	if malformedToken.Code != http.StatusBadRequest {
-		t.Fatalf("malformed token verify = %d", malformedToken.Code)
-	}
-	views, err := (issuesHandlers{deps: &deps{repo: f.s, engine: f.e}}).issueDeletionViews(nil)
-	if err != nil || views != nil {
-		t.Fatalf("nil issue views: %#v %v", views, err)
-	}
-}
 
 func TestGongfengOAuthAuthenticatedStart(t *testing.T) {
 	t.Setenv("AGENTFLOW_GONGFENG_HOST", "git.review.test")

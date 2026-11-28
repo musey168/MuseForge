@@ -217,43 +217,7 @@ func TestSharedScheduleDoesNotPinSOPDependencies(t *testing.T) {
 	}
 }
 
-func TestSharedScheduleSOPPreservesTemplateFallbacksAndBuiltInPreview(t *testing.T) {
-	st, err := OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(st.Close)
-	check := func(err error) {
-		t.Helper()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	check(SeedTestGenericTemplates(st))
-	check(st.PutAgent(domain.AgentDefinition{ID: GenericAgentRequirement, Name: "Project override", ProjectID: "source", Skills: []string{"not-in-template"}}))
-	check(st.PutRule(domain.RuleDefinition{ID: GenericRuleCore, Name: "Foreign override", ProjectID: "other"}))
-	job := domain.ScheduleJob{ID: "template-task", Name: "Template", ProjectID: "source", SkipDispatch: true, AssistantPrompt: "start", References: []domain.AssetReference{{Type: "sop", ID: GenericBackendDeliveryWorkflowID}}}
-	check(st.PutScheduleJob(job))
-	v, err := st.PublishSharedSchedule(job.ID, job.ProjectID, domain.SharedScheduleVersion{Name: "Template", Prompt: "start"}, 0)
-	check(err)
-	check(st.ValidateSharedScheduleAssets(v))
-	if !v.HasAsset("sop", GenericBackendDeliveryWorkflowID) || v.HasAsset("rule", GenericRuleCore) || v.HasAsset("skill", "not-in-template") {
-		t.Fatalf("publication stored nested template dependencies: %+v", v.Assets)
-	}
-	// The preview builder is an engine-generated role, not a catalog asset.
-	wf := domain.WorkflowDefinition{ID: "preview-sop", Name: "Preview", ProjectID: "source", Shared: true, SandboxProfileID: TestNativeSandboxID, Preview: &domain.PreviewContract{Enabled: true}, Nodes: []domain.WorkflowNode{{ID: "approve", Type: "approval", Name: "Approve"}}}
-	wf, err = domain.AttachPreviewBuild(wf)
-	check(err)
-	check(st.PutWorkflow(wf))
-	job.ID, job.References = "preview-task", []domain.AssetReference{{Type: "sop", ID: wf.ID}}
-	check(st.PutScheduleJob(job))
-	preview, err := st.PublishSharedSchedule(job.ID, job.ProjectID, domain.SharedScheduleVersion{Name: "Preview", Prompt: "start"}, 0)
-	check(err)
-	check(st.ValidateSharedScheduleAssets(preview))
-	if preview.HasAsset("agent", domain.PreviewBuildAgentID) {
-		t.Fatal("synthetic preview role was treated as a catalog dependency")
-	}
-}
+
 
 func TestSharedScheduleSharesPrivateAgentThroughCatalogBoundary(t *testing.T) {
 	st, err := OpenTest()

@@ -12,9 +12,7 @@ import (
 	"time"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
 )
 
@@ -50,7 +48,7 @@ func TestRunWorkspaceBrowseIsReadOnlyAndHidesSensitiveFiles(t *testing.T) {
 	if err := store.PutRun(domain.Run{ID: "run-workspace", Status: "waiting", Nodes: map[string]*domain.NodeRun{}}); err != nil {
 		t.Fatal(err)
 	}
-	handler := New(store, engine.New(store, runtime.NewManager(root)), tracker.NewService(), "", "")
+	handler := New(store, tracker.NewService(), "", "")
 
 	info := requestEmptyJSON[struct {
 		Available    bool              `json:"available"`
@@ -173,7 +171,7 @@ func TestRunWorkspaceReportsCleanedWorkspace(t *testing.T) {
 	if err := store.PutRun(domain.Run{ID: "run-cleaned", Status: "succeeded", WorkspaceCleanedAt: time.Now().UTC(), Nodes: map[string]*domain.NodeRun{}}); err != nil {
 		t.Fatal(err)
 	}
-	handler := New(store, engine.New(store, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
+	handler := New(store, tracker.NewService(), "", "")
 	info := requestEmptyJSON[struct {
 		Available bool   `json:"available"`
 		Reason    string `json:"reason"`
@@ -201,7 +199,7 @@ func TestRunWorkspaceReportsRemoteRunnerBoundary(t *testing.T) {
 	if err := store.PutRun(run); err != nil {
 		t.Fatal(err)
 	}
-	handler := New(store, engine.New(store, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
+	handler := New(store, tracker.NewService(), "", "")
 	info := requestEmptyJSON[struct {
 		Available bool   `json:"available"`
 		Reason    string `json:"reason"`
@@ -301,7 +299,7 @@ func TestWorkspaceInfoReportsRepositoryBranches(t *testing.T) {
 	if err := store.PutRun(run); err != nil {
 		t.Fatal(err)
 	}
-	handler := New(store, engine.New(store, runtime.NewManager(root)), tracker.NewService(), "", "")
+	handler := New(store, tracker.NewService(), "", "")
 	info := requestEmptyJSON[struct {
 		RepositoryDetails []workspaceRepositoryDetail `json:"repositoryDetails"`
 	}](t, handler, http.MethodGet, "/api/runs/run-repo/workspace", http.StatusOK)

@@ -3,13 +3,10 @@ package httpapi
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"sort"
 	"testing"
 
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
 )
 
@@ -27,7 +24,7 @@ func TestRouteInventoryExport(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(st.Close)
-	handler := New(st, engine.New(st, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "user", "pass")
+	handler := New(st, tracker.NewService(), "user", "pass")
 
 	seen := map[exportedRoute]bool{}
 	var routes []exportedRoute

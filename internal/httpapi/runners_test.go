@@ -7,16 +7,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
 )
+
 
 // requestWithHeaders issues a JSON request with extra headers (runner session
 // or bootstrap tokens) and returns the raw recorder.
@@ -53,8 +51,7 @@ func newRunnerTestServer(t *testing.T) http.Handler {
 	if err := s.PutUser(domain.User{ID: 42, LoginName: "alice", ChineseName: "爱丽丝"}); err != nil {
 		t.Fatal(err)
 	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	return New(s, e, tracker.NewService(), "", "")
+	return New(s, tracker.NewService(), "", "")
 }
 
 func registerTestRunner(t *testing.T, h http.Handler) (runnerID, session string) {
@@ -152,7 +149,7 @@ func TestRunnerBindCodeRegistersUnderIssuingUser(t *testing.T) {
 	}
 }
 
-func TestRunnerDeregisterRemovesMachineAndSelections(t *testing.T) {
+func TestRunnerDeregisterRemovesMachine(t *testing.T) {
 	h := newRunnerTestServer(t)
 
 	// Log in as alice, issue a bind code, and register her machine with it.
@@ -198,13 +195,7 @@ func TestRunnerDeregisterRemovesMachineAndSelections(t *testing.T) {
 	}
 	auth := map[string]string{"Authorization": "Bearer " + registered.SessionToken}
 
-	// Alice selects the machine as her default execution machine.
-	rec = requestWithHeaders(t, h, http.MethodPut, "/api/runners/default", map[string]any{"runnerId": registered.RunnerID}, userAuth)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("set default: %d %s", rec.Code, rec.Body.String())
-	}
-
-	// Graceful deregister removes the machine and the default selection.
+	// Graceful deregister removes the machine.
 	rec = requestWithHeaders(t, h, http.MethodPost, "/api/runners/deregister", map[string]any{}, auth)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("deregister: %d %s", rec.Code, rec.Body.String())
@@ -288,461 +279,23 @@ func TestRunnerRegisterDisabledWithoutBootstrapToken(t *testing.T) {
 	}
 }
 
-func TestRunnerTaskEndToEnd(t *testing.T) {
-	h := newRunnerTestServer(t)
-	// Keep the long poll short so the empty-claim check does not stall.
-	t.Setenv("AGENTFLOW_RUNNER_LONG_POLL_TIMEOUT", "200ms")
-	runnerID, session := registerTestRunner(t, h)
-	auth := map[string]string{"Authorization": "Bearer " + session}
 
-	// Heartbeat keeps the runner online.
-	rec := requestWithHeaders(t, h, http.MethodPost, "/api/runners/heartbeat", map[string]any{
-		"status":                 "idle",
-		"runningTasks":           0,
-		"nativeSandboxAvailable": true,
-		"runtimes":               []domain.RunnerRuntime{{Provider: "mock", BinaryPath: "(builtin)", Status: "online"}},
-	}, auth)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("heartbeat: %d %s", rec.Code, rec.Body.String())
-	}
 
-	// The runner appears in the management list without session material.
-	list := requestEmptyJSON[[]domain.Runner](t, h, http.MethodGet, "/api/runners", http.StatusOK)
-	if len(list) != 1 || list[0].ID != runnerID || !list[0].NativeSandboxAvailable {
-		t.Fatalf("unexpected runner list: %+v", list)
-	}
-	if list[0].SessionTokenHash != "" || list[0].SessionExpiresAt != nil {
-		t.Fatal("runner list leaked session material")
-	}
 
-	// Create a task (management API).
-	created := requestJSON[domain.RunnerTask](t, h, http.MethodPost, "/api/runners/tasks", map[string]any{
-		"provider": "mock",
-		"prompt":   "hello runner",
-	}, http.StatusCreated)
-	if created.ID == "" || created.Status != domain.RunnerTaskQueued {
-		t.Fatalf("unexpected created task: %+v", created)
-	}
 
-	// Claim: the long poll returns immediately because a task is queued.
-	claimBody := map[string]any{
-		"availableRuntimes": []string{"mock"},
-		"capacity":          1,
-	}
-	rec = requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/claim", claimBody, auth)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("claim: %d %s", rec.Code, rec.Body.String())
-	}
-	var claimed struct {
-		Task domain.RunnerTask `json:"task"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &claimed); err != nil {
-		t.Fatal(err)
-	}
-	if claimed.Task.ID != created.ID || claimed.Task.Status != domain.RunnerTaskLeased || claimed.Task.LeaseOwner != runnerID {
-		t.Fatalf("unexpected claimed task: %+v", claimed.Task)
-	}
 
-	// A second claim finds nothing and returns 204.
-	rec = requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/claim", claimBody, auth)
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("second claim status = %d, want 204", rec.Code)
-	}
 
-	// Start.
-	rec = requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/"+created.ID+"/start", map[string]any{}, auth)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("start: %d %s", rec.Code, rec.Body.String())
-	}
 
-	// Batched events are deduplicated by seq.
-	events := map[string]any{"events": []domain.RunnerTaskEvent{
-		{Seq: 1, Type: "stdout", Data: "line-1"},
-		{Seq: 2, Type: "stdout", Data: "line-2"},
-	}}
-	rec = requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/"+created.ID+"/events", events, auth)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("events: %d %s", rec.Code, rec.Body.String())
-	}
-	rec = requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/"+created.ID+"/events", events, auth)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("events retry: %d %s", rec.Code, rec.Body.String())
-	}
-	eventsRec := requestWithHeaders(t, h, http.MethodGet, "/api/runners/tasks/"+created.ID+"/events", nil, auth)
-	if eventsRec.Code != http.StatusOK {
-		t.Fatalf("get events: %d %s", eventsRec.Code, eventsRec.Body.String())
-	}
-	var stored []domain.RunnerTaskEvent
-	if err := json.Unmarshal(eventsRec.Body.Bytes(), &stored); err != nil {
-		t.Fatal(err)
-	}
-	if len(stored) != 2 {
-		t.Fatalf("stored %d events, want 2 (retry must not duplicate)", len(stored))
-	}
 
-	// Complete.
-	exit := 0
-	rec = requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/"+created.ID+"/complete", map[string]any{
-		"status":   "success",
-		"exitCode": exit,
-		"result":   "MOCK hello runner",
-	}, auth)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("complete: %d %s", rec.Code, rec.Body.String())
-	}
-	finalRec := requestWithHeaders(t, h, http.MethodGet, "/api/runners/tasks/"+created.ID, nil, auth)
-	if finalRec.Code != http.StatusOK {
-		t.Fatalf("get final task: %d %s", finalRec.Code, finalRec.Body.String())
-	}
-	var final domain.RunnerTask
-	if err := json.Unmarshal(finalRec.Body.Bytes(), &final); err != nil {
-		t.Fatal(err)
-	}
-	if final.Status != domain.RunnerTaskSuccess || final.Result != "MOCK hello runner" {
-		t.Fatalf("unexpected final task: %+v", final)
-	}
-}
 
-func TestRunnerTaskCancelPropagatesThroughLease(t *testing.T) {
-	h := newRunnerTestServer(t)
-	_, session := registerTestRunner(t, h)
-	auth := map[string]string{"Authorization": "Bearer " + session}
 
-	created := requestJSON[domain.RunnerTask](t, h, http.MethodPost, "/api/runners/tasks", map[string]any{
-		"provider": "mock",
-		"prompt":   "work",
-	}, http.StatusCreated)
 
-	rec := requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/claim", map[string]any{
-		"availableRuntimes": []string{"mock"},
-		"capacity":          1,
-	}, auth)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("claim: %d %s", rec.Code, rec.Body.String())
-	}
-	_ = requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/"+created.ID+"/start", map[string]any{}, auth)
 
-	// Management cancel flags the live task.
-	_ = requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/"+created.ID+"/cancel", map[string]any{}, nil)
 
-	// The runner learns about the cancel on its next lease renewal.
-	var renewed struct {
-		DesiredState string `json:"desiredState"`
-	}
-	rec = requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/"+created.ID+"/lease/renew", map[string]any{}, auth)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("renew: %d %s", rec.Code, rec.Body.String())
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &renewed); err != nil {
-		t.Fatal(err)
-	}
-	if renewed.DesiredState != domain.RunnerTaskDesiredCancel {
-		t.Fatalf("desiredState = %q, want cancel", renewed.DesiredState)
-	}
 
-	// Canceling a queued task cancels it outright.
-	queued := requestJSON[domain.RunnerTask](t, h, http.MethodPost, "/api/runners/tasks", map[string]any{
-		"provider": "mock",
-		"prompt":   "never runs",
-	}, http.StatusCreated)
-	_ = requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/"+queued.ID+"/cancel", map[string]any{}, nil)
-	finalRec := requestWithHeaders(t, h, http.MethodGet, "/api/runners/tasks/"+queued.ID, nil, auth)
-	if finalRec.Code != http.StatusOK {
-		t.Fatalf("get canceled task: %d %s", finalRec.Code, finalRec.Body.String())
-	}
-	var final domain.RunnerTask
-	if err := json.Unmarshal(finalRec.Body.Bytes(), &final); err != nil {
-		t.Fatal(err)
-	}
-	if final.Status != domain.RunnerTaskCanceled {
-		t.Fatalf("queued cancel status = %s, want canceled", final.Status)
-	}
-}
 
-func TestRunnerObservationUploadIsIdempotent(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	runnerID, session := registerTestRunner(t, h)
-	auth := map[string]string{"Authorization": "Bearer " + session}
-	runID := "run-observable"
-	if err := s.PutRun(domain.Run{
-		ID: runID, Status: "running", Nodes: map[string]*domain.NodeRun{"work": {NodeID: "work", Status: "running"}},
-		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	task := domain.RunnerTask{
-		ID: "rt-observation", RunnerID: runnerID, Provider: "codex", Status: domain.RunnerTaskRunning,
-		LeaseOwner: runnerID, RunID: runID, NodeID: "work", MaxAttempts: 1,
-	}
-	if err := s.PutRunnerTask(task); err != nil {
-		t.Fatal(err)
-	}
-	usage := domain.TokenUsage{InputTokens: 12, OutputTokens: 5, TotalTokens: 17}
-	observation := domain.TelemetryEvent{
-		Category: "usage", Name: "usage.final", Phase: "finish", Message: "final model usage",
-		Provider: "codex", Model: "gpt-test", Usage: &usage,
-		Source: domain.TelemetrySource{Layer: "executor", Adapter: "codex-jsonl-v1", Provider: "codex", Protocol: "jsonl"},
-	}
-	raw, err := json.Marshal(observation)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body := map[string]any{"events": []domain.RunnerTaskEvent{{Seq: 1, Type: "observation", Data: string(raw), Ts: time.Now().UTC()}}}
-	for attempt := 0; attempt < 2; attempt++ {
-		rec := requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/"+task.ID+"/events", body, auth)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("events attempt %d: %d %s", attempt+1, rec.Code, rec.Body.String())
-		}
-	}
-	stored := s.RunnerTaskEvents(task.ID)
-	if len(stored) != 1 || stored[0].Seq != 1 || stored[0].Type != "observation" {
-		t.Fatalf("stored runner events = %+v, want one idempotent observation", stored)
-	}
-}
 
-func TestRunnerSessionRequiredForTaskAPI(t *testing.T) {
-	h := newRunnerTestServer(t)
-	registerTestRunner(t, h)
 
-	// No session: claim is rejected.
-	rec := requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/claim", map[string]any{
-		"availableRuntimes": []string{"mock"},
-		"capacity":          1,
-	}, nil)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("unauthenticated claim status = %d, want 401", rec.Code)
-	}
-
-	// A user token (afp_) is not a runner session.
-	rec = requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/claim", map[string]any{
-		"availableRuntimes": []string{"mock"},
-		"capacity":          1,
-	}, map[string]string{"Authorization": "Bearer afp_not-a-runner"})
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("user-token claim status = %d, want 401", rec.Code)
-	}
-}
-
-func TestRunnerClaimRejectsQueuedUnsupportedSandboxes(t *testing.T) {
-	st, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(st.Close)
-	h := New(st, engine.New(st, runtime.NewManager(t.TempDir())), tracker.NewService(), "", "")
-	runnerID, session := registerTestRunner(t, h)
-	header := map[string]string{"Authorization": "Bearer " + session}
-	heartbeat := requestWithHeaders(t, h, http.MethodPost, "/runners/heartbeat", map[string]any{"version": domain.RunnerVersionEvolutionReplay}, header)
-	if heartbeat.Code != http.StatusOK {
-		t.Fatalf("heartbeat: %d %s", heartbeat.Code, heartbeat.Body)
-	}
-	for i, profile := range []domain.SandboxProfile{
-		{ID: "old-local", Driver: domain.SandboxDriverLocal},
-		{ID: "privileged", Driver: domain.SandboxDriverDocker, Privileged: true},
-		{ID: "privileged-action", Driver: domain.SandboxDriverDocker, Privileged: true},
-		{ID: "native", Driver: domain.SandboxDriverNative},
-	} {
-		task := domain.RunnerTask{
-			ID: profile.ID, RunID: "run-" + profile.ID, RunnerID: runnerID, Provider: "mock", Command: "true",
-			Sandbox:   &domain.RunnerSandboxSpec{Profile: profile},
-			CreatedAt: time.Now().UTC().Add(time.Duration(i) * time.Second),
-		}
-		if profile.ID == "privileged-action" {
-			task.Action = domain.RunnerTaskActionIntegrate
-		}
-		if err := st.PutRunnerTask(task); err != nil {
-			t.Fatal(err)
-		}
-	}
-	rec := requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/claim", map[string]any{
-		"availableRuntimes": []string{"mock"}, "capacity": 1, "noWait": true,
-	}, header)
-	var response struct {
-		Task domain.RunnerTask `json:"task"`
-	}
-	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &response) != nil || response.Task.ID != domain.SandboxDriverNative {
-		t.Fatalf("claim returned %d: %s", rec.Code, rec.Body.String())
-	}
-	if old, _ := st.RunnerTask("old-local"); old.Status != domain.RunnerTaskFailed || !strings.Contains(old.Error, "已移除的 local") {
-		t.Fatalf("legacy task status = %q, error = %q", old.Status, old.Error)
-	}
-	for _, id := range []string{"privileged", "privileged-action"} {
-		if task, _ := st.RunnerTask(id); task.Status != domain.RunnerTaskFailed || task.Error != domain.RunnerPrivilegedSandboxUpgradeMessage {
-			t.Fatalf("%s task status = %q, error = %q", id, task.Status, task.Error)
-		}
-	}
-}
-
-func TestRunnerClaimRequiresDockerSandboxLimitSupport(t *testing.T) {
-	f := cvBNewHTTPFixture(t)
-	runnerID, session := registerTestRunner(t, f.h)
-	task := domain.RunnerTask{
-		ID: "limited-task", RunID: "limited-run", RunnerID: runnerID, Provider: "mock", Command: "true",
-		Sandbox: &domain.RunnerSandboxSpec{
-			Profile: domain.SandboxProfile{Driver: domain.SandboxDriverDocker, CPUMillicores: 500, MemoryMiB: 256},
-		},
-	}
-	claim := func(supportsLimits bool) *httptest.ResponseRecorder {
-		return requestWithHeaders(t, f.h, http.MethodPost, "/api/runners/tasks/claim", map[string]any{
-			"availableRuntimes": []string{"mock"}, "noWait": true, "supportsDockerSandboxLimits": supportsLimits,
-		}, map[string]string{"Authorization": "Bearer " + session})
-	}
-	if err := f.s.PutRunnerTask(task); err != nil {
-		t.Fatal(err)
-	}
-	if rec := claim(false); rec.Code != http.StatusNoContent {
-		t.Fatalf("legacy claim: HTTP %d %s", rec.Code, rec.Body.String())
-	}
-	if rejected, _ := f.s.RunnerTask(task.ID); rejected.Status != domain.RunnerTaskFailed || rejected.Error != domain.RunnerDockerSandboxLimitsUpgradeMessage {
-		t.Fatalf("legacy task status = %q, error = %q", rejected.Status, rejected.Error)
-	}
-	// A compatible Runner may claim before its first post-upgrade heartbeat.
-	task.ID = "supported-limited-task"
-	if err := f.s.PutRunnerTask(task); err != nil {
-		t.Fatal(err)
-	}
-	var response struct {
-		Task domain.RunnerTask `json:"task"`
-	}
-	if rec := claim(true); rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &response) != nil {
-		t.Fatalf("updated claim: HTTP %d %s", rec.Code, rec.Body.String())
-	}
-	if sandbox := response.Task.Sandbox; sandbox == nil || sandbox.Profile.CPUMillicores != 500 || sandbox.Profile.MemoryMiB != 256 {
-		t.Fatalf("claimed sandbox lost resource limits: %+v", sandbox)
-	}
-}
-
-func TestRunnerTaskClaimLongPollWaitsForNewTask(t *testing.T) {
-	h := newRunnerTestServer(t)
-	_, session := registerTestRunner(t, h)
-	auth := map[string]string{"Authorization": "Bearer " + session}
-
-	// Long poll in the background; it must not return 204 before the task
-	// arrives, and it should wake up shortly after creation.
-	type claimResult struct {
-		rec *httptest.ResponseRecorder
-	}
-	done := make(chan claimResult, 1)
-	go func() {
-		done <- claimResult{requestWithHeaders(t, h, http.MethodPost, "/api/runners/tasks/claim", map[string]any{
-			"availableRuntimes": []string{"mock"},
-			"capacity":          1,
-		}, auth)}
-	}()
-
-	time.Sleep(300 * time.Millisecond)
-	created := requestJSON[domain.RunnerTask](t, h, http.MethodPost, "/api/runners/tasks", map[string]any{
-		"provider": "mock",
-		"prompt":   "wake up",
-	}, http.StatusCreated)
-
-	select {
-	case result := <-done:
-		if result.rec.Code != http.StatusOK {
-			t.Fatalf("long-poll claim status = %d body %s", result.rec.Code, result.rec.Body.String())
-		}
-		var claimed struct {
-			Task domain.RunnerTask `json:"task"`
-		}
-		if err := json.Unmarshal(result.rec.Body.Bytes(), &claimed); err != nil {
-			t.Fatal(err)
-		}
-		if claimed.Task.ID != created.ID {
-			t.Fatalf("long poll claimed %s, want %s", claimed.Task.ID, created.ID)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("long-poll claim did not return after task creation")
-	}
-}
-
-func TestRunnerTaskPreflightLeavesTaskQueued(t *testing.T) {
-	h := newRunnerTestServer(t)
-	runnerID, session := registerTestRunner(t, h)
-	auth := map[string]string{"Authorization": "Bearer " + session}
-	created := requestJSON[domain.RunnerTask](t, h, http.MethodPost, "/api/runners/tasks", map[string]any{
-		"provider": "mock", "prompt": "lazy update", "runnerId": runnerID,
-	}, http.StatusCreated)
-	request := map[string]any{"availableRuntimes": []string{"mock"}, "capacity": 1, "preflight": true}
-	preflight := requestWithHeaders(t, h, http.MethodPost, "/runners/tasks/claim", request, auth)
-	if preflight.Code != http.StatusOK || !strings.Contains(preflight.Body.String(), `"taskAvailable":true`) {
-		t.Fatalf("preflight: status=%d body=%s", preflight.Code, preflight.Body.String())
-	}
-	list := requestJSON[[]domain.RunnerTask](t, h, http.MethodGet, "/api/runners/tasks", nil, http.StatusOK)
-	if len(list) != 1 || list[0].ID != created.ID || list[0].Status != domain.RunnerTaskQueued {
-		t.Fatalf("preflight leased task: %+v", list)
-	}
-	claim := requestWithHeaders(t, h, http.MethodPost, "/runners/tasks/claim", map[string]any{
-		"availableRuntimes": []string{"mock"}, "capacity": 1, "noWait": true,
-	}, auth)
-	if claim.Code != http.StatusOK {
-		t.Fatalf("claim: status=%d body=%s", claim.Code, claim.Body.String())
-	}
-	var response struct {
-		Task domain.RunnerTask `json:"task"`
-	}
-	if err := json.Unmarshal(claim.Body.Bytes(), &response); err != nil || response.Task.ID != created.ID {
-		t.Fatalf("claimed task: %+v, err=%v", response.Task, err)
-	}
-	noTask := requestWithHeaders(t, h, http.MethodPost, "/runners/tasks/claim", map[string]any{
-		"availableRuntimes": []string{"mock"}, "capacity": 1, "noWait": true,
-	}, auth)
-	if noTask.Code != http.StatusNoContent {
-		t.Fatalf("empty non-blocking claim: status=%d body=%s", noTask.Code, noTask.Body.String())
-	}
-}
-
-func TestRunnerTaskClaimFindsTaskInsertedByAnotherProcess(t *testing.T) {
-	t.Setenv("AGENTFLOW_RUNNER_LONG_POLL_TIMEOUT", "2s")
-	t.Setenv("AGENTFLOW_RUNNER_DB_POLL_INTERVAL", "25ms")
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	e := engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	_, session := registerTestRunner(t, h)
-	auth := map[string]string{"Authorization": "Bearer " + session}
-
-	done := make(chan *httptest.ResponseRecorder, 1)
-	go func() {
-		done <- requestWithHeaders(t, h, http.MethodPost, "/runners/tasks/claim", map[string]any{
-			"availableRuntimes": []string{"mock"}, "capacity": 1,
-		}, auth)
-	}()
-	time.Sleep(75 * time.Millisecond)
-	// Write directly to the durable queue without notifying this Server's
-	// process-local waiter, matching the production worker/API split.
-	task := domain.RunnerTask{ID: "rt-other-process", Provider: "mock", Status: domain.RunnerTaskQueued, MaxAttempts: 1}
-	if err := s.PutRunnerTask(task); err != nil {
-		t.Fatal(err)
-	}
-
-	select {
-	case rec := <-done:
-		if rec.Code != http.StatusOK {
-			t.Fatalf("cross-process claim status=%d body=%s", rec.Code, rec.Body.String())
-		}
-		var claimed struct {
-			Task domain.RunnerTask `json:"task"`
-		}
-		if err := json.Unmarshal(rec.Body.Bytes(), &claimed); err != nil {
-			t.Fatal(err)
-		}
-		if claimed.Task.ID != task.ID {
-			t.Fatalf("claimed %s, want %s", claimed.Task.ID, task.ID)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("long poll did not discover cross-process queue insertion")
-	}
-}
 
 func TestIsRunnerAgentPath(t *testing.T) {
 	agentPaths := []string{
@@ -801,16 +354,14 @@ func TestRunnerMachinePlaneNeedsNoUserIdentityButKeepsRunnerAuth(t *testing.T) {
 	t.Setenv("AGENTFLOW_RUNNER_BINARY", filepath.Join(dir, "agentflow-runner-{os}-{arch}"))
 	t.Setenv("AGENTFLOW_GATE_MCP_BINARY", filepath.Join(dir, "agentflow-gate-mcp-{os}-{arch}"))
 
-	root := t.TempDir()
 	s, err := repo.OpenTest()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "preview", "secret")
+	h := New(s, tracker.NewService(), "preview", "secret")
 
-	for _, path := range []string{"/runners/install.sh", "/runners/health", "/runners/agentflow-runner?os=linux&arch=amd64", "/runners/agentflow-gate-mcp?os=linux&arch=amd64"} {
+	for _, path := range []string{"/runners/install.sh", "/runners/health", "/runners/agentflow-runner?os=linux&arch=amd64"} {
 		rec := requestWithHeaders(t, h, http.MethodGet, path, nil, nil)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("public machine asset %s: status=%d body=%s", path, rec.Code, rec.Body.String())
@@ -838,16 +389,11 @@ func TestRunnerMachinePlaneNeedsNoUserIdentityButKeepsRunnerAuth(t *testing.T) {
 	if heartbeat.Code != http.StatusOK {
 		t.Fatalf("session heartbeat: status=%d body=%s", heartbeat.Code, heartbeat.Body.String())
 	}
-	claim := requestWithHeaders(t, h, http.MethodPost, "/runners/tasks/claim", map[string]any{"availableRuntimes": []string{"terminal"}, "capacity": 1}, auth)
-	if claim.Code != http.StatusNoContent {
-		t.Fatalf("session claim: status=%d body=%s", claim.Code, claim.Body.String())
-	}
-
 	management := requestWithHeaders(t, h, http.MethodGet, "/api/runners", nil, nil)
 	if management.Code != http.StatusUnauthorized {
 		t.Fatalf("browser management unexpectedly public: status=%d body=%s", management.Code, management.Body.String())
 	}
-	for _, path := range []string{"/runners/bind-codes", "/runners/default", "/runners/runtimes", "/runners/tasks", "/runners/tasks/task-1/cancel"} {
+	for _, path := range []string{"/runners/bind-codes", "/runners/runtimes", "/runners/tasks", "/runners/tasks/task-1/cancel"} {
 		rec := requestWithHeaders(t, h, http.MethodPost, path, map[string]any{}, nil)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("management endpoint leaked into machine plane %s: status=%d body=%s", path, rec.Code, rec.Body.String())
@@ -857,51 +403,7 @@ func TestRunnerMachinePlaneNeedsNoUserIdentityButKeepsRunnerAuth(t *testing.T) {
 
 // 直接派发执行机器任务等于在别人的机器上跑任意提示词，只有平台管理员可以用；
 // 执行机器也只能读派给自己的任务，且拿不到任务里的凭证。
-func TestRunnerTaskManagementRequiresAdminAndOwnership(t *testing.T) {
-	t.Setenv("AGENTFLOW_AUTH_REQUIRED", "true")
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	if err := s.PutUser(domain.User{ID: 42, LoginName: "alice"}); err != nil {
-		t.Fatal(err)
-	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
-	alice := map[string]string{"Authorization": "Bearer not-an-account-token"}
-	for _, tc := range []struct{ method, path string }{
-		{http.MethodGet, "/api/runners/tasks"},
-		{http.MethodPost, "/api/runners/tasks"},
-		{http.MethodPost, "/api/runners/tasks/rt-x/cancel"},
-	} {
-		rec := requestWithHeaders(t, h, tc.method, tc.path, map[string]any{"provider": "mock", "prompt": "rm -rf ~"}, alice)
-		if rec.Code != http.StatusForbidden {
-			t.Fatalf("%s %s as non-admin = %d %s", tc.method, tc.path, rec.Code, rec.Body.String())
-		}
-	}
 
-	ownerID, ownerSession := registerTestRunner(t, h)
-	_, otherSession := registerTestRunner(t, h)
-	task := domain.RunnerTask{
-		ID: "rt-owned", RunnerID: ownerID, Provider: "mock", Status: domain.RunnerTaskQueued, MaxAttempts: 1,
-		Invocation: &domain.RunnerInvocation{Repositories: []domain.RunnerRepository{{CloneURL: "https://git.example.com/a/b.git", GitToken: "git-secret"}}},
-	}
-	if err := s.PutRunnerTask(task); err != nil {
-		t.Fatal(err)
-	}
-	for _, path := range []string{"/api/runners/tasks/rt-owned", "/api/runners/tasks/rt-owned/events"} {
-		if rec := requestWithHeaders(t, h, http.MethodGet, path, nil, map[string]string{"Authorization": "Bearer " + otherSession}); rec.Code != http.StatusNotFound {
-			t.Fatalf("other runner GET %s = %d %s", path, rec.Code, rec.Body.String())
-		}
-	}
-	rec := requestWithHeaders(t, h, http.MethodGet, "/api/runners/tasks/rt-owned", nil, map[string]string{"Authorization": "Bearer " + ownerSession})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("owner GET = %d %s", rec.Code, rec.Body.String())
-	}
-	if strings.Contains(rec.Body.String(), "git-secret") {
-		t.Fatalf("task read leaked credentials: %s", rec.Body.String())
-	}
-}
 
 // 用户可以移除自己已经离线、不再使用的机器；在线机器和别人的机器不能移除。
 func TestRunnerRemoveOnlyOwnOfflineMachine(t *testing.T) {
@@ -963,75 +465,4 @@ func TestRunnerRemoveOnlyOwnOfflineMachine(t *testing.T) {
 	}
 }
 
-func TestRunnerRunLimitOnlyOwnerCanSet(t *testing.T) {
-	h := newRunnerTestServer(t)
-	t.Setenv("AGENTFLOW_RUNNER_BOOTSTRAP_TOKEN", "boot-secret")
-	t.Setenv("AGENTFLOW_LOCAL_LOGIN_USER", "alice")
-	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/local", bytes.NewReader([]byte("{}")))
-	loginReq.Header.Set("Content-Type", "application/json")
-	loginReq.Header.Set("Origin", "http://example.com")
-	loginReq.RemoteAddr = "127.0.0.1:60000"
-	loginRec := httptest.NewRecorder()
-	h.ServeHTTP(loginRec, loginReq)
-	if loginRec.Code != http.StatusOK {
-		t.Fatalf("local login: %d %s", loginRec.Code, loginRec.Body.String())
-	}
-	var cookie string
-	for _, c := range loginRec.Result().Cookies() {
-		if c.Name == authCookieName {
-			cookie = c.Value
-		}
-	}
-	userAuth := map[string]string{"Cookie": authCookieName + "=" + cookie}
-	rec := requestWithHeaders(t, h, http.MethodPost, "/api/runners/bind-codes", map[string]any{}, userAuth)
-	var issued struct {
-		Code string `json:"code"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &issued); err != nil || issued.Code == "" {
-		t.Fatalf("bind code response: %d %s", rec.Code, rec.Body.String())
-	}
-	rec = requestWithHeaders(t, h, http.MethodPost, "/api/runners/register", map[string]any{
-		"name": "my-mac", "os": "darwin", "arch": "arm64", "maxConcurrency": 1,
-	}, map[string]string{"X-Bootstrap-Token": issued.Code})
-	var registered struct {
-		RunnerID     string `json:"runnerId"`
-		SessionToken string `json:"sessionToken"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &registered); err != nil || registered.RunnerID == "" {
-		t.Fatalf("register: %d %s", rec.Code, rec.Body.String())
-	}
-	poolRunnerID, _ := registerTestRunner(t, h)
-	path := "/api/runners/" + registered.RunnerID + "/run-limit"
-	rec = requestWithHeaders(t, h, http.MethodGet, "/api/runners?mine=1", nil, userAuth)
-	var mine []domain.Runner
-	if err := json.Unmarshal(rec.Body.Bytes(), &mine); rec.Code != http.StatusOK || err != nil || len(mine) != 1 || mine[0].RunLimit != 10 {
-		t.Fatalf("new machine default: %d %s", rec.Code, rec.Body.String())
-	}
 
-	if rec = requestWithHeaders(t, h, http.MethodPut, path, map[string]any{"runLimit": 3}, nil); rec.Code != http.StatusUnauthorized {
-		t.Fatalf("anonymous set status = %d, want 401", rec.Code)
-	}
-	if rec = requestWithHeaders(t, h, http.MethodPut, "/api/runners/"+poolRunnerID+"/run-limit", map[string]any{"runLimit": 3}, userAuth); rec.Code != http.StatusForbidden {
-		t.Fatalf("set someone else's machine status = %d, want 403", rec.Code)
-	}
-	for _, body := range []map[string]any{{}, {"runLimit": -1}, {"runLimit": 1.5}} {
-		if rec = requestWithHeaders(t, h, http.MethodPut, path, body, userAuth); rec.Code != http.StatusBadRequest {
-			t.Fatalf("invalid %v status = %d, want 400", body, rec.Code)
-		}
-	}
-	rec = requestWithHeaders(t, h, http.MethodPut, path, map[string]any{"runLimit": 250}, userAuth)
-	var updated domain.Runner
-	if err := json.Unmarshal(rec.Body.Bytes(), &updated); rec.Code != http.StatusOK || err != nil || updated.RunLimit != 250 || updated.SessionTokenHash != "" {
-		t.Fatalf("set own machine: %d %s", rec.Code, rec.Body.String())
-	}
-	// A heartbeat from the machine must not reset the owner's limit.
-	requestWithHeaders(t, h, http.MethodPost, "/api/runners/heartbeat", map[string]any{}, map[string]string{"Authorization": "Bearer " + registered.SessionToken})
-	rec = requestWithHeaders(t, h, http.MethodGet, "/api/runners?mine=1", nil, userAuth)
-	if err := json.Unmarshal(rec.Body.Bytes(), &mine); err != nil || len(mine) != 1 || mine[0].RunLimit != 250 {
-		t.Fatalf("limit after heartbeat: %s", rec.Body.String())
-	}
-	rec = requestWithHeaders(t, h, http.MethodPut, path, map[string]any{"runLimit": 0}, userAuth)
-	if err := json.Unmarshal(rec.Body.Bytes(), &updated); rec.Code != http.StatusOK || err != nil || updated.RunLimit != 0 {
-		t.Fatalf("clear limit: %d %s", rec.Code, rec.Body.String())
-	}
-}

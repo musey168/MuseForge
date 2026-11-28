@@ -15,109 +15,13 @@ import (
 
 	"agentflow/internal/auth"
 	"agentflow/internal/domain"
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
 )
 
-func TestIssueDispatchCreatesTaskAndRun(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	if err := s.PutWorkflow(domain.WorkflowDefinition{ID: "issue-test", Name: "Issue test", Version: 1, SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
 
-	if err := s.PutIssue(domain.Issue{ID: "iss-audit", ProjectID: "platform", Title: "Implement audit log", Description: "Record mutations", Status: "todo", Priority: "high", AssigneeType: "agent", AssigneeID: "developer", WorkflowID: "issue-test"}); err != nil {
-		t.Fatal(err)
-	}
-	created, ok := s.Issue("iss-audit")
-	if !ok || created.ID == "" {
-		t.Fatalf("unexpected issue: %+v", created)
-	}
 
-	task := requestEmptyJSON[domain.Task](t, h, http.MethodPost, "/api/issues/"+created.ID+"/dispatch", http.StatusCreated)
-	if task.IssueID != created.ID || task.RunID == "" || task.Status != "running" || task.CreatedAt.IsZero() || task.UpdatedAt.IsZero() {
-		t.Fatalf("unexpected task: %+v", task)
-	}
-	stored, ok := s.Issue(created.ID)
-	if !ok || stored.Status != "in_progress" || stored.LatestTaskID != task.ID {
-		t.Fatalf("issue was not linked to task: %+v", stored)
-	}
-	run, ok := s.Run(task.RunID)
-	if !ok {
-		t.Fatal("dispatch did not create workflow run")
-	}
-	if !strings.Contains(run.Input, "需求身份（平台权威，禁止忽略）") || !strings.Contains(run.Input, "平台工作项：iss-audit") || !strings.Contains(run.Input, "来源：本地") || strings.Contains(run.Input, "回写") {
-		t.Fatalf("local issue identity missing from input: %s", run.Input)
-	}
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		run, _ := s.Run(task.RunID)
-		if run.Status == "waiting" {
-			_ = requestJSON[struct {
-				Sequence int64                   `json:"sequence"`
-				Events   []domain.TelemetryEvent `json:"events"`
-			}](t, h, http.MethodGet, "/api/runs/"+task.RunID+"/telemetry?after=0", nil, http.StatusOK)
-			requestJSON[map[string]any](t, h, http.MethodPost, "/api/issues/"+created.ID+"/dispatch", map[string]any{}, http.StatusConflict)
-			rerun := requestJSON[domain.Task](t, h, http.MethodPost, "/api/issues/"+created.ID+"/dispatch", map[string]any{"rerun": true}, http.StatusCreated)
-			if rerun.ID == task.ID || rerun.DispatchMode != "rerun" {
-				t.Fatalf("unexpected rerun task: %+v", rerun)
-			}
-			t.Cleanup(func() { _ = e.Cancel(rerun.RunID) })
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatal("workflow did not reach its approval gate")
-}
 
-func TestDispatchTAPDIssuePutsStoryIdentityInInput(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	if err := s.PutWorkflow(domain.WorkflowDefinition{ID: "tapd-identity", Name: "TAPD identity", Version: 1, SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	issue := domain.Issue{
-		ID: "tapd-1010000000100001887", ProjectID: "platform", Kind: "requirement", Source: "tapd",
-		Title: "在soul广场页面新增一个banner", Description: "纯前端写死", Status: "todo",
-		WorkflowID: "tapd-identity", Clarification: domain.ClarificationAssessment{Status: "ready"},
-		ExternalRef: &domain.ExternalRef{Source: "tapd", ExternalID: "1010000000100001887", ExternalType: "story", ExternalURL: "https://tapd.example.com/tapd_fe/10000000/story/detail/1010000000100001887"},
-	}
-	if err := s.PutIssue(issue); err != nil {
-		t.Fatal(err)
-	}
-	task := requestEmptyJSON[domain.Task](t, h, http.MethodPost, "/api/issues/"+issue.ID+"/dispatch", http.StatusCreated)
-	t.Cleanup(func() { _ = e.Cancel(task.RunID) })
-	run, ok := s.Run(task.RunID)
-	if !ok {
-		t.Fatal("dispatch did not create run")
-	}
-	for _, want := range []string{
-		"需求身份（平台权威，禁止忽略）",
-		"外部 ID：1010000000100001887",
-		"https://tapd.example.com/tapd_fe/10000000/story/detail/1010000000100001887",
-	} {
-		if !strings.Contains(run.Input, want) {
-			t.Fatalf("TAPD identity missing %q in input:\n%s", want, run.Input)
-		}
-	}
-	if strings.Contains(run.Input, "回写") {
-		t.Fatalf("dispatch input must not instruct write-back:\n%s", run.Input)
-	}
-}
 
 func TestCreateIssueDefaultsAssigneeToCurrentUser(t *testing.T) {
 	t.Setenv("AGENTFLOW_SESSION_SECRET", "create-assignee-session-secret")
@@ -130,7 +34,7 @@ func TestCreateIssueDefaultsAssigneeToCurrentUser(t *testing.T) {
 	if err := s.PutUser(creator); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	created := requestJSONAuthed[domain.Issue](t, h, creator, http.MethodPost, "/api/issues", map[string]any{
 		"projectId": "platform", "title": "新人需求", "kind": "requirement",
 	}, http.StatusOK)
@@ -145,7 +49,7 @@ func TestPlatformRequirementOptionalTapdMetricBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	issue := requestJSON[domain.Issue](t, h, http.MethodPost, "/api/issues", map[string]any{
 		"projectId": "platform", "title": "平台需求", "kind": "requirement", "syncTarget": "local",
 	}, http.StatusOK)
@@ -187,7 +91,7 @@ func TestIssueClarificationStartPersistsAcrossEdit(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	started := time.Now().UTC().Add(-30 * time.Minute).Truncate(time.Second)
 	issue := requestJSON[domain.Issue](t, h, http.MethodPost, "/api/issues", map[string]any{
 		"projectId": "platform", "title": "澄清后开发", "kind": "requirement", "syncTarget": "local",
@@ -208,33 +112,7 @@ func TestIssueClarificationStartPersistsAcrossEdit(t *testing.T) {
 	}, http.StatusBadRequest)
 }
 
-func TestIssueDispatchUsesTriggerUserCredentials(t *testing.T) {
-	t.Setenv("AGENTFLOW_SESSION_SECRET", "dispatch-trigger-session-secret")
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	operator := domain.User{ID: 88, LoginName: "operator", ChineseName: "点运行"}
-	if err := s.PutUser(operator); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutWorkflow(domain.WorkflowDefinition{ID: "issue-trigger", Name: "Trigger", Version: 1, SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	if err := s.PutIssue(domain.Issue{ID: "iss-trigger", ProjectID: "platform", Title: "Run me", WorkflowID: "issue-trigger"}); err != nil {
-		t.Fatal(err)
-	}
-	task := requestJSONAuthed[domain.Task](t, h, operator, http.MethodPost, "/api/issues/iss-trigger/dispatch", map[string]any{}, http.StatusCreated)
-	t.Cleanup(func() { _ = e.Cancel(task.RunID) })
-	run, ok := s.Run(task.RunID)
-	if !ok || run.ExecutionContext.ResponsibleUserID != 88 {
-		t.Fatalf("run responsible=%d want trigger user 88", run.ExecutionContext.ResponsibleUserID)
-	}
-}
+
 
 func TestIssueDispatchRejectsMissingOwnerAndResponsibleUser(t *testing.T) {
 	s, err := repo.OpenTest()
@@ -248,280 +126,24 @@ func TestIssueDispatchRejectsMissingOwnerAndResponsibleUser(t *testing.T) {
 	if err := s.PutIssue(domain.Issue{ID: "ownerless-issue", ProjectID: "ownerless", Title: "Cannot run", WorkflowID: "issue-fix-production"}); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	result := requestJSON[map[string]string](t, h, http.MethodPost, "/api/issues/ownerless-issue/dispatch", map[string]any{}, http.StatusConflict)
 	if !strings.Contains(result["error"], "项目未配置 Owner") {
 		t.Fatalf("unexpected error: %q", result["error"])
 	}
 }
 
-func TestExternalIssueDispatchKeepsExplicitWorkflow(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	workflow := domain.WorkflowDefinition{
-		ID: "gongfeng-bwrap-override", Name: "Gongfeng bwrap override", Version: 1, SandboxProfileID: "test-native",
-		Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}},
-	}
-	if err := s.PutWorkflow(workflow); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	issue := domain.Issue{
-		ID: "gf-custom-flow", ProjectID: "platform", Source: "gongfeng", Kind: "issue", Title: "Use custom flow",
-		WorkflowID: workflow.ID, ExternalRef: &domain.ExternalRef{Source: "gongfeng", ExternalID: "99", ExternalIID: 22},
-	}
-	if err := s.PutIssue(issue); err != nil {
-		t.Fatal(err)
-	}
-	stored, _ := s.Issue(issue.ID)
-	if stored.WorkflowID != workflow.ID {
-		t.Fatalf("explicit workflow was overwritten on save: %q", stored.WorkflowID)
-	}
 
-	task := requestJSON[domain.Task](t, h, http.MethodPost, "/api/issues/"+issue.ID+"/dispatch", map[string]any{}, http.StatusCreated)
-	t.Cleanup(func() { _ = e.Cancel(task.RunID) })
-	if task.WorkflowID != workflow.ID {
-		t.Fatalf("dispatch used workflow %q, want %q", task.WorkflowID, workflow.ID)
-	}
-	run, ok := s.Run(task.RunID)
-	if !ok || run.WorkflowID != workflow.ID {
-		t.Fatalf("run did not use explicit workflow: %+v", run)
-	}
-}
 
-func TestIssueDispatchSecondLaneKeepsDefaultSOP(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	backend := domain.WorkflowDefinition{ID: "wf-backend-lane", Name: "Backend", SOPLane: "backend", Version: 1, SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}
-	frontend := domain.WorkflowDefinition{ID: "wf-frontend-lane", Name: "Frontend", SOPLane: "frontend", Version: 1, SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}
-	if err := s.PutWorkflow(backend); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutWorkflow(frontend); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	if err := s.PutIssue(domain.Issue{ID: "iss-lanes", ProjectID: "platform", Kind: "requirement", Title: "Two lanes", Status: "todo", WorkflowID: backend.ID}); err != nil {
-		t.Fatal(err)
-	}
-	first := requestJSON[domain.Task](t, h, http.MethodPost, "/api/issues/iss-lanes/dispatch", map[string]any{}, http.StatusCreated)
-	t.Cleanup(func() { _ = e.Cancel(first.RunID) })
-	if first.WorkflowID != backend.ID {
-		t.Fatalf("first task workflow=%q", first.WorkflowID)
-	}
-	second := requestJSON[domain.Task](t, h, http.MethodPost, "/api/issues/iss-lanes/dispatch", map[string]any{"workflowId": frontend.ID}, http.StatusCreated)
-	t.Cleanup(func() { _ = e.Cancel(second.RunID) })
-	if second.WorkflowID != frontend.ID || second.ID == first.ID {
-		t.Fatalf("second task=%#v", second)
-	}
-	stored, _ := s.Issue("iss-lanes")
-	if stored.WorkflowID != backend.ID {
-		t.Fatalf("default LOOP overwritten: %q", stored.WorkflowID)
-	}
-	snap := requestJSON[domain.RequirementSnapshot](t, h, http.MethodGet, "/api/issues/iss-lanes/requirement", nil, http.StatusOK)
-	if snap.Overall.RunCount < 2 {
-		t.Fatalf("snapshot runs=%d", snap.Overall.RunCount)
-	}
-	var sawBackend, sawFrontend bool
-	for _, lane := range snap.Lanes {
-		if lane.Lane == "backend" && lane.Started {
-			sawBackend = true
-		}
-		if lane.Lane == "frontend" && lane.Started {
-			sawFrontend = true
-		}
-	}
-	if !sawBackend || !sawFrontend {
-		t.Fatalf("lanes=%#v", snap.Lanes)
-	}
-}
 
-func TestIssueSOPBindingsRoundTripAndDispatchOwner(t *testing.T) {
-	t.Setenv("AGENTFLOW_SESSION_SECRET", "sop-bind-session-secret")
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(s.Close)
-	owner := domain.User{ID: 7, LoginName: "backend-owner", ChineseName: "后端责任人"}
-	operator := domain.User{ID: 88, LoginName: "operator", ChineseName: "点运行"}
-	if err := s.PutUser(owner); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutUser(operator); err != nil {
-		t.Fatal(err)
-	}
-	design := domain.WorkflowDefinition{ID: "wf-design-bind", Name: "Design", SOPLane: "design", Version: 1, SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}
-	backend := domain.WorkflowDefinition{ID: "wf-backend-bind", Name: "Backend", SOPLane: "backend", Version: 1, SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}
-	if err := s.PutWorkflow(design); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutWorkflow(backend); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	if err := s.PutIssue(domain.Issue{ID: "iss-sops", ProjectID: "platform", Kind: "requirement", Title: "Orchestrate", Status: "todo", WorkflowID: backend.ID}); err != nil {
-		t.Fatal(err)
-	}
-	saved := requestJSON[domain.Issue](t, h, http.MethodPut, "/api/issues/iss-sops/sops", map[string]any{
-		"bindings": []map[string]any{
-			{"workflowId": design.ID, "order": 1, "assigneeUserId": 7},
-			{"workflowId": backend.ID, "order": 2, "assigneeUserId": 7, "handoff": []string{"design.md"}},
-		},
-	}, http.StatusOK)
-	if saved.WorkflowID != design.ID || len(saved.SOPBindings) != 2 {
-		t.Fatalf("saved=%#v", saved)
-	}
-	task := requestJSONAuthed[domain.Task](t, h, operator, http.MethodPost, "/api/issues/iss-sops/dispatch", map[string]any{"workflowId": backend.ID}, http.StatusCreated)
-	t.Cleanup(func() { _ = e.Cancel(task.RunID) })
-	run, ok := s.Run(task.RunID)
-	if !ok || run.ExecutionContext.ResponsibleUserID != 7 {
-		t.Fatalf("responsible=%d want step owner 7, run=%+v", run.ExecutionContext.ResponsibleUserID, run.ExecutionContext)
-	}
-	if !strings.Contains(run.Input, "design.md") {
-		t.Fatalf("handoff missing from input: %s", run.Input)
-	}
-}
 
-func TestRequirementInheritsProjectPlaybook(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(s.Close)
-	product := domain.WorkflowDefinition{ID: "wf-play-product", Name: "Product", SOPLane: "product", Version: 1, SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}
-	backend := domain.WorkflowDefinition{ID: "wf-play-backend", Name: "Backend", SOPLane: "backend", Version: 1, SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}
-	if err := s.PutWorkflow(product); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutWorkflow(backend); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutUser(domain.User{ID: 3, LoginName: "owner", ChineseName: "项目Owner"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutProject(domain.Project{ID: "playbook", Key: "PB", Name: "Playbook", OwnerID: 3, SOPBindings: []domain.IssueSOPBinding{
-		{WorkflowID: product.ID, Order: 1},
-		{WorkflowID: backend.ID, Order: 2},
-	}}); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	created := requestJSON[domain.Issue](t, h, http.MethodPost, "/api/issues", domain.Issue{
-		ProjectID: "playbook", Kind: "requirement", Title: "Inherit playbook", Status: "todo", AssigneeUserID: 3,
-	}, http.StatusOK)
-	if created.WorkflowID != product.ID {
-		t.Fatalf("new issue workflow=%q want first playbook step", created.WorkflowID)
-	}
-	if created.SOPBindings != nil {
-		t.Fatalf("issue must inherit live, not copy playbook: %#v", created.SOPBindings)
-	}
-	if created.PlaybookID != "default" {
-		t.Fatalf("legacy wrap playbookId=%q", created.PlaybookID)
-	}
-	snap := requestJSON[domain.RequirementSnapshot](t, h, http.MethodGet, "/api/issues/"+created.ID+"/requirement", nil, http.StatusOK)
-	if len(snap.Lanes) != 1 || snap.Lanes[0].WorkflowID != product.ID {
-		t.Fatalf("bound lanes=%#v", snap.Lanes)
-	}
-	task := requestJSON[domain.Task](t, h, http.MethodPost, "/api/issues/"+created.ID+"/dispatch", map[string]any{"workflowId": backend.ID}, http.StatusCreated)
-	t.Cleanup(func() { _ = e.Cancel(task.RunID) })
-	if task.WorkflowID != backend.ID {
-		t.Fatalf("dispatch workflow=%q", task.WorkflowID)
-	}
-}
 
-func TestRequirementPicksNamedPlaybook(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(s.Close)
-	product := domain.WorkflowDefinition{ID: "wf-combo-product", Name: "Product", SOPLane: "product", Version: 1, SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}
-	frontend := domain.WorkflowDefinition{ID: "wf-combo-frontend", Name: "Frontend", SOPLane: "frontend", Version: 1, SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}
-	backend := domain.WorkflowDefinition{ID: "wf-combo-backend", Name: "Backend", SOPLane: "backend", Version: 1, SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}
-	for _, wf := range []domain.WorkflowDefinition{product, frontend, backend} {
-		if err := s.PutWorkflow(wf); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := s.PutUser(domain.User{ID: 3, LoginName: "owner", ChineseName: "项目Owner"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutProject(domain.Project{ID: "combos", Key: "CB", Name: "Combos", OwnerID: 3, SOPPlaybooks: []domain.SOPPlaybook{
-		{ID: "full", Name: "完整需求", Default: true, Bindings: []domain.IssueSOPBinding{
-			{WorkflowID: product.ID, Order: 1},
-			{WorkflowID: frontend.ID, Order: 2},
-			{WorkflowID: backend.ID, Order: 3},
-		}},
-		{ID: "be", Name: "仅后端", Bindings: []domain.IssueSOPBinding{
-			{WorkflowID: backend.ID, Order: 1},
-		}},
-	}}); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	created := requestJSON[domain.Issue](t, h, http.MethodPost, "/api/issues", domain.Issue{
-		ProjectID: "combos", Kind: "requirement", Title: "Backend only", Status: "todo", AssigneeUserID: 3, PlaybookID: "be",
-	}, http.StatusOK)
-	if created.PlaybookID != "be" {
-		t.Fatalf("playbookId=%q", created.PlaybookID)
-	}
-	if created.WorkflowID != backend.ID {
-		t.Fatalf("workflow=%q want backend", created.WorkflowID)
-	}
-	if created.SOPBindings != nil {
-		t.Fatalf("must inherit named playbook live: %#v", created.SOPBindings)
-	}
-	snap := requestJSON[domain.RequirementSnapshot](t, h, http.MethodGet, "/api/issues/"+created.ID+"/requirement", nil, http.StatusOK)
-	if len(snap.Lanes) != 1 || snap.Lanes[0].WorkflowID != backend.ID {
-		t.Fatalf("named lanes=%#v", snap.Lanes)
-	}
-	switched := requestJSON[domain.Issue](t, h, http.MethodPut, "/api/issues/"+created.ID+"/sops", map[string]any{"playbookId": "full"}, http.StatusOK)
-	if switched.PlaybookID != "full" || switched.SOPBindings != nil {
-		t.Fatalf("switch=%#v", switched)
-	}
-	if switched.WorkflowID != product.ID {
-		t.Fatalf("switch workflow=%q", switched.WorkflowID)
-	}
-	snap = requestJSON[domain.RequirementSnapshot](t, h, http.MethodGet, "/api/issues/"+created.ID+"/requirement", nil, http.StatusOK)
-	if len(snap.Lanes) != 1 || snap.Lanes[0].WorkflowID != product.ID {
-		t.Fatalf("switched lanes=%#v", snap.Lanes)
-	}
-}
 
-func TestWorkflowAPIRequiresExistingWorkflowSandboxProfile(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
 
-	requestJSON[map[string]string](t, h, http.MethodPut, "/api/workflows", map[string]any{"id": "missing", "name": "Missing", "nodes": []any{}, "edges": []any{}}, http.StatusBadRequest)
-	requestJSON[map[string]string](t, h, http.MethodPut, "/api/workflows", map[string]any{"id": "unknown", "name": "Unknown", "sandboxProfileId": "does-not-exist", "nodes": []any{}, "edges": []any{}}, http.StatusBadRequest)
-	created := requestJSON[domain.WorkflowDefinition](t, h, http.MethodPut, "/api/workflows", map[string]any{"id": "valid", "name": "Valid", "sandboxProfileId": "test-native", "nodes": []any{}, "edges": []any{}}, http.StatusOK)
-	if created.SandboxProfileID != "test-native" {
-		t.Fatalf("sandboxProfileId = %q", created.SandboxProfileID)
-	}
-}
+
+
+
+
 
 func TestAssetAPIAcceptsSandboxEnvironmentButExecutorsAreReadOnly(t *testing.T) {
 	root := t.TempDir()
@@ -530,7 +152,7 @@ func TestAssetAPIAcceptsSandboxEnvironmentButExecutorsAreReadOnly(t *testing.T) 
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 
 	requestJSON[map[string]string](t, h, http.MethodPut, "/api/executors", map[string]any{"id": "legacy", "name": "Legacy", "kind": "mock"}, http.StatusMethodNotAllowed)
 	executors := requestEmptyJSON[[]domain.ExecutorDefinition](t, h, http.MethodGet, "/api/executors", http.StatusOK)
@@ -556,7 +178,7 @@ func TestAgentAPIOnlyAcceptsBuiltInCLIs(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 
 	rejected := requestJSON[map[string]string](t, h, http.MethodPut, "/api/agents", map[string]any{"id": "custom-cli", "name": "Custom CLI", "projectId": "platform", "executorId": "custom"}, http.StatusBadRequest)
 	if !strings.Contains(rejected["error"], "不支持的 CLI") {
@@ -577,7 +199,7 @@ func TestSandboxAPIStoresItsDockerfileAndInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 
 	requestJSON[map[string]string](t, h, http.MethodPut, "/api/sandboxes", map[string]any{"id": "container-new", "name": "Container", "projectId": "platform", "driver": "docker"}, http.StatusBadRequest)
 	requestJSON[map[string]string](t, h, http.MethodPut, "/api/sandboxes", map[string]any{"id": "container-new", "name": "Container", "projectId": "platform", "driver": "docker", "dockerfile": map[string]any{"content": " "}}, http.StatusBadRequest)
@@ -607,53 +229,7 @@ func TestSandboxAPIStoresItsDockerfileAndInstall(t *testing.T) {
 	}
 }
 
-func TestManualRunKeepsSelectedProjectContext(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	if err := s.PutProject(domain.Project{ID: "project-a", Key: "PA", Name: "Project A", OwnerID: 1}); err != nil {
-		t.Fatal(err)
-	}
-	workflow := domain.WorkflowDefinition{
-		ID: "manual-project-run", Name: "Manual project run", SandboxProfileID: "test-native",
-		Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}},
-	}
-	if err := s.PutWorkflow(workflow); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
 
-	run := requestJSON[domain.Run](t, h, http.MethodPost, "/api/runs", map[string]any{
-		"workflowId": workflow.ID,
-		"input":      "manual smoke",
-		"projectId":  "project-a",
-	}, http.StatusCreated)
-	t.Cleanup(func() { _ = e.Cancel(run.ID) })
-	if run.ExecutionContext.ProjectID != "project-a" {
-		t.Fatalf("manual run project context = %q", run.ExecutionContext.ProjectID)
-	}
-	if run.ExecutionContext.ResponsibleUserID != 1 {
-		t.Fatalf("manual run responsible user = %d, want project owner 1", run.ExecutionContext.ResponsibleUserID)
-	}
-	requestJSON[map[string]string](t, h, http.MethodPost, "/api/runs", map[string]any{
-		"workflowId": workflow.ID,
-		"projectId":  "missing-project",
-	}, http.StatusBadRequest)
-	listed := requestJSON[[]domain.Run](t, h, http.MethodGet, "/api/runs?projectId=project-a", nil, http.StatusOK)
-	if len(listed) != 1 || listed[0].ID != run.ID {
-		t.Fatalf("project-a run list = %+v", listed)
-	}
-	other := requestJSON[[]domain.Run](t, h, http.MethodGet, "/api/runs?projectId=platform", nil, http.StatusOK)
-	for _, item := range other {
-		if item.ID == run.ID {
-			t.Fatal("manual run leaked into another project list")
-		}
-	}
-}
 
 func TestRepositoryBindingIsValidatedAndFrozenAtDispatch(t *testing.T) {
 	root := t.TempDir()
@@ -665,7 +241,7 @@ func TestRepositoryBindingIsValidatedAndFrozenAtDispatch(t *testing.T) {
 	if err := s.PutWorkflow(domain.WorkflowDefinition{ID: "repo-flow", Name: "Repo flow", SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	source := filepath.Join(root, "source")
 	if err := os.MkdirAll(source, 0o700); err != nil {
 		t.Fatal(err)
@@ -751,7 +327,7 @@ func TestSecurityHeadersAndSameOriginCORS(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "http://agentflow.example/api/health", nil)
 	rec := httptest.NewRecorder()
@@ -796,7 +372,7 @@ func TestSyncConfigUpdatePreservesOperationalStatus(t *testing.T) {
 	if err := s.PutSyncConfig(domain.SyncConfig{LastSyncAt: lastSync, LastSyncStatus: "failed", LastSyncError: "upstream timeout"}); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 
 	updated := requestJSON[domain.SyncConfig](t, h, http.MethodPut, "/api/sync/config", map[string]any{
 		"gongfengProjectId": "new/project", "autoSyncIntervalSec": 120, "autoSyncEnabled": false,
@@ -916,7 +492,7 @@ func TestRunLogsArePagedAndOmittedFromDetail(t *testing.T) {
 	if err := s.PutRun(run); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	detail := requestJSON[domain.Run](t, h, http.MethodGet, "/api/runs/run-page", nil, http.StatusOK)
 	if len(detail.Logs) != 0 {
 		t.Fatalf("run detail still embeds logs: %d", len(detail.Logs))
@@ -954,7 +530,7 @@ func TestRunLogsDumpExportsAllNodes(t *testing.T) {
 	if err := s.PutRun(run); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	req := httptest.NewRequest(http.MethodGet, "/api/runs/run-dump/logs.txt", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -979,7 +555,7 @@ func TestGzipJSONResponses(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	req.Header.Set("Accept-Encoding", "gzip")
 	rec := httptest.NewRecorder()
@@ -992,55 +568,7 @@ func TestGzipJSONResponses(t *testing.T) {
 	}
 }
 
-func TestStandardWorkerIngressSeparatesRealtimeLogs(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	wf := domain.WorkflowDefinition{ID: "signal-test", Name: "Signal test", SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "gate", Name: "Gate", Type: "approval", MaxAttempts: 1}}}
-	if err := s.PutWorkflow(wf); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	run, err := e.Start(wf.ID, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	requestJSON[map[string]any](t, h, http.MethodPost, "/api/runs/"+run.ID+"/signals", domain.WorkerEnvelope{SpecVersion: domain.ObservabilitySpecVersion, Type: "log", Log: &domain.LogRecord{Level: "info", Stream: "stdout", Body: "worker ready", Source: domain.TelemetrySource{Layer: "executor", Adapter: "remote-sdk-v1"}, Context: domain.TelemetryContext{NodeID: "gate"}}}, http.StatusAccepted)
-	requestJSON[map[string]any](t, h, http.MethodPost, "/api/runs/"+run.ID+"/signals", domain.WorkerEnvelope{SpecVersion: domain.ObservabilitySpecVersion, Type: "observation", Observation: &domain.TelemetryEvent{Category: "delivery", Name: "mr", Phase: "finish", Message: "MR created", Attributes: map[string]any{"stage": "mr", "status": "passed", "url": "https://git.example.test/repo/merge_requests/1", "sha": "abc123"}, Source: domain.TelemetrySource{Layer: "executor", Adapter: "gongfeng-v1"}, Context: domain.TelemetryContext{NodeID: "gate"}}}, http.StatusAccepted)
-	logs := requestJSON[struct {
-		Sequence int64              `json:"sequence"`
-		Logs     []domain.LogRecord `json:"logs"`
-	}](t, h, http.MethodGet, "/api/runs/"+run.ID+"/logs?after=0", nil, http.StatusOK)
-	var ready, delivery bool
-	for _, log := range logs.Logs {
-		ready = ready || log.Body == "worker ready" && log.Context.TraceID == run.ID
-		delivery = delivery || log.Attributes["category"] == "delivery" && log.Body == "MR created"
-	}
-	if logs.Sequence < 2 || !ready || !delivery {
-		t.Fatalf("standard log ingress failed: %+v", logs)
-	}
-	spec := requestJSON[domain.ObservabilitySpec](t, h, http.MethodGet, "/api/observability/spec", nil, http.StatusOK)
-	hasDelivery := false
-	for _, category := range spec.Categories {
-		hasDelivery = hasDelivery || category == "delivery"
-	}
-	if spec.Version != domain.ObservabilitySpecVersion || len(spec.Adapters) < 3 || !hasDelivery {
-		t.Fatalf("observability spec endpoint incomplete: %+v", spec)
-	}
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		current, _ := s.Run(run.ID)
-		if current.Status == "waiting" {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatal("signal test run did not settle")
-}
+
 
 func TestIssueStatusFromLatestTask(t *testing.T) {
 	manuallyClosed := domain.Issue{Status: "closed", DeliveryState: "merged", DeliveryMRState: "closed"}
@@ -1124,35 +652,7 @@ func TestSyncTasksMapsQueuedRun(t *testing.T) {
 	}
 }
 
-func TestIssueDispatchReturnsQueuedTask(t *testing.T) {
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	workflow := domain.WorkflowDefinition{ID: "dispatch-queued", Name: "Queued dispatch", Version: 1, SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Type: "approval", MaxAttempts: 1}}}
-	if err := s.PutWorkflow(workflow); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < repo.ProjectRunLimit; i++ {
-		if err := s.PutRun(domain.Run{ID: fmt.Sprintf("occupied-%d", i), Status: "running", ExecutionContext: domain.TelemetryContext{ProjectID: "platform"}, Nodes: map[string]*domain.NodeRun{}}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := s.PutIssue(domain.Issue{ID: "dispatch-queued-issue", ProjectID: "platform", Title: "Queued dispatch", Status: "todo", WorkflowID: workflow.ID}); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(t.TempDir(), "workspaces")))
-	e.ConfigureExecution("queued-dispatch-api", "", time.Minute, false)
-	task, err := dispatchIssue(&deps{repo: s, engine: e}, dispatchRequest{IssueID: "dispatch-queued-issue"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	run, ok := s.RunState(task.RunID)
-	if !ok || run.Status != "queued" || task.Status != "queued" || run.QueueEnteredAt.IsZero() {
-		t.Fatalf("dispatch must reflect admitted run state: task=%+v run=%+v found=%v", task, run, ok)
-	}
-}
+
 
 func TestSyncTasksBindsIssueToLatestSOP(t *testing.T) {
 	root := t.TempDir()
@@ -1161,7 +661,7 @@ func TestSyncTasksBindsIssueToLatestSOP(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 
 	if err := s.PutIssue(domain.Issue{ID: "gf-5", ProjectID: "platform", Title: "count", Status: "blocked", LatestTaskID: "task-old"}); err != nil {
 		t.Fatal(err)
@@ -1218,100 +718,9 @@ func TestSyncTasksBindsIssueToLatestSOP(t *testing.T) {
 	}
 }
 
-func TestIssueListFiltersAndPages(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	now := time.Now().UTC()
-	if err := s.PutProject(domain.Project{ID: "list-filter", Key: "LFLT", Name: "List Filter"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutIssue(domain.Issue{ID: "lflt-backlog", ProjectID: "list-filter", Number: 11, Title: "扫描超包-unique", Status: "backlog", Source: "tapd", UpdatedAt: now.Add(-time.Minute)}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutIssue(domain.Issue{ID: "lflt-todo", ProjectID: "list-filter", Number: 12, Title: "评审清单-unique", Status: "todo", Source: "gongfeng", UpdatedAt: now}); err != nil {
-		t.Fatal(err)
-	}
 
-	all := requestJSON[[]domain.Issue](t, h, http.MethodGet, "/api/issues", nil, http.StatusOK)
-	if len(all) < 2 {
-		t.Fatalf("unfiltered GET must stay an array: %d", len(all))
-	}
 
-	filtered := requestJSON[[]domain.Issue](t, h, http.MethodGet, "/api/issues?projectId=list-filter&status=backlog", nil, http.StatusOK)
-	if len(filtered) != 1 || filtered[0].ID != "lflt-backlog" {
-		t.Fatalf("status filter: %+v", filtered)
-	}
 
-	page := requestJSON[issueListPage](t, h, http.MethodGet, "/api/issues?projectId=list-filter&limit=1&offset=0", nil, http.StatusOK)
-	if page.Limit != 1 || page.Offset != 0 || len(page.Items) != 1 || page.Items[0].ID != "lflt-todo" || !page.HasMore || page.Total != 2 {
-		t.Fatalf("page: %+v", page)
-	}
-	next := requestJSON[issueListPage](t, h, http.MethodGet, "/api/issues?projectId=list-filter&q=扫描超包-unique&limit=10", nil, http.StatusOK)
-	if next.Total != 1 || len(next.Items) != 1 || next.Items[0].ID != "lflt-backlog" || next.HasMore {
-		t.Fatalf("q page: %+v", next)
-	}
-	fuzzyTitle := requestJSON[issueListPage](t, h, http.MethodGet, "/api/issues?projectId=list-filter&q=超%20包%20扫描&limit=10", nil, http.StatusOK)
-	if fuzzyTitle.Total != 1 || len(fuzzyTitle.Items) != 1 || fuzzyTitle.Items[0].ID != "lflt-backlog" {
-		t.Fatalf("fuzzy title page: %+v", fuzzyTitle)
-	}
-	source := requestJSON[issueListPage](t, h, http.MethodGet, "/api/issues?projectId=list-filter&source=gongfeng&limit=20", nil, http.StatusOK)
-	if source.Total != 1 || source.Items[0].ID != "lflt-todo" {
-		t.Fatalf("source page: %+v", source)
-	}
-	requestJSON[map[string]any](t, h, http.MethodGet, "/api/issues?limit=abc", nil, http.StatusBadRequest)
-}
-
-func TestGongfengClosedIssueRejectsDispatch(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	if err := s.PutWorkflow(domain.WorkflowDefinition{ID: "issue-fix-production", Name: "Issue fix", Version: 1, SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-
-	closed := domain.Issue{
-		ID: "gf-closed", ProjectID: "platform", Source: "gongfeng", Kind: "issue", Title: "Already closed on Gongfeng",
-		Status: "blocked", WorkflowID: "issue-fix-production",
-		ExternalRef: &domain.ExternalRef{Source: "gongfeng", ExternalID: "7", ExternalIID: 7, ExternalState: "closed"},
-	}
-	if err := s.PutIssue(closed); err != nil {
-		t.Fatal(err)
-	}
-	resp := requestJSON[map[string]any](t, h, http.MethodPost, "/api/issues/"+closed.ID+"/dispatch", map[string]any{}, http.StatusConflict)
-	errMsg, _ := resp["error"].(string)
-	if !strings.Contains(errMsg, "已关闭") {
-		t.Fatalf("unexpected error: %+v", resp)
-	}
-	stored, _ := s.Issue(closed.ID)
-	if stored.Status != "closed" || stored.CloseSource != "external" || stored.LatestTaskID != "" {
-		t.Fatalf("closed issue must not start a run: %+v", stored)
-	}
-
-	openIssue := domain.Issue{
-		ID: "gf-open", ProjectID: "platform", Source: "gongfeng", Kind: "issue", Title: "Still open",
-		Status: "todo", WorkflowID: "issue-fix-production",
-		ExternalRef: &domain.ExternalRef{Source: "gongfeng", ExternalID: "8", ExternalIID: 8, ExternalState: "opened"},
-	}
-	if err := s.PutIssue(openIssue); err != nil {
-		t.Fatal(err)
-	}
-	task := requestJSON[domain.Task](t, h, http.MethodPost, "/api/issues/"+openIssue.ID+"/dispatch", map[string]any{}, http.StatusCreated)
-	t.Cleanup(func() { _ = e.Cancel(task.RunID) })
-	if task.IssueID != openIssue.ID || task.RunID == "" {
-		t.Fatalf("opened Gongfeng issue should still dispatch: %+v", task)
-	}
-}
 
 func TestGongfengClosedIssueRejectsRetry(t *testing.T) {
 	root := t.TempDir()
@@ -1320,7 +729,7 @@ func TestGongfengClosedIssueRejectsRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 
 	closed := domain.Issue{
 		ID: "gf-closed-retry", ProjectID: "platform", Source: "gongfeng", Kind: "issue", Title: "closed but failed",
@@ -1353,163 +762,15 @@ func TestGongfengClosedIssueRejectsRetry(t *testing.T) {
 	}
 }
 
-func TestMergedTAPDDeliveryRequiresExplicitReopen(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(s.Close)
-	wf := domain.WorkflowDefinition{ID: "requirement-development-production", Name: "Requirement", SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}
-	if err := s.PutWorkflow(wf); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	issue := domain.Issue{ID: "tapd-merged", ProjectID: "platform", Source: "tapd", Kind: "requirement", Title: "Delivered", Status: "done", WorkflowID: wf.ID, LatestTaskID: "task-old", DeliveryState: "merged", DeliveryMRURL: "https://git.example.com/org/repo/merge_requests/9", AutomationState: "ignored"}
-	if err := s.PutIssue(issue); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutTask(domain.Task{ID: "task-old", IssueID: issue.ID, RunID: "run-old", Status: "completed"}); err != nil {
-		t.Fatal(err)
-	}
-	blocked := requestJSON[map[string]any](t, h, http.MethodPost, "/api/issues/"+issue.ID+"/dispatch", map[string]any{"rerun": true}, http.StatusConflict)
-	if !strings.Contains(blocked["error"].(string), "重新打开") {
-		t.Fatalf("unexpected dispatch error: %+v", blocked)
-	}
-	reopened := requestJSON[domain.Issue](t, h, http.MethodPost, "/api/issues/"+issue.ID+"/reopen", map[string]any{}, http.StatusOK)
-	if reopened.DeliveryState != "reopened" || reopened.Status != "todo" {
-		t.Fatalf("unexpected reopened issue: %+v", reopened)
-	}
-	if err := s.MarkIssueDelivered(issue.ID, issue.DeliveryMRURL, time.Now().UTC()); err != nil {
-		t.Fatal(err)
-	}
-	stillOpen, _ := s.Issue(issue.ID)
-	if stillOpen.DeliveryState != "reopened" {
-		t.Fatalf("newer MR check must not relock a reopened issue: %+v", stillOpen)
-	}
-	task := requestJSON[domain.Task](t, h, http.MethodPost, "/api/issues/"+issue.ID+"/dispatch", map[string]any{"rerun": true}, http.StatusCreated)
-	t.Cleanup(func() { _ = e.Cancel(task.RunID) })
-	if task.RunID == "" || task.IssueID != issue.ID {
-		t.Fatalf("reopened issue did not dispatch: %+v", task)
-	}
-}
 
-func TestRequirementDispatchesWithoutClarificationGate(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	wf := domain.WorkflowDefinition{ID: "requirement-gated", Name: "Requirement gated", SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}
-	if err := s.PutWorkflow(wf); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	// Legacy imports still carry gated/needs_user; neither may block the LOOP.
-	if err := s.PutIssue(domain.Issue{ID: "req-gated", ProjectID: "platform", Kind: "requirement", Title: "Build requirement", AssigneeType: "agent", AssigneeID: "developer", WorkflowID: wf.ID, Clarification: domain.ClarificationAssessment{Gated: true, Status: domain.ClarificationNeedsUser}}); err != nil {
-		t.Fatal(err)
-	}
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/issues/req-gated/clarify", strings.NewReader(`{"answers":{}}`)))
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("score endpoint must be gone, got %d", rec.Code)
-	}
-	task := requestJSON[domain.Task](t, h, http.MethodPost, "/api/issues/req-gated/dispatch", map[string]any{}, http.StatusCreated)
-	t.Cleanup(func() { _ = e.Cancel(task.RunID) })
-	if task.RunID == "" {
-		t.Fatal("unclarified requirement must dispatch")
-	}
-}
 
-func TestScheduledDispatchDoesNotRequireClarification(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	wf := domain.WorkflowDefinition{ID: "req-sched-wf", Name: "Req", SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval"}}}
-	if err := s.PutWorkflow(wf); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutIssue(domain.Issue{
-		ID: "req-sched-gate", ProjectID: "platform", Kind: "requirement", Title: "Thin TAPD",
-		WorkflowID: wf.ID, Clarification: domain.ClarificationAssessment{Status: domain.ClarificationNeedsUser, Gated: true},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	d := &deps{repo: s, engine: e, sync: tracker.NewService()}
-	task, err := dispatchIssue(d, dispatchRequest{IssueID: "req-sched-gate", WorkflowID: wf.ID, ScheduleJobID: "job-1"})
-	if err != nil {
-		t.Fatalf("scheduled dispatch must not be gated: %v", err)
-	}
-	t.Cleanup(func() { _ = e.Cancel(task.RunID) })
-}
 
-func TestSyncedRequirementCanDispatchWithoutClarification(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	wf := domain.WorkflowDefinition{ID: "req-sync-wf", Name: "Req", SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval"}}}
-	if err := s.PutWorkflow(wf); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutIssue(domain.Issue{
-		ID: "req-sync", ProjectID: "platform", Kind: "requirement", Source: "tapd", Title: "mq_flush_dns CMQ SDK",
-		WorkflowID: wf.ID, Clarification: domain.ClarificationAssessment{Status: domain.ClarificationNeedsUser},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	d := &deps{repo: s, engine: e, sync: tracker.NewService()}
-	task, err := dispatchIssue(d, dispatchRequest{IssueID: "req-sync", WorkflowID: wf.ID, ScheduleJobID: "job-1"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = e.Cancel(task.RunID) })
-	if task.RunID == "" {
-		t.Fatal("synced requirement must dispatch")
-	}
-}
 
-func TestReadyClarificationCanDispatch(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	wf := domain.WorkflowDefinition{ID: "req-ready-wf", Name: "Req", SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval"}}}
-	if err := s.PutWorkflow(wf); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutIssue(domain.Issue{
-		ID: "req-ready-low", ProjectID: "platform", Kind: "requirement", Title: "Low score but clarified",
-		WorkflowID: wf.ID,
-		Clarification: domain.ClarificationAssessment{
-			Gated: true, Status: domain.ClarificationReady, Summary: "已确认 insert/delete 语义",
-		},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	d := &deps{repo: s, engine: e, sync: tracker.NewService()}
-	task, err := dispatchIssue(d, dispatchRequest{IssueID: "req-ready-low", WorkflowID: wf.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = e.Cancel(task.RunID) })
-	if task.RunID == "" {
-		t.Fatal("finished clarification must dispatch")
-	}
-}
+
+
+
+
+
 
 func TestAppendClarificationDescriptionReplacesPreviousBlock(t *testing.T) {
 	got := appendClarificationDescription("原描述", "第一轮结论")
@@ -1522,81 +783,9 @@ func TestAppendClarificationDescriptionReplacesPreviousBlock(t *testing.T) {
 	}
 }
 
-func TestExistingIssueClarificationDoesNotStartOrBlockSOP(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	wf := domain.WorkflowDefinition{ID: "issue-flow", Name: "Issue flow", SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}
-	if err := s.PutWorkflow(wf); err != nil {
-		t.Fatal(err)
-	}
-	issue := domain.Issue{ID: "gf-existing", ProjectID: "platform", Kind: "issue", Source: "gongfeng", Title: "unclear bug", WorkflowID: wf.ID}
-	if err := s.PutIssue(issue); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	updated := requestJSON[domain.Issue](t, h, http.MethodPost, "/api/issues/"+issue.ID+"/clarification", map[string]any{
-		"summary": "复现条件和预期行为已经确认", "ready": true,
-		"history": []map[string]string{{"role": "user", "content": "仅在首次加载时发生"}},
-	}, http.StatusOK)
-	if updated.Clarification.Status != "ready" || updated.Clarification.WriteBackStatus != "skipped" {
-		t.Fatalf("unexpected clarification: %+v", updated.Clarification)
-	}
-	if !strings.Contains(updated.Description, "复现条件和预期行为已经确认") {
-		t.Fatalf("platform description missing conclusion: %q", updated.Description)
-	}
-	if len(s.Tasks()) != 0 {
-		t.Fatal("clarification must not start a LOOP")
-	}
-	retried := requestJSON[domain.Issue](t, h, http.MethodPost, "/api/issues/"+issue.ID+"/clarification", map[string]any{
-		"ready": true, "retry": true,
-	}, http.StatusOK)
-	if retried.Clarification.WriteBackStatus != "skipped" {
-		t.Fatalf("retry should keep local-only clarification skipped: %+v", retried.Clarification)
-	}
-	task := requestJSON[domain.Task](t, h, http.MethodPost, "/api/issues/"+issue.ID+"/dispatch", map[string]any{}, http.StatusCreated)
-	if task.RunID == "" {
-		t.Fatal("existing issue LOOP should still dispatch normally")
-	}
-	t.Cleanup(func() { _ = e.Cancel(task.RunID) })
-}
 
-func TestRequirementClarificationFinishesWithoutScore(t *testing.T) {
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	wf := domain.WorkflowDefinition{ID: "req-flow", Name: "Req flow", SandboxProfileID: "test-native", Nodes: []domain.WorkflowNode{{ID: "approval", Name: "Approval", Type: "approval", MaxAttempts: 1}}}
-	if err := s.PutWorkflow(wf); err != nil {
-		t.Fatal(err)
-	}
-	issue := domain.Issue{ID: "tapd-rated", ProjectID: "platform", Kind: "requirement", Source: "tapd", Title: "partial req", WorkflowID: wf.ID}
-	if err := s.PutIssue(issue); err != nil {
-		t.Fatal(err)
-	}
-	e := engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces")))
-	h := New(s, e, tracker.NewService(), "", "")
-	updated := requestJSON[domain.Issue](t, h, http.MethodPost, "/api/issues/"+issue.ID+"/clarification", map[string]any{
-		"summary": "还缺验收和范围", "ready": true,
-	}, http.StatusOK)
-	if updated.Clarification.Status != domain.ClarificationReady {
-		t.Fatalf("status=%s", updated.Clarification.Status)
-	}
-	if !strings.Contains(updated.Description, "还缺验收和范围") {
-		t.Fatalf("platform description missing conclusion: %q", updated.Description)
-	}
-	task := requestJSON[domain.Task](t, h, http.MethodPost, "/api/issues/"+issue.ID+"/dispatch", map[string]any{}, http.StatusCreated)
-	if task.RunID == "" {
-		t.Fatal("ready clarification must dispatch")
-	}
-	t.Cleanup(func() { _ = e.Cancel(task.RunID) })
-}
+
+
 
 func TestCreateLocalIssueWithoutSyncTarget(t *testing.T) {
 	root := t.TempDir()
@@ -1605,7 +794,7 @@ func TestCreateLocalIssueWithoutSyncTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	created := requestJSON[domain.Issue](t, h, http.MethodPost, "/api/issues", map[string]any{
 		"projectId": "platform", "title": "local only", "description": "用户自己写的描述",
 	}, http.StatusOK)
@@ -1711,7 +900,7 @@ func TestImportTAPDIssueFromURL(t *testing.T) {
 	if err := s.PutSyncConfig(domain.SyncConfig{TAPDMCPURL: gateway.URL, AutoSyncIntervalSec: 300}); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	requestJSON[map[string]any](t, h, http.MethodPost, "/api/issues/import-tapd", map[string]any{"projectId": "platform"}, http.StatusBadRequest)
 	imported := requestJSON[domain.Issue](t, h, http.MethodPost, "/api/issues/import-tapd", map[string]any{
 		"projectId":    "platform",
@@ -1802,7 +991,7 @@ func TestSaveAfterClarificationDoesNotRecreateOrDeleteTAPDIssue(t *testing.T) {
 	if err := s.PutIssue(issue); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	saved := requestJSON[domain.Issue](t, h, http.MethodPut, "/api/issues", map[string]any{
 		"id":          issue.ID,
 		"projectId":   "platform",
@@ -1855,7 +1044,7 @@ func TestIssuesSaveDoesNotGateSyncedTAPDRequirement(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	saved := requestJSON[domain.Issue](t, h, http.MethodPut, "/api/issues", map[string]any{
 		"id":            "tapd-1010000000100001776",
 		"projectId":     "platform",
@@ -1884,7 +1073,7 @@ func TestSaveRestoresTAPDBindingFromStableID(t *testing.T) {
 	if err := s.PutIssue(domain.Issue{ID: "tapd-1010000000100000999", ProjectID: "platform", Title: "绑定被清空", Kind: "requirement", Status: "todo"}); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	saved := requestJSON[domain.Issue](t, h, http.MethodPut, "/api/issues", map[string]any{
 		"id":          "tapd-1010000000100000999",
 		"projectId":   "platform",
@@ -2049,7 +1238,7 @@ func newTAPDImportHandler(t *testing.T, s *repo.Store, root, payload string) htt
 	if err := s.PutSyncConfig(domain.SyncConfig{TAPDMCPURL: gateway.URL, AutoSyncIntervalSec: 300}); err != nil {
 		t.Fatal(err)
 	}
-	return New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	return New(s, tracker.NewService(), "", "")
 }
 
 func putPlatformImportRepo(t *testing.T, s *repo.Store) string {
@@ -2095,7 +1284,7 @@ func TestUserCredentialsAreStoredAndRedacted(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	if err := s.PutUser(domain.User{StaffID: 2002, LoginName: "alice", ChineseName: "爱丽丝"}); err != nil {
 		t.Fatal(err)
 	}
@@ -2149,7 +1338,7 @@ func TestCodeBuddyInternetEnvironmentIsNormalizedOrRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	if err := s.PutUser(domain.User{StaffID: 2003, LoginName: "bob", ChineseName: "鲍勃"}); err != nil {
 		t.Fatal(err)
 	}

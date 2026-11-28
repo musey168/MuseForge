@@ -2,9 +2,7 @@ package httpapi
 
 import (
 	"agentflow/internal/domain"
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"bytes"
 	"net/http"
 	"net/http/httptest"
@@ -26,7 +24,7 @@ func TestPasswordLoginOriginCredentialsAndSession(t *testing.T) {
 	if err := s.SetLocalPassword(u.ID, "a-local-test-password"); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(t.TempDir())), nil, "", "")
+	h := New(s, nil, "", "")
 	login := func(origin, password string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("POST", "http://localhost/api/auth/password", bytes.NewBufferString(`{"login":"public-user","password":"`+password+`"}`))
 		r.Header.Set("Content-Type", "application/json")

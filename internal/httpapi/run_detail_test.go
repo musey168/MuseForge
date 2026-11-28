@@ -8,9 +8,7 @@ import (
 	"time"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
 )
 
@@ -20,7 +18,7 @@ func TestRunDetailAndPublicLiveIncludeAutoAssignFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(s.Close)
-	h := New(s, engine.New(s, runtime.NewManager(t.TempDir())), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	now := time.Now().UTC()
 	for _, scenario := range []struct {
 		name              string

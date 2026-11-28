@@ -2,9 +2,7 @@ package httpapi
 
 import (
 	"agentflow/internal/domain"
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"bytes"
 	"net/http"
 	"net/http/httptest"
@@ -19,7 +17,7 @@ func TestRepositoryWritesRequireProjectOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(s.Close)
-	h := New(s, engine.New(s, runtime.NewManager(t.TempDir())), nil, "", "")
+	h := New(s, nil, "", "")
 	session := func(login string) *http.Cookie {
 		r := httptest.NewRequest("POST", "http://localhost/api/auth/register", bytes.NewBufferString(`{"login":"`+login+`","password":"secret1"}`))
 		r.Header.Set("Content-Type", "application/json")
