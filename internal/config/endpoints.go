@@ -81,7 +81,15 @@ func LoadEndpoints(role, addrFlag string) (Endpoints, error) {
 //
 // An address with no host ("8080", ":8080") means the wildcard, which is not
 // loopback and is refused.
+//
+// A container deployment opts in with AGENTFLOW_ALLOW_PUBLIC_BIND=1: inside the
+// container's own network namespace the wildcard reaches nothing but the
+// container, and the published port bounds what the host exposes. A host
+// deployment must not set it.
 func RequireLoopbackListenAddr(addr string) error {
+	if env("AGENTFLOW_ALLOW_PUBLIC_BIND") == "1" {
+		return nil
+	}
 	host, _, err := net.SplitHostPort(strings.TrimSpace(addr))
 	if err != nil {
 		return fmt.Errorf("invalid listen address %q: %w", addr, err)

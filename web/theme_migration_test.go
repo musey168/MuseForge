@@ -2,7 +2,6 @@ package web
 
 import (
 	"os/exec"
-	"strings"
 	"testing"
 )
 

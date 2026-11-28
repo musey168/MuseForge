@@ -19,17 +19,17 @@ func TestLoopbackURL(t *testing.T) {
 
 func TestLoadEndpointsAPIFollowsListenAddr(t *testing.T) {
 	clearEndpointEnv(t)
-	ep, err := LoadEndpoints("api", "0.0.0.0:18090")
+	ep, err := LoadEndpoints("api", "127.0.0.1:18090")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// -addr 覆盖端口时，助手工具网关和 OTLP 采集地址要跟着走，不能再假定 8080。
 	want := "http://127.0.0.1:18090"
-	if ep.ListenAddr != "0.0.0.0:18090" || ep.APIBase != want || ep.PlatformBase != want || ep.AgentToolGateway != want || ep.CollectorBase != want {
+	if ep.ListenAddr != "127.0.0.1:18090" || ep.APIBase != want || ep.PlatformBase != want || ep.AgentToolGateway != want || ep.CollectorBase != want {
 		t.Fatalf("endpoints = %#v", ep)
 	}
 	t.Setenv("AGENTFLOW_HTTP_PORT", "9090")
-	if ep, _ = LoadEndpoints("all", ""); ep.ListenAddr != ":9090" || ep.APIBase != "http://127.0.0.1:9090" {
+	if ep, _ = LoadEndpoints("all", ""); ep.ListenAddr != "127.0.0.1:9090" || ep.APIBase != "http://127.0.0.1:9090" {
 		t.Fatalf("port from env: %#v", ep)
 	}
 	t.Setenv("AGENTFLOW_HTTP_PORT", "nope")
@@ -83,7 +83,7 @@ func TestCurrentDefaultsAndOverride(t *testing.T) {
 
 func TestPrivateAgentToolGatewayUnlessOverridden(t *testing.T) {
 	clearEndpointEnv(t)
-	ep, err := LoadEndpoints("api", "0.0.0.0:18090")
+	ep, err := LoadEndpoints("api", "127.0.0.1:18090")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,8 +94,64 @@ func TestPrivateAgentToolGatewayUnlessOverridden(t *testing.T) {
 		t.Fatalf("private gateway = %#v", private)
 	}
 	t.Setenv("AGENTFLOW_AGENT_TOOL_GATEWAY_URL", "http://gateway.internal:9000")
-	ep, _ = LoadEndpoints("api", "0.0.0.0:18090")
+	ep, _ = LoadEndpoints("api", "127.0.0.1:18090")
 	if got := ep.WithPrivateAgentToolGateway("http://127.0.0.1:41234").AgentToolGateway; got != "http://gateway.internal:9000" {
 		t.Fatalf("explicit override lost: %s", got)
+	}
+}
+
+// TestRequireLoopbackListenAddr pins the exposure rule: the platform serves an
+// unauthenticated API, so it binds to the loopback interface and refuses
+// anything else.
+func TestRequireLoopbackListenAddr(t *testing.T) {
+	t.Setenv("AGENTFLOW_ALLOW_PUBLIC_BIND", "")
+	for _, tc := range []struct {
+		addr    string
+		wantErr bool
+	}{
+		{"127.0.0.1:8080", false},
+		{"127.0.0.1:0", false},
+		{"localhost:8080", false},
+		{"[::1]:8080", false},
+		{"0.0.0.0:8080", true},
+		{"[::]:8080", true},
+		{":8080", true},
+		{"192.168.1.10:8080", true},
+		{"example.com:8080", true},
+	} {
+		err := RequireLoopbackListenAddr(tc.addr)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("RequireLoopbackListenAddr(%q) error = %v, want error %v", tc.addr, err, tc.wantErr)
+		}
+	}
+}
+
+// TestLoadEndpointsBindsLoopbackOnly asserts the default listen address is the
+// loopback interface and that a public address is refused.
+func TestLoadEndpointsBindsLoopbackOnly(t *testing.T) {
+	clearEndpointEnv(t)
+	t.Setenv("AGENTFLOW_ALLOW_PUBLIC_BIND", "")
+	t.Setenv("AGENTFLOW_HTTP_PORT", "18099")
+	ep, err := LoadEndpoints("api", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ep.ListenAddr != "127.0.0.1:18099" {
+		t.Fatalf("default listen address = %q, want the loopback interface", ep.ListenAddr)
+	}
+	if _, err := LoadEndpoints("api", "0.0.0.0:18099"); err == nil {
+		t.Fatal("a public listen address must be refused")
+	}
+}
+
+// TestLoadEndpointsAllowsTheContainerOptIn: a container deployment may bind the
+// wildcard inside its own network namespace, where the published port bounds what
+// the host exposes.
+func TestLoadEndpointsAllowsTheContainerOptIn(t *testing.T) {
+	clearEndpointEnv(t)
+	t.Setenv("AGENTFLOW_ALLOW_PUBLIC_BIND", "1")
+	t.Setenv("AGENTFLOW_HTTP_PORT", "18099")
+	if _, err := LoadEndpoints("api", "0.0.0.0:18099"); err != nil {
+		t.Fatalf("the container opt-in must be honoured: %v", err)
 	}
 }
