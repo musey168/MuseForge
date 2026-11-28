@@ -64,6 +64,16 @@ curl -fsSL http://127.0.0.1:8080/runners/install.sh | bash
 The daemon registers, heartbeats and reports the CLIs it finds — their paths,
 versions, login state and the models they can reach. It never receives work.
 
+**What it keeps on disk.** One state file, `~/.agentflow-runner/state.json` (or
+`-state`), and — only when you set `AGENTFLOW_MANAGED_CLI_ROOT` — the CLIs it
+manages there. It creates no per-session directory and copies no helper
+distribution: a start that leaves anything else behind is a defect, and
+`internal/runner/daemon_test.go` fails if one does. An older team-build runner
+did keep a full git distribution per start under
+`~/Library/Caches/LoopForge/git-helpers` — several hundred megabytes each, never
+reclaimed. If that directory exists on a machine, nothing in this build reads
+it, and `rm -rf ~/Library/Caches/LoopForge` reclaims it.
+
 ## The omp extension
 
 The extension that reports a finished session's usage is installed separately, and

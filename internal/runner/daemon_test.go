@@ -301,3 +301,52 @@ func TestDaemonReportsDetectedCLIs(t *testing.T) {
 		t.Fatalf("detected runtimes = %+v", d.currentRuntimes())
 	}
 }
+
+// The machine daemon keeps one small state file and nothing else. A runner
+// that copied a helper distribution per start filled 37 GB on a real machine;
+// this pins the footprint so it cannot come back.
+func TestDaemonLeavesNoPerSessionCopy(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	statePath, err := DefaultStatePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := New(Config{
+		ServerURL:      "http://127.0.0.1:1", // nothing listens: registration fails at once
+		BootstrapToken: "boot",
+		StatePath:      statePath,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = d.Run(ctx) // registration fails; the daemon stops
+
+	var entries []string
+	var total int64
+	err = filepath.Walk(home, func(path string, info os.FileInfo, err error) error {
+		if err != nil || path == home {
+			return nil
+		}
+		rel, _ := filepath.Rel(home, path)
+		entries = append(entries, rel)
+		if !info.IsDir() {
+			total += info.Size()
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry != ".agentflow-runner" && !strings.HasPrefix(entry, ".agentflow-runner"+string(filepath.Separator)) {
+			t.Fatalf("the daemon wrote outside its state directory: %s (everything: %v)", entry, entries)
+		}
+	}
+	// A copied binary bundle is hundreds of megabytes; a state file is bytes.
+	if total > 1<<20 {
+		t.Fatalf("the daemon wrote %d bytes of state, want a small file: %v", total, entries)
+	}
+}
