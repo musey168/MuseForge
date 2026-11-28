@@ -14,12 +14,6 @@ function renderProjectContext(projectIssues){
   $('#projectContextMetrics').innerHTML=`<button type="button" data-issue-filter="" class="${!state.issueDeliveryFilter?'on':''}"><span>工作项</span><b>${projectIssues.length}</b></button><button type="button" data-issue-filter="active" class="${state.issueDeliveryFilter==='active'?'on':''}"><span>正在推进</span><b>${active}</b></button><button type="button" data-issue-filter="attention" class="${attention?'danger':''} ${state.issueDeliveryFilter==='attention'?'on':''}" title="点此只看待确认澄清结论、门禁失败、运行失败或已中断的工作项"><span>需要介入</span><b>${attention}</b></button><button type="button" data-issue-filter="mr" class="${state.issueDeliveryFilter==='mr'?'on':''}" title="已提 MR 但还没合入的 MR 数（按 MR 计，点击只看涉及的需求）"><span>待处理 MR</span><b>${pendingMRs}</b></button><div class="project-default-sop"><span>代码仓库（${repoCount}）</span><b title="${escapeHTML(repo?.gongfengProjectId||'未绑定')}">默认：${escapeHTML(repo?.name||'未绑定')}</b></div>`;
   $('#projectContextMetrics').querySelectorAll('[data-issue-filter]').forEach(btn=>btn.onclick=()=>{state.issueDeliveryFilter=btn.dataset.issueFilter;resetListPage('issues');renderIssues()});
 }
-function clarificationNeedsConfirm(i){
-  const c=i?.clarification||{};
-  if(c.status!=='ready')return false;
-  if(c.writeBackStatus!=='pending')return false;
-  return (i.source==='tapd'||i.source==='gongfeng')&&!!i.externalRef;
-}
 function userCombobox(name,selected,emptyLabel='请选择用户',attributes=''){
   const current=userById(selected),label=current?userDisplay(current):emptyLabel;
   const options=(state.data.users||[]).map(u=>`<button type="button" class="user-combobox-option${Number(u.id)===Number(selected)?' selected':''}" data-user-option="${u.id}" data-search="${escapeHTML(`${u.loginName||''} ${u.chineseName||''}`.toLowerCase())}"><span>${escapeHTML(userDisplay(u))}</span>${Number(u.id)===Number(selected)?'<i>✓</i>':''}</button>`).join('');

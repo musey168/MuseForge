@@ -141,6 +141,9 @@ global.escapeHTML = s => String(s);
 global.state = { currentUser: { isGuest: true }, loginUrl: "" };
 const fnStart = appCode.indexOf("function renderUserProfilePopover()");
 const fnEnd = appCode.indexOf("function renderDashboard()");
+// The theme preference lives in app.js, outside the sliced profile popover.
+const themeCode = appCode.match(/function readThemePreference\(\)\{[\s\S]*?catch\{return'light'\}\}/);
+eval(themeCode[0]);
 eval(appCode.slice(fnStart, fnEnd));
 
 // Guest mode
@@ -646,14 +649,11 @@ func TestRequirementDirectCreateUI(t *testing.T) {
 	if strings.Contains(code, "直接创建会同步到 TAPD") {
 		t.Fatal("直接创建 must not auto-sync TAPD; user chooses dest")
 	}
-	if !strings.Contains(code, "await syncRunControlState(runId)") || strings.Contains(code, "patchCachedRun(runId,{pauseRequested:false,status:'running'})") {
-		t.Fatal("resume must refresh authoritative state instead of forcing running")
+	if strings.Contains(code, "patchCachedRun(runId,{pauseRequested:false,status:'running'})") {
+		t.Fatal("the console must not force a run back to running")
 	}
-	if !strings.Contains(code, "pauseRequested:Boolean(incoming.pauseRequested)") {
-		t.Fatal("live run merge must treat omitted pauseRequested as false")
-	}
-	if !strings.Contains(code, "function runRetryNeedsContext(run)") {
-		t.Fatal("script retry must skip the context prompt")
+	if strings.Contains(code, "function runRetryNeedsContext(run)") {
+		t.Fatal("the console must not offer a run retry")
 	}
 	for _, want := range []string{
 		`function renderReqFooter(`, `function renderReqRepoChip(`, `persistRequirementComposer`, `agentflow.requirementComposer`, `未配置`, `if(modal.id==='requirementModal')return`,
@@ -1124,32 +1124,27 @@ func TestPlatformAdminViewIsGone(t *testing.T) {
 	}
 }
 
-func TestClarifyOptionToggleLogic(t *testing.T) {
+func TestClarifyControlsAreGone(t *testing.T) {
 	app, err := readAppBundle()
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := string(app)
 
-	// Verify issue clarify option unselect on second click
-	if !strings.Contains(source, "const wasSelected=b.classList.contains('selected');") {
-		t.Fatal("issue clarify option does not track wasSelected to toggle off on repeat click")
-	}
-	if !strings.Contains(source, "if(!wasSelected)b.classList.add('selected');") {
-		t.Fatal("issue clarify option does not conditionally add selected")
-	}
-
-	// Verify CSS distinguishes hover from selected so cancellation is visually obvious
-	v4css, err := os.ReadFile("product-v4.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	v4style := string(v4css)
-	if strings.Contains(v4style, ".issue-clarify-option:hover,.issue-clarify-option.selected") {
-		t.Fatal("issue-clarify-option must not share identical hover and selected styles")
-	}
-	if !strings.Contains(v4style, ".issue-clarify-option:hover{") || !strings.Contains(v4style, ".issue-clarify-option.selected{") {
-		t.Fatal("issue-clarify-option must define separate hover and selected rules")
+	// The clarification round left the console: its option controls, its
+	// buttons and its pane must not come back.
+	for _, unwanted := range []string{
+		"wasSelected=b.classList.contains('selected')",
+		"issue-clarify-option",
+		"data-start-clarify",
+		"data-continue-clarify",
+		"data-stop-clarify",
+		"data-reclarify",
+		"data-retry-clarify",
+	} {
+		if strings.Contains(source, unwanted) {
+			t.Fatalf("the clarification round is still wired into the app: %q", unwanted)
+		}
 	}
 }
 
@@ -1246,13 +1241,11 @@ func TestCodexStyleLeftMiniRailLayout(t *testing.T) {
 			t.Fatalf("#platformRail must contain %s nav button", needle)
 		}
 	}
+	// 流程模板、运行记录、定时任务随执行引擎一起离开，导航里也不再保留入口。
 	for _, view := range []string{"sops", "runs", "aiSchedules"} {
 		needle := `data-view="` + view + `"`
-		if strings.Contains(page[railIdx:sidebarIdx], needle) {
-			t.Fatalf("#platformRail must not contain %s; it lives in the settings navigation", needle)
-		}
-		if !strings.Contains(page[sidebarIdx:], needle) {
-			t.Fatalf("settings navigation must contain %s", needle)
+		if strings.Contains(page, needle) {
+			t.Fatalf("the retired %s view must not be in the navigation", needle)
 		}
 	}
 	// 图标栏第 2 位仍是统计；需求列表紧跟其后，两者都是日常工作入口。
@@ -1333,15 +1326,15 @@ func TestCodexStyleLeftMiniRailLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 	appJs := string(appJsBytes)
-	if !strings.Contains(appJs, "const noSidebarViews = ['issues', 'approvals', 'observability'];") {
-		t.Fatal("app.js must hide the sidebar on the rail-only pages: 需求列表, 待我确认, 用量台")
+	if !strings.Contains(appJs, "const noSidebarViews = ['issues', 'observability'];") {
+		t.Fatal("app.js must hide the sidebar on the rail-only pages: 需求列表, 用量台")
 	}
 	managed := appJs[strings.Index(appJs, "const settingsManagementViews="):]
 	managed = managed[:strings.Index(managed, "\n")]
 	if strings.Contains(managed, "'observability'") {
 		t.Fatal("用量台 must not enter settings management mode")
 	}
-	for _, view := range []string{"'sops'", "'runs'", "'aiSchedules'", "'bots'"} {
+	for _, view := range []string{"'projects'", "'projectCredentials'", "'runners'"} {
 		if !strings.Contains(managed, view) {
 			t.Fatalf("%s moved into the settings sidebar and must enter settings management mode", view)
 		}

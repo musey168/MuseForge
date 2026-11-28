@@ -1905,12 +1905,11 @@ function renderDashboard(){
   const projectIssues=issues.filter(i=>!state.projectFilter||i.projectId===state.projectFilter);
   const stageOf=i=>issueCurrentStage(i);
   const attention=projectIssues.filter(i=>stageOf(i).key==='attention');
-  const confirm=projectIssues.filter(i=>stageOf(i).key==='confirm');
   const active=projectIssues.filter(i=>stageOf(i).key==='active');
   const closed=projectIssues.filter(i=>stageOf(i).key==='closed');
-  const needMe=[...confirm,...attention];
+  const needMe=[...attention];
   const statCards=[
-    {label:'需要介入',value:attention.length,foot:'被阻塞或需要确认',color:'#c63c4b',filter:'attention'},
+    {label:'需要介入',value:attention.length,foot:'被阻塞的需求',color:'#c63c4b',filter:'attention'},
     {label:'正在推进',value:active.length,foot:'需求正在推进',color:'#5b8cff',filter:'active'},
     {label:'已经完成',value:closed.length,foot:'本项目已闭环',color:'#34d399',filter:'closed'},
   ];
@@ -1924,7 +1923,7 @@ function renderDashboard(){
   const bindIssueRows=host=>{host.querySelectorAll('[data-issue]').forEach(el=>el.onclick=()=>openIssueDetail(el.dataset.issue))};
   $('#dashAttention').innerHTML=needMe.length?needMe.slice(0,8).map(row).join(''):'<div class="empty-box">没有需要你处理的需求</div>';
   $('#dashActive').innerHTML=active.length?active.slice(0,8).map(row).join(''):'<div class="empty-box">当前没有进行中的需求</div>';
-  const results=closed.filter(i=>!issueManuallyClosed(i)&&!issueTrackerClosed(i)).sort((a,b)=>new Date(b.updatedAt||0)-new Date(a.updatedAt||0)).slice(0,8);
+  const results=closed.filter(i=>!issueClosed(i)).sort((a,b)=>new Date(b.updatedAt||0)-new Date(a.updatedAt||0)).slice(0,8);
   $('#dashResults').innerHTML=results.length?results.map(row).join(''):'<div class="empty-box">还没有跑完的需求</div>';
   bindIssueRows($('#dashAttention'));bindIssueRows($('#dashActive'));bindIssueRows($('#dashResults'));
   const cfg=state.data.syncConfig||{},logs=state.data.syncLogs||[];

@@ -158,7 +158,7 @@ func TestIssueTableShowsSourceColumn(t *testing.T) {
 	if !strings.Contains(code, head) {
 		t.Fatal("issue table head must list 来源 between 标题 and 责任人")
 	}
-	row := `<div class="issue-title-cell">${issueTitleMarkup(i.title)}</div><div class="issue-source-cell">${issueSourceMarkup(i)}</div><div class="issue-assignee-cell"`
+	row := `<div class="issue-title-cell">${issueTagsMarkup(i)}${issueTitleMarkup(i.title)}</div><div class="issue-source-cell">${issueSourceMarkup(i)}</div><div class="issue-assignee-cell"`
 	if !strings.Contains(code, row) {
 		t.Fatal("issue row must render the 来源 cell between 标题 and 责任人")
 	}
