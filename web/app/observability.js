@@ -224,7 +224,16 @@ async function obsLoadUsage(){
     if(request===obsUsageRequest){state.usageLoading=false;renderObservability()}
   }
 }
-async function refreshObs(){return obsLoadUsage()}
+async function obsLoadStats(){
+  try{
+    state.stats=await api('/api/stats/overview'+obsPlatformQuery(),{silent:true})||null;
+    state.statsError='';
+  }catch(e){
+    state.statsError=e.message||'';
+  }
+  renderObservability();
+}
+async function refreshObs(){return Promise.all([obsLoadUsage(),obsLoadStats()])}
 function setObsUsageGrain(grain){
   grain=['day','week','month'].includes(grain)?grain:'day';
   if(obsUsageGrain()===grain)return;
@@ -232,6 +241,7 @@ function setObsUsageGrain(grain){
   state.usageBucket='';
   localStorage.setItem('agentflow.usageGrain',grain);
   obsLoadUsage();
+  obsLoadStats();
 }
 function setObsUsageBucket(key){
   const next=String(key||'');
@@ -404,9 +414,54 @@ function obsUsageExecutionCard(){
   return obsCard('executions','执行明细','最新在上；点「明细」展开该次执行的模型用量','',obsUsageExecutionTable(obsUsageExecutionRows()));
 }
 function obsUsageEmptyPanel(){
-  return `<section class="obs-card2" data-obs-card="empty"><header class="obs-card-head"><div class="obs-card-heading"><h3>暂无上报的执行</h3><p>用量台只统计外部工作流主动上报的用量。</p></div></header><div class="obs-empty-usage"><ol><li>在「数据源」里为当前项目创建上报凭据（Token 只显示一次），把它交给执行工作流的系统。</li><li>omp 会话在每次执行结束时上报一次用量汇总；相同 ID 重试不会重复计量。</li><li>上报后回到本页刷新，即可看到 Token、费用、缓存和模型拆分。</li></ol></div></section>`;
+  return `<section class="obs-card2" data-obs-card="empty"><header class="obs-card-head"><div class="obs-card-heading"><h3>还没有 Agent 用量</h3><p>上面的平台统计是 MuseForge 自己的数据；这里统计接入的 Agent 花了多少 Token 和费用。</p></div></header><div class="obs-empty-usage"><ol><li>在「数据源」里为当前项目创建上报凭据（Token 只显示一次）。</li><li>把凭据填进 Agent 的连接命令：omp 用扩展，Codex / pi / Claude Code 用 <code>museforge-usage</code> 回填。</li><li>运行后回到本页刷新，就能看到 Token、费用、缓存和模型拆分。</li></ol></div></section>`;
 }
 
+// ---------- 平台统计（MuseForge 自己的数据） ----------
+function obsPlatform(){return state.stats||null}
+function obsPlatformQuery(){
+  const tz=obsTimeZone();
+  return `?grain=${encodeURIComponent(obsUsageGrain())}${tz?`&tz=${encodeURIComponent(tz)}`:''}`;
+}
+const OBS_STATUS_LABELS={backlog:'待规划',todo:'待处理',in_progress:'进行中',in_review:'评审中',blocked:'受阻',done:'已完成',closed:'已关闭',cancelled:'已取消'};
+const OBS_SOURCE_LABELS={local:'平台新建',github:'GitHub',gitlab:'GitLab'};
+const OBS_PRIORITY_LABELS={urgent:'紧急',high:'高',medium:'中',low:'低'};
+function obsPlatLabel(labels,key){return labels[key]||key||'—'}
+function obsPlatPairs(map,labels,order){
+  const entries=Object.entries(map||{}).filter(([,v])=>Number(v)>0);
+  const rank=k=>{const i=order.indexOf(k);return i<0?order.length:i};
+  return entries.sort((a,b)=>rank(a[0])-rank(b[0])||Number(b[1])-Number(a[1])).map(([k,v])=>[obsPlatLabel(labels,k),Number(v)]);
+}
+function obsPlatDist(title,pairs){
+  if(!pairs.length)return `<div class="obs-plat-dist"><h5>${title}</h5><p class="muted">暂无</p></div>`;
+  const max=Math.max(...pairs.map(p=>p[1]));
+  return `<div class="obs-plat-dist"><h5>${title}</h5>${pairs.map(([k,v])=>`<div class="obs-plat-row"><span>${escapeHTML(k)}</span>${obsMeter(v*100/max)}<b>${v}</b></div>`).join('')}</div>`;
+}
+function obsPlatSparkRow(label,values,unit){
+  const total=values.reduce((sum,v)=>sum+v,0);
+  return `<div class="obs-plat-spark"><span>${label}</span>${obsSpark(values)}<b>${formatTokens(total)}${unit||''}</b></div>`;
+}
+function obsPlatformCard(){
+  const s=obsPlatform();
+  if(!s)return '';
+  const requirements=s.requirements||{};
+  const total=Number(requirements.total||0);
+  const kpis=obsKpiGroup('平台概览',[
+    {label:'项目',value:String(Number(s.projects||0)),foot:'分组容器'},
+    {label:'需求',value:String(total),foot:`未完成 ${Number(requirements.open||0)} · 已完成 ${Number(requirements.closed||0)}`},
+    {label:'未完成',value:String(Number(requirements.open||0)),foot:'还没关掉的需求',meter:total?Number(requirements.open||0)*100/total:0},
+    {label:'已完成',value:String(Number(requirements.closed||0)),foot:'完成 · 关闭 · 取消',meter:total?Number(requirements.closed||0)*100/total:0},
+    {label:'仓库',value:String(Number(s.repositories?.total||0)),foot:'已连接的代码仓库'},
+    {label:'机器',value:String(Number(s.machines?.total||0)),foot:`在线 ${Number(s.machines?.connected||0)}`},
+  ]);
+  if(s.empty){
+    return `<section class="obs-card2" data-obs-card="platform"><header class="obs-card-head"><div class="obs-card-heading"><h3>平台统计</h3><p>还没有数据：先在需求列表里建一个项目，数据会出现在这里。</p></div></header>${kpis}</section>`;
+  }
+  const trend=s.trend||[];
+  const dists=`<div class="obs-grid2">${obsPlatDist('状态分布',obsPlatPairs(requirements.byStatus,OBS_STATUS_LABELS,['backlog','todo','in_progress','in_review','blocked','done','closed','cancelled']))}${obsPlatDist('来源分布',obsPlatPairs(requirements.bySource,OBS_SOURCE_LABELS,['local','github','gitlab']))}${obsPlatDist('优先级分布',obsPlatPairs(requirements.byPriority,OBS_PRIORITY_LABELS,['urgent','high','medium','low']))}${obsPlatDist('标签',(requirements.tags||[]).map(t=>[t.tag,Number(t.count||0)]))}</div>`;
+  const sparks=`<div class="obs-plat-spark-wrap">${obsPlatSparkRow(`近 ${trend.length} ${obsUsageGrainName()}创建`,trend.map(p=>Number(p.created||0)))}${obsPlatSparkRow(`近 ${trend.length} ${obsUsageGrainName()}关闭`,trend.map(p=>Number(p.closed||0)))}</div>`;
+  return obsCard('platform','平台统计','项目、需求、仓库与机器，按'+obsUsageGrainName()+'看创建与关闭', '', `${kpis}${dists}${sparks}`);
+}
 // ---------- 渲染 ----------
 function renderObservability(){
   const host=$('#obsBody');
@@ -430,7 +485,7 @@ function renderObservability(){
   }else{
     body=`<div class="detail-empty">${escapeHTML(lfT('暂无统计数据','No usage data yet'))}</div>`;
   }
-  host.innerHTML=`<div class="obs-pane active">${obsUsageScopeBar()}${body}</div>`;
+  host.innerHTML=`<div class="obs-pane active">${obsUsageScopeBar()}${obsPlatformCard()}${body}</div>`
   state.obsSelects=obsEnhanceSelects(host);
   host.querySelectorAll('[data-obs-usage-grain]').forEach(b=>b.onclick=()=>setObsUsageGrain(b.dataset.obsUsageGrain));
   host.querySelectorAll('[data-obs-usage-metric]').forEach(b=>b.onclick=()=>{state.usageMetric=b.dataset.obsUsageMetric;renderObservability()});

@@ -40,7 +40,7 @@ test('English mode leaves no Chinese in the navigation, the top bar or the ä¸ªäº
   assert.equal(roots.length, 4);
   assert.deepEqual(leftoverChinese(roots), []);
   assert.equal(document.querySelector('#settingsSidebar [data-view="settings"] .nav-label').textContent, 'Personal settings');
-  assert.equal(document.querySelector('#platformRail [data-view="observability"]').dataset.tooltip, 'Usage');
+  assert.equal(document.querySelector('#platformRail [data-view="observability"]').dataset.tooltip, 'Statistics');
   window.close();
 });
 

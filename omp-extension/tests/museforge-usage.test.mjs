@@ -204,10 +204,10 @@ test("aggregates one session's usage per model into one reported execution", asy
     const execution = await aggregateSessionUsage({ sessionFile, statsDb });
 
     assert.deepEqual(execution, {
-      id: "omp-session:fixture-session",
+      id: "omp:fixture-session",
       type: "workflow_execution",
-      externalExecutionId: "fixture-session",
-      workflow: { id: "omp-session", name: "omp 会话" },
+      externalExecutionId: "omp:fixture-session",
+      workflow: { id: "omp", name: "omp" },
       startedAt: "2026-11-27T10:00:01.000Z",
       finishedAt: "2026-11-27T10:00:07.000Z",
       executionDurationMs: 3500,
@@ -393,7 +393,7 @@ test("posts the aggregated execution to the ingest endpoint with the credential 
     assert.equal(request.url, "/api/insights/v1/ingest");
     assert.equal(request.headers.authorization, "Bearer afi_test");
     assert.match(request.headers["content-type"], /application\/json/);
-    assert.equal(request.body.id, "omp-session:posted-session");
+    assert.equal(request.body.id, "omp:posted-session");
     assert.equal(request.body.type, "workflow_execution");
     assert.deepEqual(request.body.usage[0], {
       provider: "provider-1",

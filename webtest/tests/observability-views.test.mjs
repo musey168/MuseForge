@@ -28,17 +28,76 @@ const usagePayload = {
   timeZone: 'Asia/Shanghai',
   grain: 'day',
 };
+const statsPayload = {
+  projects: 2,
+  requirements: {
+    total: 3, open: 2, closed: 1,
+    byStatus: { todo: 2, done: 1 },
+    bySource: { local: 2, github: 1 },
+    byPriority: { high: 1, medium: 2 },
+    tags: [{ tag: '接口', count: 2 }],
+  },
+  trend: [
+    { bucket: '2026-11-27', created: 1, closed: 0 },
+    { bucket: '2026-11-28', created: 2, closed: 1 },
+  ],
+  repositories: { total: 1, byProvider: { https: 1 } },
+  machines: { total: 1, connected: 1 },
+  empty: false,
+  grain: 'day',
+  generatedAt: '2026-11-28T12:00:00Z',
+};
 
-async function prepare(app, payload = usagePayload) {
+
+async function prepare(app, payload = usagePayload, stats = statsPayload) {
   app.router.get(/^\/api\/usage\?/, () => payload);
+  app.router.get(/^\/api\/stats\/overview/, () => stats);
   app.evaluate(`
     state.currentUser={id:1,isGuest:false,isPlatformAdmin:true};
     state.data.users=[{id:1,loginName:'alice'}];
     state.data.projects[0].ownerId=1;
+    state.stats=null;state.statsError='';
     state.usage=null;state.usageLoading=false;state.usageError='';state.usageGrain='day';state.usageBucket='';state.usageBuckets=[];state.usageMetric='tokens';state.usageExpanded='';
   `);
 }
 
+test('the statistics page opens with the platform numbers, not an empty page', async (t) => {
+  const app = await loadApp();
+  t.after(app.close);
+  await prepare(app);
+  await app.evaluate('refreshObs()');
+  await settle(4);
+  const body = app.document.querySelector('#obsBody');
+  const card = body.querySelector('[data-obs-card="platform"]');
+  assert.ok(card, 'the platform card renders above the agent usage');
+  const text = card.textContent;
+  assert.match(text, /平台统计/);
+  assert.match(text, /项目/);
+  assert.match(text, /需求/);
+  assert.match(text, /状态分布/);
+  assert.match(text, /来源分布/);
+  assert.match(text, /优先级分布/);
+  assert.match(text, /标签/);
+  // The distributions read the payload, not the raw keys.
+  assert.match(text, /待处理/);
+  assert.match(text, /平台新建/);
+  assert.match(text, /GitHub/);
+  const call = app.router.calls.find(c => c.path === '/api/stats/overview');
+  assert.ok(call, 'the page requests the platform statistics');
+  assert.equal(call.url.searchParams.get('grain'), 'day');
+  assert.equal(call.url.searchParams.get('tz'), app.evaluate('obsTimeZone()'));
+});
+
+test('an empty platform shows zeros and a hint instead of pretending to have data', async (t) => {
+  const app = await loadApp();
+  t.after(app.close);
+  await prepare(app, usagePayload, { projects: 1, requirements: { total: 0, open: 0, closed: 0, byStatus: {}, bySource: {}, byPriority: {}, tags: [] }, trend: [], repositories: { total: 0, byProvider: {} }, machines: { total: 0, connected: 0 }, empty: true, grain: 'day' });
+  await app.evaluate('refreshObs()');
+  await settle(4);
+  const card = app.document.querySelector('[data-obs-card="platform"]');
+  assert.ok(card);
+  assert.match(card.textContent, /还没有数据/);
+});
 test('the usage console renders token, cost, cache, execution, trend, breakdown and execution panels', async (t) => {
   const app = await loadApp();
   t.after(app.close);
@@ -47,7 +106,7 @@ test('the usage console renders token, cost, cache, execution, trend, breakdown 
   await settle(4);
   const body = app.document.querySelector('#obsBody');
   const cards = [...body.querySelectorAll('[data-obs-card]')].map(el => el.dataset.obsCard);
-  assert.deepEqual(cards, ['trend', 'models', 'providers', 'executions']);
+  assert.deepEqual(cards, ['platform', 'trend', 'models', 'providers', 'executions']);
   const text = body.textContent;
   assert.match(text, /Token 用量/);
   assert.match(text, /费用/);
@@ -106,9 +165,9 @@ test('no reported executions renders an explicit empty state instead of zeros', 
   await settle(4);
   const body = app.document.querySelector('#obsBody');
   assert.ok(body.querySelector('[data-obs-card="empty"]'));
-  assert.match(body.textContent, /暂无上报的执行/);
+  assert.match(body.textContent, /还没有 Agent 用量/);
   assert.match(body.textContent, /上报凭据/);
-  assert.match(body.textContent, /omp 会话/);
+  assert.match(body.textContent, /museforge-usage/);
   assert.equal(body.querySelector('[data-obs-card="executions"]'), null);
   assert.doesNotMatch(body.textContent, /¥0\.00/);
 });

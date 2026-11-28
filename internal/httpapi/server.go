@@ -46,6 +46,7 @@ type Server struct {
 	runners      *runnersHandlers // runners.go
 	tokens       *tokenHandlers   // auth_tokens.go
 	syncAPI      *syncHandlers    // tracker.go
+	stats        *statsHandlers   // stats.go
 }
 
 func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *gin.Engine {
@@ -68,6 +69,7 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 		runners:      &runnersHandlers{deps: d, runnerControls: runnerControls, runnerBindCodes: map[string]runnerBindCode{}},
 		tokens:       &tokenHandlers{deps: d},
 		syncAPI:      &syncHandlers{deps: d},
+		stats:        &statsHandlers{deps: d},
 	}
 	api.runners.startRunnerSweeper()
 	g := gin.New()
@@ -156,6 +158,9 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 	g.DELETE("/api/insights/v1/sources/:id", api.insights.revokeSource)
 	g.GET("/api/usage", api.insights.usage)
 	g.GET("/api/observability/spec", api.observabilitySpec)
+
+	// --- statistics page ---
+	g.GET("/api/stats/overview", api.stats.overview)
 
 	// --- sync & tracker import ---
 	g.GET("/api/tracker/import", api.syncAPI.trackerImport)

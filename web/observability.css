@@ -533,3 +533,15 @@ body.obs-expand-open{overflow:hidden}
 @media (prefers-reduced-motion:reduce){
   .obs-chart-skeleton{animation:none}
 }
+
+/* 统计台 · 平台统计（MuseForge 自己的数据） */
+#observabilityView .obs-plat-dist{display:flex;flex-direction:column;gap:6px;min-width:0}
+#observabilityView .obs-plat-dist h5{margin:0;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.02em}
+#observabilityView .obs-plat-dist>p{margin:0;font-size:11.5px}
+#observabilityView .obs-plat-row{display:grid;grid-template-columns:64px minmax(0,1fr) 36px;align-items:center;gap:8px;font-size:11.5px;color:var(--text)}
+#observabilityView .obs-plat-row .obs-meter{margin:0}
+#observabilityView .obs-plat-row b{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+#observabilityView .obs-plat-spark-wrap{display:grid;gap:6px}
+#observabilityView .obs-plat-spark{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--muted)}
+#observabilityView .obs-plat-spark .obs-spark{flex:0 0 120px}
+#observabilityView .obs-plat-spark b{margin-left:auto;color:var(--text);font-variant-numeric:tabular-nums}

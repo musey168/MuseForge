@@ -784,7 +784,7 @@ func TestUsageAnalysisUI(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := string(html)
-	for _, want := range []string{`<h1>用量台</h1>`, `id="refreshObs"`, `id="obsManageSources"`, `id="obsBody"`, `id="obsExpand"`} {
+	for _, want := range []string{`<h1>统计台</h1>`, `id="refreshObs"`, `id="obsManageSources"`, `id="obsBody"`, `id="obsExpand"`} {
 		if !strings.Contains(page, want) {
 			t.Fatalf("usage console UI missing %q", want)
 		}
@@ -1264,14 +1264,14 @@ func TestCodexStyleLeftMiniRailLayout(t *testing.T) {
 	if !strings.Contains(railNav, `data-view="issues" data-tooltip="需求列表" aria-label="需求列表"`) {
 		t.Fatal("#platformRail must contain the issues entry labelled 需求列表")
 	}
-	if !strings.Contains(railNav, `data-view="observability" data-tooltip="用量台" aria-label="用量台"`) {
-		t.Fatal("#platformRail observability button must be labelled 用量台")
+	if !strings.Contains(railNav, `data-view="observability" data-tooltip="统计台" aria-label="统计台"`) {
+		t.Fatal("#platformRail observability button must be labelled 统计台")
 	}
 	if strings.Index(railNav, `data-view="observability"`) > strings.Index(railNav, `data-view="issues"`) {
-		t.Fatal("用量台 must stay before 需求列表 in #platformRail")
+		t.Fatal("统计台 must stay before 需求列表 in #platformRail")
 	}
 	if strings.Contains(page[sidebarIdx:], `data-view="observability"`) {
-		t.Fatal("settings navigation must not duplicate the 用量台 entry")
+		t.Fatal("settings navigation must not duplicate the 统计台 entry")
 	}
 	if !strings.Contains(page[sidebarIdx:], `data-view="runners"`) {
 		t.Fatal("settings navigation must contain the runners entry")
@@ -1350,15 +1350,15 @@ func TestCodexStyleLeftMiniRailLayout(t *testing.T) {
 			t.Fatalf("%s moved into the settings sidebar and must enter settings management mode", view)
 		}
 	}
-	if !strings.Contains(appJs, "observability:'用量台'") {
-		t.Fatal("viewTitles.observability must be 用量台")
+	if !strings.Contains(appJs, "observability:'统计台'") {
+		t.Fatal("viewTitles.observability must be 统计台")
 	}
 	paletteBytes, err := Files.ReadFile("app/command-palette.js")
 	if err != nil {
 		t.Fatal(err)
 	}
 	palette := string(paletteBytes)
-	for _, want := range []string{"['observability','用量台','上报用量 · Token 与费用']", "['issues','需求列表'"} {
+	for _, want := range []string{"['observability','统计台','平台数据 · Agent 用量']", "['issues','需求列表'"} {
 		if !strings.Contains(palette, want) {
 			t.Fatalf("command palette is missing %q", want)
 		}

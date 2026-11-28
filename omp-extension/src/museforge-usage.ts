@@ -27,8 +27,11 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 
 const INGEST_PATH = "/api/insights/v1/ingest";
-const WORKFLOW_ID = "omp-session";
-const WORKFLOW_NAME = "omp 会话";
+// Every sender names a session the same way: `<agent>:<session key>`. The
+// backfill CLI (cmd/museforge-usage) uses the identical scheme, so a session
+// reported live at shutdown and again by the backfill is one record, not two.
+const AGENT = "omp";
+const WORKFLOW_NAME = "omp";
 const DEFAULT_TIMEOUT_MS = 1500;
 const MAX_TIMEOUT_MS = 10_000;
 const DEFAULT_STATS_DB = [".omp", "stats.db"];
@@ -198,12 +201,12 @@ export async function aggregateSessionUsage({ sessionFile, statsDb }) {
         .sort((left, right) => (left.model < right.model ? -1 : left.model > right.model ? 1 : 0));
     }
 
-    const key = sessionKey(sessionFile);
+    const key = `${AGENT}:${sessionKey(sessionFile)}`;
     return {
-      id: `omp-session:${key}`,
+      id: key,
       type: "workflow_execution",
       externalExecutionId: key,
-      workflow: { id: WORKFLOW_ID, name: WORKFLOW_NAME },
+      workflow: { id: AGENT, name: WORKFLOW_NAME },
       startedAt: new Date(startedAt).toISOString(),
       finishedAt: new Date(finishedAt).toISOString(),
       executionDurationMs: Math.round(duration),

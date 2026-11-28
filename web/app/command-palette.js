@@ -1,7 +1,7 @@
 // 全局命令面板（⌘K）：按页面和需求检索并跳转。
 let commandMatches=[],commandSelectedIndex=0;
 function commandCatalog(){
-  const pages=[['issues','需求列表','我的需求与进度'],['observability','用量台','上报用量 · Token 与费用'],['projects','项目配置','项目与代码仓库'],['runners','执行机器','我的开发机器清单'],['settings','个人配置','账号、模型与执行凭据']];
+  const pages=[['issues','需求列表','我的需求与进度'],['observability','统计台','平台数据 · Agent 用量'],['projects','项目配置','项目与代码仓库'],['runners','执行机器','我的开发机器清单'],['settings','个人配置','账号、模型与执行凭据']];
   const issues=(state.data.issues||[]).map(i=>({kind:'需求',title:i.title,meta:`${i.priority||'—'} · ${issueStatusLabel(i.status)}`,action:()=>openIssueDetail(i.id)}));
   return [...pages,...issues];
 }
