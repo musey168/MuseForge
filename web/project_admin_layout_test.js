@@ -133,11 +133,11 @@ assert.match(card,/class="pa-chip cur">当前/);
 assert.ok(!card.includes("pa-av"),"a project card shows no member avatars");
 assert.doesNotMatch(card,/data-project-join/,"a project card offers no join request");
 assert.match(card,/<b>3<\/b> 需求/);
-assert.match(card,/<b>2<\/b> 推进中/);
+assert.match(card,/<b>2<\/b> 进行中/);
 const bare=ctx.projectCardHTML(projects[2],{repos:repositories,issues,currentId:"agentflow"});
 assert.match(bare,/pa-fact warn[^]*未绑定代码仓库/);
 assert.match(bare,/暂无项目说明/);
-assert.ok(!bare.includes("推进中"));
+assert.ok(!bare.includes("进行中"));
 
 // Repository cards and empty state.
 const rc=ctx.repoCardHTML(repositories[0],true);

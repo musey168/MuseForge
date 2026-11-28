@@ -10,7 +10,10 @@ import (
 	"testing"
 )
 
-func TestIssueHeadingMenuKeepsLegacyControls(t *testing.T) {
+// The requirement list's heading offers what the personal build has: refresh,
+// the tracker import and a new requirement. The sync menu, the TAPD import and
+// the scheduled-task entry went with their surfaces.
+func TestIssueHeadingOffersOnlyThePersonalBuild(t *testing.T) {
 	html, err := os.ReadFile("index.html")
 	if err != nil {
 		t.Fatal(err)
@@ -27,41 +30,20 @@ func TestIssueHeadingMenuKeepsLegacyControls(t *testing.T) {
 	actions := page[start+actionsStart:]
 	actions = actions[:strings.Index(actions, `<div class="project-context-bar">`)]
 
-	menuStart := strings.Index(actions, `id="issueHeadingMenu"`)
-	if menuStart < 0 {
-		t.Fatal("heading actions are missing #issueHeadingMenu")
-	}
-	menu := actions[menuStart:]
-	menu = menu[:strings.Index(menu, "</div>")]
-	for _, want := range []string{`role="menu"`, `id="openSyncModal"`, `id="syncBadge"`, `id="importGitHubIssues"`, `id="importTAPDIssue"`} {
-		if !strings.Contains(menu, want) {
-			t.Fatalf("#issueHeadingMenu is missing %s", want)
+	for _, want := range []string{`id="refreshIssues"`, `id="newIssue"`} {
+		if !strings.Contains(actions, want) {
+			t.Fatalf("heading actions are missing %s", want)
 		}
 	}
-	if got := strings.Count(menu, `role="menuitem"`); got != 3 {
-		t.Fatalf("#issueHeadingMenu should hold 3 menu items, got %d", got)
-	}
-	if !regexp.MustCompile(`id="importTAPDIssue"[^>]*data-legacy-tracker hidden`).MatchString(menu) {
-		t.Fatal("the TAPD import item must stay hidden behind the legacy tracker flag")
-	}
-
-	if strings.Contains(menu, `id="newScheduleJob"`) {
-		t.Fatal("LOOP trigger configuration lives in 定时任务 › LOOP 触发, not the issue list menu")
-	}
-	if got := strings.Count(page, `id="importTAPDIssue"`); got != 1 {
-		t.Fatalf("the TAPD import must exist once, as the hidden legacy menu item; got %d", got)
-	}
-
-	outside := strings.Replace(actions, menu, "", 1)
-	for _, want := range []string{`id="refreshIssues"`, `id="issueHeadingMore"`, `aria-haspopup="menu"`, `id="newIssue"`} {
-		if !strings.Contains(outside, want) {
-			t.Fatalf("heading actions are missing %s outside the menu", want)
+	for _, gone := range []string{`id="issueHeadingMenu"`, `id="issueHeadingMore"`, `id="importTAPDIssue"`, `id="newScheduleJob"`} {
+		if strings.Contains(actions, gone) {
+			t.Fatalf("heading actions must not offer %s", gone)
 		}
 	}
-	if got := strings.Count(outside, `class="button primary"`); got != 1 {
+	if got := strings.Count(actions, `class="button primary"`); got != 1 {
 		t.Fatalf("only 新建需求 may be a solid primary button in the heading, got %d", got)
 	}
-	if !strings.Contains(outside, `id="newIssue" class="button primary"`) {
+	if !strings.Contains(actions, `id="newIssue" class="button primary"`) {
 		t.Fatal("新建需求 must be the solid primary heading button")
 	}
 }

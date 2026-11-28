@@ -267,8 +267,10 @@ assert.ok(html.includes('data-credential-row="codexApiKey"'));
 assert.equal(count(html, 'credential-editor-form'), 2);
 assert.equal(count(html, 'data-credential-act="delete"'), 2);
 assert.equal(count(credentialPanelHTML({}), 'data-credential-row='), 0);
-assert.ok(!credentialPanelHTML({}).includes('data-credential-defaults'));
-assert.ok(html.includes('data-credential-defaults'));
+// The personal settings carry no assistant preferences: the panel is the
+// credential list alone.
+assert.ok(!html.includes('data-credential-defaults'));
+assert.ok(!html.includes('AI 默认设置'));
 assert.ok(credentialRowHTML(cred.kind('gitToken'), user).includes('git-token-verify'), 'Git row keeps 重新校验');
 
 // Each kind saves and deletes only its own fields.
@@ -613,15 +615,18 @@ func TestRequirementDirectCreateUI(t *testing.T) {
 		t.Fatal("index.html must load the requirement wizard stylesheet")
 	}
 	reqStart := strings.Index(page, `id="requirementModal"`)
-	reqEnd := strings.Index(page, `id="importTAPDModal"`)
-	if reqStart < 0 || reqEnd < reqStart {
-		t.Fatal("requirement modal must sit before the TAPD import modal")
+	if reqStart < 0 {
+		t.Fatal("index.html is missing the requirement modal")
 	}
-	composer := page[reqStart:reqEnd]
+	// The modal ends at its own closing tag; the TAPD import modal it used to
+	// sit before went with the tracker.
+	composer := page[reqStart:]
+	if end := strings.Index(composer, `<div id="syncModal"`); end > 0 {
+		composer = composer[:end]
+	}
 	for _, want := range []string{
 		`id="reqStepDescribe"`, `id="reqFooter"`,
 		`id="chatInput"`, `placeholder="要做什么？例如：`, `id="reqRepoChip"`, `id="reqRepoPopover"`, `id="reqRepository"`, `id="reqBaseBranch"`,
-		`id="reqTarget"`, `data-req-target="local"`, `data-req-target="tapd"`,
 		`id="reqCreate"`, `创建需求`, `先写一句需求`,
 	} {
 		if !strings.Contains(composer, want) {
@@ -1022,7 +1027,7 @@ global.$ = () => mockEl();
 global.$$ = () => [];
 global.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 global.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-eval(code + '; global.state = state; global.renderIssues = renderIssues; global.issueMatchesStatusFilter = issueMatchesStatusFilter; global.issueStatusBucket = issueStatusBucket; global.deliveryLockedLabel = deliveryLockedLabel; global.reopenDeliveredButton = reopenDeliveredButton; global.issueOutcome = issueOutcome; global.issueCurrentStage = issueCurrentStage;');
+eval(code + '; global.state = state; global.renderIssues = renderIssues; global.issueMatchesStatusFilter = issueMatchesStatusFilter; global.issueStatusBucket = issueStatusBucket;  global.issueOutcome = issueOutcome; global.issueCurrentStage = issueCurrentStage; global.reopenIssueButton = reopenIssueButton;');
 state.data = { issues: [], projects: [], repositories: [], workflows: [], runs: [], tasks: [] };
 state.listPages = {};
 renderIssues();
@@ -1063,7 +1068,7 @@ const closedRequirement = { id: 'closed-requirement', status: 'closed' };
 if (issueOutcome(closedRequirement).title !== '需求已关闭') {
   throw new Error('a closed requirement must report that it is closed');
 }
-if (!reopenDeliveredButton(closedRequirement).includes('data-reopen-issue')) {
+if (!reopenIssueButton(closedRequirement).includes('data-reopen-issue')) {
   throw new Error('a closed requirement must stay reopenable');
 }
 const statusMatrix = [
