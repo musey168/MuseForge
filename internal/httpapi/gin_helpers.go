@@ -126,15 +126,6 @@ func securityHeaders() gin.HandlerFunc {
 		path := c.Request.URL.Path
 		frameOptions := "DENY"
 		csp := "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; frame-src 'self' blob:"
-		if path == "/vscode.html" || strings.HasPrefix(path, "/vscode-web/") || strings.HasPrefix(path, "/extensions/") {
-			// Real vscode-web workbench + extension-host iframe, same-origin only.
-			frameOptions = "SAMEORIGIN"
-			scriptSrc := "'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:"
-			if strings.HasPrefix(path, "/vscode-web/") {
-				scriptSrc += " 'unsafe-inline'"
-			}
-			csp = "default-src 'self'; script-src " + scriptSrc + "; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; child-src 'self' blob:; frame-src 'self' blob:; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'"
-		}
 		c.Header("X-Frame-Options", frameOptions)
 		c.Header("Content-Security-Policy", csp)
 		if path == "/" || strings.HasSuffix(path, ".html") {

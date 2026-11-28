@@ -89,7 +89,7 @@ func injectBuildCommit(html string) string {
 	if short == "" || !strings.Contains(html, "</body>") {
 		return html
 	}
-	// Inline style: login and vscode pages do not share the workbench stylesheet.
+	// Inline style: the login page does not share the workbench stylesheet.
 	// The CSP allows style-src 'unsafe-inline' and forbids inline scripts.
 	label := fmt.Sprintf(
 		`<style>.loopforge-build{position:fixed;right:12px;bottom:8px;z-index:35;margin:0;font:11px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.02em;color:#7c7c82;user-select:text}</style><span class="loopforge-build" title="%s">%s</span></body>`,
@@ -114,13 +114,10 @@ func studioFileServer(static fs.FS) http.Handler {
 			_, _ = w.Write([]byte(injectBuildCommit(string(raw))))
 			return
 		}
-		if r.URL.Path == "/" || r.URL.Path == "/index.html" || r.URL.Path == "/vscode.html" {
+		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
 			// 每次请求实时读取并重新计算版本哈希，
 			// 保证前端文件修改后无需重启服务即可生效。
 			name := "index.html"
-			if r.URL.Path == "/vscode.html" {
-				name = "vscode.html"
-			}
 			raw, err := fs.ReadFile(static, name)
 			if err != nil {
 				files.ServeHTTP(w, r)
@@ -132,10 +129,6 @@ func studioFileServer(static fs.FS) http.Handler {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(stampStudioIndex(static, raw))
 			return
-		}
-		if strings.HasPrefix(r.URL.Path, "/extensions/agentflow-workspace/") ||
-			r.URL.Path == "/vscode.js" || r.URL.Path == "/vscode.css" {
-			w.Header().Set("Cache-Control", "no-store")
 		}
 		files.ServeHTTP(w, r)
 	})
