@@ -183,10 +183,13 @@ func TestRepositoryCacheCheckoutUsesOneTimeout(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer unlock()
-		timed, cancel := context.WithTimeout(ctx, 5*time.Second)
+		// The lock is held for the whole subtest, so the clone cannot finish:
+		// the budget always fires, and the numbers only have to keep a wide
+		// margin over a loaded machine's scheduling jitter.
+		timed, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		err = CloneFromRepositoryCache(timed, root, "service", remote, "main", t.TempDir(), false, procwatch.Options{
-			Timeout: 200 * time.Millisecond, TimeoutEnv: CloneTimeoutEnv,
+			Timeout: 2 * time.Second, TimeoutEnv: CloneTimeoutEnv,
 		})
 		if !procwatch.Stopped(err) || !strings.Contains(err.Error(), CloneTimeoutEnv) {
 			t.Fatalf("cache lock exceeded the clone budget: %v", err)
