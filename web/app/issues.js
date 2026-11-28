@@ -254,15 +254,12 @@ function issueCurrentStage(i){
 }
 function issueStatusIcon(value){return ({backlog:'circle',todo:'clock',in_progress:'user-hold',in_review:'pending-review',done:'check',closed:'close',blocked:'alert',cancelled:'close'}[value]||'circle')}
 function huiIcon(name,cls=''){return `<svg class="agent-icon harness-icon${cls?` ${cls}`:''}" data-icon="${escapeHTML(name)}" width="14" height="14" aria-hidden="true" focusable="false"></svg>`}
-// stage.key alone is not enough: 「已关闭」 shares closed with merged deliveries.
+// stage.key alone is not enough: 「已关闭」 shares closed with a finished requirement.
 function issueStageTone(stage){
   const key=stage?.key||'',label=String(stage?.label||'');
-  if(key==='active')return /排队/.test(label)?{tone:'info',icon:'clock'}:{tone:'info',icon:'lamp'};
-  if(key==='waiting')return {tone:'warn',icon:'user-hold'};
-  if(key==='confirm')return {tone:'warn',icon:'pending-review'};
-  if(key==='clarifying')return {tone:'warn',icon:'user-hold'};
-  if(key==='attention')return {tone:'error',icon:'alert'};
-  if(key==='closed')return ['已完成','交付闭环','MR 已合入','已合入基线'].includes(label)?{tone:'success',icon:'check'}:{tone:'neutral',icon:'close'};
+  if(key==='active')return{tone:'info',icon:'lamp'};
+  if(key==='attention')return{tone:'error',icon:'alert'};
+  if(key==='closed')return label==='已完成'?{tone:'success',icon:'check'}:{tone:'neutral',icon:'close'};
   return {tone:'neutral',icon:'circle'};
 }
 function issueStageBadge(stage){
@@ -374,7 +371,7 @@ function issueRow(i){
   return `<div class="issue-table-row${rowTone}" role="row" data-id="${escapeHTML(i.id)}">${state.issueSelectionMode?`<div class="issue-select-cell">${issueSelectionCheckbox(i)}</div>`:''}<div class="issue-key-cell" title="${escapeHTML(String(issueKeyLabel(i)||''))}">${issueKeyMarkup(i)}</div><div class="issue-title-cell">${issueTagsMarkup(i)}${issueTitleMarkup(i.title)}</div><div class="issue-source-cell">${issueSourceMarkup(i)}</div><div class="issue-assignee-cell" title="${escapeHTML(owner)}">${issueOwnerAvatar(i)}<span class="issue-assignee-name">${escapeHTML(owner)}</span></div><div class="issue-repository-cell" title="${escapeHTML(issueRepos.map(r=>r.name).join('、')||'未绑定')} · ${escapeHTML(i.baseBranch||repo?.defaultBranch||'')}">${escapeHTML(repoLabel)}</div><div class="issue-priority-cell">${issuePriorityMarkup(i.priority)}</div>${stageCell}<div class="issue-actions-cell">${issueActionButtons(i)}</div></div>`;
 }
 let refreshIssuesPending=null;
-async function refreshIssues(){if(refreshIssuesPending)return refreshIssuesPending;refreshIssuesPending=(async()=>{try{const opt={silent:true};const issues=await api('/api/issues',opt);state.data.issues=issues;renderIssues();if(state.drawerOpen&&state.issueDetailData?.issue?.id){const curId=state.issueDetailData.issue.id,updatedIssue=issues.find(i=>i.id===curId);if(updatedIssue){const keepClarifyStream=state.issueDetailTab==='clarify'&&!!state.issueDetailData.issue.clarification;state.issueDetailData.issue=Object.assign({},state.issueDetailData.issue,updatedIssue);if(!keepClarifyStream)renderIssueDetailTab();}}}catch(e){}});return refreshIssuesPending}
+async function refreshIssues(){if(refreshIssuesPending)return refreshIssuesPending;refreshIssuesPending=(async()=>{try{const opt={silent:true};const issues=await api('/api/issues',opt);state.data.issues=issues;renderIssues();if(state.drawerOpen&&state.issueDetailData?.issue?.id){const curId=state.issueDetailData.issue.id,updatedIssue=issues.find(i=>i.id===curId);if(updatedIssue){state.issueDetailData.issue=Object.assign({},state.issueDetailData.issue,updatedIssue);renderIssueDetailTab();}}}catch(e){}});return refreshIssuesPending}
 function fillIssueRepositories(projectId,selected){
   const f=$('#issueForm'),project=(state.data.projects||[]).find(p=>p.id===projectId),repos=(state.data.repositories||[]).filter(r=>r.projectId===projectId),box=$('#issueRepoChecks');
   if(!box)return;
