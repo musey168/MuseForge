@@ -105,31 +105,22 @@ func protectedAccessPath(path string) bool {
 	}
 }
 
-// requestUser 挂 deps（身份解析与多个领域共用）。It resolves a signed
-// browser session. Gateway identity headers are resolved by authCurrent, which
-// exchanges them for the signed HttpOnly browser cookie.
+// requestUser 挂 deps（身份解析与多个领域共用）。It resolves the platform's
+// single account. There is no sign-in: the personal build has one person, and
+// the identity is that person.
 func (d deps) requestUser(r *http.Request) (*auth.User, bool) {
 	if current, ok := r.Context().Value(requestUserContextKey{}).(*auth.User); ok && current != nil && !current.IsGuest {
 		return current, true
 	}
-	cookie, err := r.Cookie(authCookieName)
-	if err != nil || cookie.Value == "" {
-		return d.previewLocalAuthUser()
+	if d.repo == nil {
+		return nil, false
 	}
-	user, err := d.getAuthClient().ParseSignedUser(cookie.Value)
-	if err != nil || user == nil || user.IsGuest || strings.TrimSpace(user.LoginName) == "" {
-		return d.previewLocalAuthUser()
+	account, found := d.repo.Account()
+	if !found {
+		return nil, false
 	}
-	if authSessionExpired(user) {
-		return d.previewLocalAuthUser()
-	}
-	if stored, exists := d.repo.UserByLoginName(user.LoginName); exists {
-		user.ID = stored.ID
-		user.StaffID = stored.StaffID
-		user.ChineseName = stored.ChineseName
-		user.DeptID = stored.DeptID
-		user.DeptName = stored.DeptName
-	}
+	user := domainUserToAuth(account)
+	user.AvatarURL = auth.AvatarURL(account.LoginName, 100)
 	return user, true
 }
 
@@ -138,27 +129,6 @@ func bearerToken(r *http.Request) (string, bool) {
 	scheme, raw, ok := strings.Cut(value, " ")
 	raw = strings.TrimSpace(raw)
 	return raw, ok && strings.EqualFold(scheme, "Bearer") && raw != ""
-}
-
-// previewLocalAuthUser signs the configured local acceptance user into this
-// process only. It stays off unless the preview start script sets
-// AGENTFLOW_PREVIEW_LOCAL_LOGIN=1, authentication is not required, and
-// AGENTFLOW_LOCAL_LOGIN_USER names an existing user.
-func (d deps) previewLocalAuthUser() (*auth.User, bool) {
-	if strings.TrimSpace(os.Getenv("AGENTFLOW_PREVIEW_LOCAL_LOGIN")) != "1" || authRequired() || d.repo == nil {
-		return nil, false
-	}
-	login := strings.TrimSpace(os.Getenv("AGENTFLOW_LOCAL_LOGIN_USER"))
-	if login == "" {
-		return nil, false
-	}
-	stored, ok := d.repo.UserByLoginName(login)
-	if !ok {
-		return nil, false
-	}
-	user := domainUserToAuth(stored)
-	user.AvatarURL = auth.AvatarURL(stored.LoginName, 100)
-	return user, true
 }
 
 func domainUserToAuth(user domain.User) *auth.User {
@@ -175,12 +145,8 @@ func domainUserToAuth(user domain.User) *auth.User {
 }
 
 // isAccount reports whether the request acts as the platform's single account.
-// The personal build stores one account, so with authentication off every
-// request is that account; with it on, the resolved identity is.
+// The personal build has one person, so every request is that account.
 func (d deps) isAccount(r *http.Request) bool {
-	if !authRequired() {
-		return true
-	}
 	_, ok := d.requestUser(r)
 	return ok
 }

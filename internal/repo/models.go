@@ -707,7 +707,7 @@ func (trackerImportRunRow) TableName() string { return "tracker_import_runs" }
 
 // allModels lists every table for the sqlite test schema (AutoMigrate).
 func allModels() []any {
-	return []any{userRow{}, localAccountRow{}, userConfigRow{}, gitSSHKeyRow{}, gitHTTPCredentialRow{}, authIntegrationRow{},
+	return []any{userRow{}, userConfigRow{}, gitSSHKeyRow{}, gitHTTPCredentialRow{}, authIntegrationRow{},
 		insightSourceRow{}, insightExecutionRow{},
 		projectRow{}, projectCredentialRow{}, repositoryRow{},
 		issueRow{}, issueCommentRow{}, issueImageRow{},

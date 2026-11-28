@@ -633,7 +633,7 @@ function credentialFieldHTML({label,note='',name,type='password',value='',placeh
   return `<label class="credential-field"><span>${escapeHTML(label)}${note?`<em>${escapeHTML(note)}</em>`:''}</span><div class="credential-input${secret?'':' is-plain'}${hintTone?' is-'+(hintTone==='err'?'bad':hintTone==='ok'?'good':hintTone):''}"><input${id?` id="${id}"`:''} name="${name}" type="${type}" ${secret?'autocomplete="new-password"':'autocomplete="off" spellcheck="false"'}${secret?'':` value="${escapeHTML(value)}"`} placeholder="${escapeHTML(placeholder)}">${secret?`<button type="button" class="credential-eye" data-credential-eye aria-label="显示">${credentialGlyph('eye',15)}</button>`:''}</div>${hint!==null?`<small data-credential-hint="${name}"${hintTone?` class="is-${hintTone}"`:''}>${escapeHTML(hint)}</small>`:''}</label>`;
 }
 function credentialOAuthHTML(label,note){
-  return (typeof githubConnectHTML==='function'?githubConnectHTML():'')+`<div class="credential-oauth" data-gongfeng-oauth${state.gongfengOAuthEnabled?'':' hidden'}><a class="credential-btn secondary credential-ink" href="/api/auth/gongfeng/start" target="_blank" rel="noopener noreferrer">${credentialLogo(credentialKind('gitToken'),'is-mini')}<span>${label}</span></a><small>${note}</small></div>`;
+  return (typeof githubConnectHTML==='function'?githubConnectHTML():'')+`<div class="credential-oauth"><span>${escapeHTML(label||'')}</span><small>${escapeHTML(note||'')}</small></div>`;
 }
 function credentialPatWarningHTML(show){return `<div class="credential-note is-warn git-token-pat-warning"${show?'':' hidden'}>${credentialGlyph('alert',14)}<span>${CREDENTIAL_PAT_WARNING}</span></div>`}
 const GIT_TOKEN_REPLACE_HINT='保存后替换当前的令牌，对下一次任务生效';
@@ -1667,9 +1667,7 @@ async function renderPersonalSettings(){
   const user=state.currentUser;
   if(account)account.hidden=!user||!!user.isGuest;
   if(!user||user.isGuest){
-    host.innerHTML='<section class="personal-settings-card"><h2>登录账号</h2><p>登录后即可管理自己的 Git Token 和 API Key。</p><button class="button primary" id="settingsLogin">账号登录</button><button class="button ghost" id="localAcceptanceLogin" hidden>本地验收登录</button></section>';
-    host.querySelector('#settingsLogin').onclick=()=>{window.location.href=state.loginUrl||'/login.html'};
-    try{const capability=await api('/api/auth/local',{silent:true}),button=host.querySelector('#localAcceptanceLogin');if(button&&capability.enabled){button.hidden=false;button.onclick=async()=>{try{const result=await api('/api/auth/local',{method:'POST',body:'{}'});state.currentUser=result.user;state.data.users=await api('/api/users');window.AgentFlowExecutorModels=null;window.AgentFlowAssistantModels?.load?.();renderUserBadge();renderPersonalSettings();toast('已登录本地验收账号')}catch(err){toast(err.message)}}}}catch{}
+    host.innerHTML='<section class="personal-settings-card"><h2>个人配置</h2><p>管理自己的 Git Token 和 API Key。</p></section>';
     return;
   }
   const storedUser=userById(user.id)||{};
@@ -1695,7 +1693,6 @@ async function renderPersonalSettings(){
   hydrateCredentialIcons(host);
   setTimeout(()=>panel.classList.remove('is-entering'),900);
   // Offer the OAuth shortcut only when the server has a Gongfeng application.
-  api('/api/auth/gongfeng',{silent:true}).then(capability=>{state.gongfengOAuthEnabled=!!capability?.enabled;document.querySelectorAll('[data-gongfeng-oauth]').forEach(el=>{el.hidden=!state.gongfengOAuthEnabled})}).catch(()=>{});
   if(storedUser.gitHubCredentialConfigured){
     const cached=gitTokenVerifyFor(user);
     if(!cached||(cached.busy&&!state.gitTokenVerifyInFlight)){state.gitTokenVerifyInFlight=true;refreshGitTokenStatus().finally(()=>{state.gitTokenVerifyInFlight=false})}
@@ -1746,14 +1743,6 @@ function renderUserProfilePopover() {
         <button id="uppLoginBtn" class="button small primary upp-full-btn" type="button">通过账号登录</button>
       </div>
     `;
-    const loginBtn = popover.querySelector('#uppLoginBtn');
-    if (loginBtn) {
-      loginBtn.onclick = () => {
-        try { sessionStorage.removeItem('agentflow_auth_err'); } catch (_) {}
-        const target = state.loginUrl || '/login.html';
-        window.location.href = target;
-      };
-    }
   } else {
     const storedUser=(state.data?.users||[]).find(u=>Number(u.id)===Number(user.id))||{};
     popover.innerHTML = `
@@ -1797,17 +1786,6 @@ function renderUserProfilePopover() {
         <button id="uppLogoutBtn" class="button small ghost upp-btn-danger upp-full-btn" type="button" title="退出当前登录">退出登录</button>
       </div>
     `;
-    const logoutBtn = popover.querySelector('#uppLogoutBtn');
-    if (logoutBtn) {
-      logoutBtn.onclick = async () => {
-        try {
-          await api('/api/auth/logout', {method: 'POST'});
-          location.replace('/login.html');
-        } catch (err) {
-          toast('退出登录失败: ' + err.message, 'err');
-        }
-      };
-    }
   }
   bindThemeSegment(popover);
 }
@@ -1870,9 +1848,7 @@ function userAvatarHTML(userOrId, spec=100, extraClass=''){
   if(isGuest){
     return `<span class="user-avatar-text">${escapeHTML(initial)}</span>`;
   }
-  const specNum = Number(spec) || 100;
-  const photoUrl = `/api/auth/photo/${specNum}/${encodeURIComponent(user.loginName)}.png`;
-  return `<img class="user-avatar-img ${extraClass}" src="${photoUrl}" alt="" loading="lazy"><span class="user-avatar-text">${escapeHTML(initial)}</span>`;
+  return `<span class="user-avatar-text ${extraClass}">${escapeHTML(initial)}</span>`;
 }
 
 function renderUserBadge(){

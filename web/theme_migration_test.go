@@ -40,22 +40,10 @@ check('invalid earlier value falls back to light',c.document.documentElement.dat
 vm.runInContext(keys+read+';globalThis.out=readThemePreference()',c);
 check('invalid earlier value is dropped',c.out==='light'&&!s.data.has('loopforge.theme.v3')&&!s.data.has('agentflow.theme.v3'));
 
-const login=fs.readFileSync('login.js','utf8'),bootJS=fs.readFileSync('boot.js','utf8');
-check('login writes the shared key',login.includes("localStorage.setItem('agentflow.theme.v3', next)"));
+const bootJS=fs.readFileSync('boot.js','utf8');
 check('boot.js leaves the theme to boot-theme.js',!bootJS.includes('dataset.theme'));
 `
 	if out, err := exec.Command(node, "-e", script).CombinedOutput(); err != nil {
 		t.Fatalf("%v\n%s", err, out)
-	}
-}
-
-func TestLoginPageAppliesThemeBeforeStyles(t *testing.T) {
-	page := readThemeSource(t, "login.html")
-	theme, styles := strings.Index(page, `<script src="/boot-theme.js`), strings.Index(page, `<link rel="stylesheet"`)
-	if theme < 0 || styles < 0 {
-		t.Fatal("login.html should load boot-theme.js and stylesheets")
-	}
-	if theme > styles {
-		t.Error("login.html should apply the theme before requesting stylesheets")
 	}
 }

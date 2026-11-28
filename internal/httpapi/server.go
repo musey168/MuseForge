@@ -14,7 +14,6 @@ import (
 	deployassets "agentflow/deploy"
 	apidocs "agentflow/docs/api"
 	"agentflow/internal/application"
-	"agentflow/internal/auth"
 	"agentflow/internal/domain"
 	"agentflow/internal/mcpserver"
 	"agentflow/internal/repo"
@@ -26,26 +25,15 @@ import (
 
 // deps 聚合所有领域 handler 共享的基础依赖与跨领域行为。
 type deps struct {
-	repo       *repo.Store
-	sync       *tracker.Service
-	authClient *auth.Client
-	api        http.Handler
+	repo *repo.Store
+	sync *tracker.Service
+	api  http.Handler
 	// passwordAttempts is this server's brute-force budget (auth_password.go).
-	passwordAttempts *passwordLimiter
-}
-
-// getAuthClient 挂 deps（token 鉴权与 auth 流程共用）。
-func (d deps) getAuthClient() *auth.Client {
-	if d.authClient == nil {
-		d.authClient = auth.NewClientFromEnv()
-	}
-	return d.authClient
 }
 
 // Server 组合各领域 handler，仅保留服务级端点与入口装配。
 type Server struct {
 	*deps
-	auth         *authHandlers // auth.go
 	github       *githubHandlers
 	users        *usersHandlers // users.go
 	projects     *projectsHandlers
@@ -59,17 +47,13 @@ type Server struct {
 }
 
 func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *gin.Engine {
-	d := &deps{repo: s, sync: syncSvc, authClient: auth.NewClientFromEnv(), passwordAttempts: newPasswordLimiter()}
-	if trustGatewayIdentityHeaders() && strings.TrimSpace(os.Getenv("AGENTFLOW_IDENTITY_HEADER_SECRET")) == "" {
-		log.Printf("warning: AGENTFLOW_TRUST_IDENTITY_HEADERS is on without AGENTFLOW_IDENTITY_HEADER_SECRET; any loopback caller without forwarding headers, including a proxy that passes client headers through, can sign in as any user")
-	}
+	d := &deps{repo: s, sync: syncSvc}
 	if syncSvc != nil {
 		syncSvc.ConfigureWithStore(s)
 	}
 	runnerControls := newRunnerControlHub()
 	api := &Server{
 		deps:         d,
-		auth:         &authHandlers{deps: d},
 		github:       newGitHubHandlers(d),
 		users:        &usersHandlers{deps: d},
 		insights:     &insightsHandlers{deps: d},
@@ -103,22 +87,11 @@ func New(s *repo.Store, syncSvc *tracker.Service, basicUser, basicPass string) *
 
 	// --- auth & users ---
 	g.GET("/api/health", api.health)
-	g.GET("/api/auth/current", api.auth.authCurrent)
-	g.POST("/api/auth/password", api.auth.authPassword)
-	g.GET("/api/auth/setup", api.auth.authSetup)
-	g.POST("/api/auth/register", api.auth.authRegister)
-	g.GET("/api/auth/local", api.auth.authLocal)
-	g.POST("/api/auth/local", api.auth.authLocal)
 	g.GET("/api/auth/github", api.github.status)
 	g.PUT("/api/auth/github/config", api.github.configure)
 	g.POST("/api/auth/github/device", api.github.start)
 	g.POST("/api/auth/github/poll", api.github.poll)
 	g.GET("/api/auth/github/repositories", api.github.repositories)
-	g.GET("/api/auth/exchange", api.auth.authExchange)
-	g.POST("/api/auth/exchange", api.auth.authExchange)
-	g.POST("/api/auth/logout", api.auth.authLogout)
-	g.GET("/api/auth/photo", api.auth.authPhoto)
-	g.GET("/api/auth/photo/:spec/:username", api.auth.authPhoto)
 	// master(net/http) 的 /api/users/ 子树只接受 PUT /api/users/<id>/credentials
 	// 一种形态，其余任何方法/子路径都走 method(w) → 405 JSON。
 	g.Any("/api/users/:id/credentials", func(c *gin.Context) {

@@ -601,3 +601,21 @@ func normalizeCLIModelEfforts(efforts map[string]string, defaultEffort string) (
 	}
 	return out, defaultEffort, nil
 }
+
+// Account returns the platform's one account. The personal build has a single
+// user: there is no roster, no sign-in and no administrator. The account is the
+// lowest-numbered user, so the platform has an identity even before the person
+// configures their credentials.
+func (r *UsersRepo) Account() (domain.User, bool) {
+	users := r.Users()
+	if len(users) == 0 {
+		return domain.User{}, false
+	}
+	account := users[0]
+	for _, user := range users {
+		if user.ID < account.ID || account.ID == 0 {
+			account = user
+		}
+	}
+	return account, true
+}

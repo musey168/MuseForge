@@ -89,37 +89,29 @@ test('project switching and shell keyboard interactions update state', async (t)
   assert.equal(app.window.localStorage.getItem('agentflow.sidebarWidth'), null);
 });
 
-test('boot exchanges an authentication callback, cleans the URL, and loads the selected project shell', async (t) => {
+test('boot lands on the requirement list without a sign-in', async (t) => {
   const app = await loadApp({ dispatchReady: false });
   t.after(app.close);
-  app.window.history.replaceState({}, '', '/?code=oauth-code&projectId=project-1#/issues');
-  app.router.get('/api/auth/exchange?code=oauth-code', {
-    user: { id: 9, loginName: 'oauth-user', isGuest: false, isPlatformAdmin: false },
-    authRequired: true,
-    appDomain: 'loopforge.example.com',
-  });
+  app.window.history.replaceState({}, '', '/?projectId=project-1#/issues');
   await app.evaluate(`boot()`);
-  const exchange = app.router.calls.find(c => c.path === '/api/auth/exchange');
-  assert.equal(exchange.search, '?code=oauth-code');
-  assert.equal(app.evaluate(`state.currentUser.loginName`), 'oauth-user');
-  assert.equal(app.evaluate(`state.authRequired`), true);
   assert.equal(app.evaluate(`state.projectFilter`), 'project-1');
-  assert.doesNotMatch(app.window.location.search, /code=/);
   assert.match(app.window.location.hash, /issues/);
   assert.equal(app.document.querySelector('#pageTitle').textContent, '需求列表');
+  assert.equal(app.document.querySelector('#loginView'), null);
 });
 
-test('boot selects a project the signed-in user owns before an unrelated first project', async (t) => {
+test('boot selects the account\'s project before an unrelated first project', async (t) => {
   const shell = sampleBootstrap();
   shell.projects = [
     { id: 'someone-else', name: 'Someone else', key: 'ELSE', ownerId: 1 },
     { id: 'owned', name: 'Owned', key: 'OWN', ownerId: 7 },
   ];
+  shell.users = [{ id: 7, loginName: 'owner', isGuest: false }];
   const app = await loadApp({ routes: [
-    { path: '/api/auth/current', body: { user: { id: 7, loginName: 'owner', isGuest: false }, authRequired: false } },
     { path: '/api/bootstrap', body: shell },
   ] });
   t.after(app.close);
   await settle(6);
+  assert.equal(app.evaluate('state.currentUser.loginName'), 'owner');
   assert.equal(app.evaluate('state.projectFilter'), 'owned');
 });

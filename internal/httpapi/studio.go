@@ -89,7 +89,7 @@ func injectBuildCommit(html string) string {
 	if short == "" || !strings.Contains(html, "</body>") {
 		return html
 	}
-	// Inline style: the login page does not share the workbench stylesheet.
+	// Inline style: the stamped page does not share the workbench stylesheet.
 	// The CSP allows style-src 'unsafe-inline' and forbids inline scripts.
 	label := fmt.Sprintf(
 		`<style>.loopforge-build{position:fixed;right:12px;bottom:8px;z-index:35;margin:0;font:11px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.02em;color:#7c7c82;user-select:text}</style><span class="loopforge-build" title="%s">%s</span></body>`,
@@ -102,18 +102,6 @@ func injectBuildCommit(html string) string {
 func studioFileServer(static fs.FS) http.Handler {
 	files := http.FileServer(http.FS(static))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/login.html" {
-			raw, err := fs.ReadFile(static, "login.html")
-			if err != nil {
-				files.ServeHTTP(w, r)
-				return
-			}
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.Header().Set("Cache-Control", "no-cache")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(injectBuildCommit(string(raw))))
-			return
-		}
 		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
 			// 每次请求实时读取并重新计算版本哈希，
 			// 保证前端文件修改后无需重启服务即可生效。

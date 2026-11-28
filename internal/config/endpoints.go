@@ -60,13 +60,37 @@ func LoadEndpoints(role, addrFlag string) (Endpoints, error) {
 		ep.APIBase = firstNonEmpty(configuredAPI, "http://127.0.0.1:"+httpPort)
 		ep.PlatformBase = firstNonEmpty(envURL("AGENTFLOW_PLATFORM_MCP_URL"), configuredAPI)
 	} else {
-		ep.ListenAddr = firstNonEmpty(addrFlag, ":"+httpPort)
+		// The personal build serves an unauthenticated API, so it listens on
+		// the loopback interface only.
+		ep.ListenAddr = firstNonEmpty(addrFlag, "127.0.0.1:"+httpPort)
+		if err := RequireLoopbackListenAddr(ep.ListenAddr); err != nil {
+			return Endpoints{}, err
+		}
 		ep.APIBase = firstNonEmpty(configuredAPI, LoopbackURL(ep.ListenAddr))
 		ep.PlatformBase = firstNonEmpty(envURL("AGENTFLOW_PLATFORM_MCP_URL"), ep.APIBase)
 	}
 	ep.AgentToolGateway = firstNonEmpty(envURL("AGENTFLOW_AGENT_TOOL_GATEWAY_URL"), ep.APIBase)
 	ep.CollectorBase = firstNonEmpty(ep.PlatformBase, ep.APIBase)
 	return ep, nil
+}
+
+// RequireLoopbackListenAddr refuses a listen address that is not the loopback
+// interface. The personal build serves an unauthenticated API: a public
+// interface would expose the requirements, the credentials and the cost data to
+// the network, so the refusal is the point rather than a warning.
+//
+// An address with no host ("8080", ":8080") means the wildcard, which is not
+// loopback and is refused.
+func RequireLoopbackListenAddr(addr string) error {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(addr))
+	if err != nil {
+		return fmt.Errorf("invalid listen address %q: %w", addr, err)
+	}
+	switch strings.ToLower(strings.Trim(host, "[]")) {
+	case "127.0.0.1", "::1", "localhost":
+		return nil
+	}
+	return fmt.Errorf("refusing to listen on %q: MuseForge serves an unauthenticated API and binds to the loopback interface only (use 127.0.0.1)", addr)
 }
 
 // httpPortFromEnv returns AGENTFLOW_HTTP_PORT, defaulting to defaultAPIPort,

@@ -8,7 +8,7 @@ import (
 
 func TestLanguageSwitchOptionsAreRadios(t *testing.T) {
 	option := regexp.MustCompile(`<button[^>]*data-lang-value="[^"]*"[^>]*>`)
-	for _, path := range []string{"index.html", "login.html"} {
+	for _, path := range []string{"index.html"} {
 		src := readThemeSource(t, path)
 		if !strings.Contains(src, `class="lang-switch" role="radiogroup"`) {
 			t.Errorf("%s: language switch should be a radiogroup", path)

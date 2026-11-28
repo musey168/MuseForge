@@ -762,70 +762,13 @@ async function boot(){
   state.data = {issues:[],syncLogs:[],projects:[],repositories:[],users:[],trackerImport:null};
   bind(); renderProjectSwitcher();
 
-  // 1. 检查 URL 中是否有 SSO 回调的 code
   const urlParams = new URLSearchParams(window.location.search);
-  const authCode = urlParams.get('code');
-  if (authCode) {
-    try {
-      const authRes = await api('/api/auth/exchange?code=' + encodeURIComponent(authCode), {silent: true});
-      state.currentUser = authRes.user || null;
-      state.authRequired = !!authRes.authRequired;
-      state.appDomain = authRes.appDomain || (typeof window !== 'undefined' ? window.__AGENTFLOW_APP_DOMAIN__ : '') || '';
-      if (state.currentUser && !state.currentUser.isGuest) {
-        sessionStorage.removeItem('agentflow_auth_err');
-      } else {
-        sessionStorage.setItem('agentflow_auth_err', 'exchange_failed');
-      }
-    } catch (err) {
-      console.warn('[auth] exchange code failed:', err);
-      sessionStorage.setItem('agentflow_auth_err', 'network_err');
-    } finally {
-      urlParams.delete('code');
-      const cleanSearch = urlParams.toString();
-      const newUrl = window.location.pathname + (cleanSearch ? '?' + cleanSearch : '') + window.location.hash;
-      window.history.replaceState({}, document.title, newUrl);
-    }
-  }
-
-  // 2. 若尚未获取当前登录身份，则请求 /api/auth/current
-  if (!state.currentUser) {
-    try {
-      const returnUrl = encodeURIComponent(window.location.href);
-      const curRes = await api('/api/auth/current?return_url=' + returnUrl, {silent: true});
-      state.currentUser = curRes.user || null;
-      state.loginUrl = curRes.loginUrl || '';
-      state.authRequired = !!curRes.authRequired;
-      state.appDomain = curRes.appDomain || (typeof window !== 'undefined' ? window.__AGENTFLOW_APP_DOMAIN__ : '') || '';
-    } catch (err) {
-      console.warn('[auth] get current user failed:', err);
-    }
-  }
-
-  // 3. 自动拉起认证：只在配置的应用域名下把访客送到 SSO 登录页。localhost / 127.0.0.1 即使开启 AUTH_REQUIRED 也不跳转，改走本地验收登录。
-  const isGuest = !state.currentUser || state.currentUser.isGuest;
-  const bypassAutoAuth = new URLSearchParams(window.location.search).has('guest');
-  const authErr = sessionStorage.getItem('agentflow_auth_err');
-
-  if (shouldAutoSSORedirect({isGuest, hostname: window.location.hostname, bypassAutoAuth, authErr, loginUrl: state.loginUrl})) {
-    window.location.href = state.loginUrl;
-    return;
-  }
-
-  // Explicitly enabled loopback acceptance login is available before protected bootstrap.
-  if(isGuest&&state.authRequired&&['localhost','127.0.0.1','[::1]'].includes(window.location.hostname)){
-    const local=await api('/api/auth/local',{silent:true}).catch(()=>({enabled:false}));
-    if(local.enabled){
-      finishBootLoader();
-      document.body.innerHTML='<main style="max-width:480px;margin:15vh auto;padding:32px"><h1>本地验收环境</h1><p>登录配置的本地验收账号后查看项目和业务域。</p><button id="localBootLogin" class="button primary">本地验收登录</button><p id="localBootError"></p></main>';
-      $('#localBootLogin').onclick=async()=>{const button=$('#localBootLogin');button.disabled=true;try{await api('/api/auth/local',{method:'POST',body:'{}'});location.reload()}catch(e){$('#localBootError').textContent=e.message;button.disabled=false}};
-      return;
-    }
-  }
-  if(isGuest&&state.authRequired){location.replace('/login.html');return}
   renderUserBadge();
 
   const shell = await api('/api/bootstrap', {silent: true});
   state.data = Object.assign(state.data, shell);
+  // There is one account and no sign-in: the bootstrap names it.
+  if(!state.currentUser && (state.data.users||[]).length) state.currentUser = state.data.users[0];
   const savedProject=urlParams.get('projectId')||localStorage.getItem('agentflow.activeProject');
   state.projectFilter=(state.data.projects||[]).some(p=>p.id===savedProject)?savedProject:defaultProjectId(state.data.projects,state.currentUser?.id);
   renderProjectSwitcher();
