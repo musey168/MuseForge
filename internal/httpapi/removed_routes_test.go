@@ -674,6 +674,7 @@ var personalRoutes = []struct {
 	{"GET", "/api/tracker/import"},
 	{"POST", "/api/tracker/import"},
 	{"GET", "/api/usage"},
+	{"GET", "/api/stats/overview"},
 	{"CONNECT", "/api/users/:id"},
 	{"DELETE", "/api/users/:id"},
 	{"GET", "/api/users/:id"},

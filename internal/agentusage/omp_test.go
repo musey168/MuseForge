@@ -42,8 +42,8 @@ func TestOMPReaderAggregatesSessions(t *testing.T) {
 		t.Fatalf("want 3 sessions, got %d", len(sessions))
 	}
 	first := sessions[0]
-	if first.Key != "2026-10-01T00-00-00-000Z_aaaa" {
-		t.Fatalf("session key must be the file basename: %q", first.Key)
+	if !strings.HasPrefix(first.Key, "2026-10-01T00-00-00-000Z_aaaa-") || len(first.Key) != len("2026-10-01T00-00-00-000Z_aaaa")+9 {
+		t.Fatalf("session key must be the name plus an 8-hex path hash: %q", first.Key)
 	}
 	if first.Status != "" && first.Status != "succeeded" {
 		t.Fatalf("status = %q", first.Status)

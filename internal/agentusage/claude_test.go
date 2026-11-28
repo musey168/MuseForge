@@ -2,6 +2,7 @@ package agentusage
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -21,7 +22,7 @@ func TestClaudeReaderToleratesTranscript(t *testing.T) {
 	for _, session := range sessions {
 		byKey[session.Key] = session
 	}
-	main, ok := byKey["01a20700-0000-7000-8000-000000000001"]
+	main, ok := sessionByKeyPrefix(sessions, "01a20700-0000-7000-8000-000000000001")
 	if !ok {
 		t.Fatalf("transcript with usage missing: %v", byKey)
 	}
@@ -40,13 +41,24 @@ func TestClaudeReaderToleratesTranscript(t *testing.T) {
 		t.Fatalf("claude reports no cost: %+v", usage)
 	}
 
-	nameless, ok := byKey["01a20700-0000-7000-8000-000000000002"]
+	nameless, ok := sessionByKeyPrefix(sessions, "01a20700-0000-7000-8000-000000000002")
 	if !ok {
 		t.Fatalf("second transcript missing: %v", byKey)
 	}
 	if nameless.Usage[0].Model != "unknown" || nameless.Usage[0].InputTokens != 5 {
 		t.Fatalf("missing model must fall back to unknown: %+v", nameless.Usage[0])
 	}
+}
+
+// sessionByKeyPrefix finds a session by its name; the key carries a hash of
+// the full path after it.
+func sessionByKeyPrefix(sessions []Session, prefix string) (Session, bool) {
+	for _, session := range sessions {
+		if strings.HasPrefix(session.Key, prefix+"-") {
+			return session, true
+		}
+	}
+	return Session{}, false
 }
 
 func TestClaudeReaderWithoutData(t *testing.T) {

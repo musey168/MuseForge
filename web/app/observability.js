@@ -462,6 +462,39 @@ function obsPlatformCard(){
   const sparks=`<div class="obs-plat-spark-wrap">${obsPlatSparkRow(`近 ${trend.length} ${obsUsageGrainName()}创建`,trend.map(p=>Number(p.created||0)))}${obsPlatSparkRow(`近 ${trend.length} ${obsUsageGrainName()}关闭`,trend.map(p=>Number(p.closed||0)))}</div>`;
   return obsCard('platform','平台统计','项目、需求、仓库与机器，按'+obsUsageGrainName()+'看创建与关闭', '', `${kpis}${dists}${sparks}`);
 }
+// ---------- Agent 对接 ----------
+function obsBaseURL(){return location.origin}
+function obsCmdRow(label,command){
+  return `<div class="obs-cmd-row"><span>${escapeHTML(label)}</span><code>${escapeHTML(command)}</code><button type="button" class="obs-icon-btn" data-obs-copy="${escapeHTML(command)}" title="复制" aria-label="复制 ${escapeHTML(label)} 命令">${obsIcon('copy')}</button></div>`;
+}
+function obsConnectCard(){
+  const mcp=obsBaseURL()+'/mcp';
+  const mcpRows=[
+    ['omp', `~/.omp/agent/mcp.json: {"mcpServers":{"museforge":{"type":"http","url":"${mcp}"}}}`],
+    ['Codex', `codex mcp add museforge --url ${mcp}`],
+    ['Claude Code', `claude mcp add --transport http museforge ${mcp}`],
+    ['pi', `~/.pi/agent/mcp.json: {"mcpServers":{"museforge":{"url":"${mcp}","exposure":"direct"}}}`],
+  ].map(([label,command])=>obsCmdRow(label,command)).join('');
+  const usageRows=[
+    ['omp', 'bash omp-extension/scripts/install.sh --user  # 一次；之后每个会话自动上报'],
+    ['Codex', 'go run ./cmd/museforge-usage sync --agent codex --url '+obsBaseURL()+' --token <数据源 Token>'],
+    ['pi', 'go run ./cmd/museforge-usage sync --agent pi --url '+obsBaseURL()+' --token <数据源 Token>'],
+    ['Claude Code', 'go run ./cmd/museforge-usage sync --agent claude --url '+obsBaseURL()+' --token <数据源 Token>'],
+  ].map(([label,command])=>obsCmdRow(label,command)).join('');
+  return obsCard('connect','Agent 对接','让 Agent 读写 MuseForge，也把它们的用量送进来','',
+    `<div class="obs-plat-dist"><h5>读写全部功能（MCP）</h5>${mcpRows}</div>`+
+    `<div class="obs-plat-dist"><h5>上报用量</h5><p>先在「数据源」里为当前项目创建 Token，再运行对应命令；omp 的扩展在会话结束时自动上报，其余三个用命令回填。</p>${usageRows}</div>`);
+}
+function obsSourceCommands(token){
+  const url=obsBaseURL();
+  const cfg=JSON.stringify({url,token});
+  return [
+    ['omp', `mkdir -p ~/.config/museforge && printf '%s\\n' '${cfg}' > ~/.config/museforge/omp-usage.json`],
+    ['Codex', `go run ./cmd/museforge-usage sync --agent codex --url ${url} --token ${token}`],
+    ['pi', `go run ./cmd/museforge-usage sync --agent pi --url ${url} --token ${token}`],
+    ['Claude Code', `go run ./cmd/museforge-usage sync --agent claude --url ${url} --token ${token}`],
+  ].map(([label,command])=>obsCmdRow(label,command)).join('');
+}
 // ---------- 渲染 ----------
 function renderObservability(){
   const host=$('#obsBody');
@@ -485,8 +518,12 @@ function renderObservability(){
   }else{
     body=`<div class="detail-empty">${escapeHTML(lfT('暂无统计数据','No usage data yet'))}</div>`;
   }
-  host.innerHTML=`<div class="obs-pane active">${obsUsageScopeBar()}${obsPlatformCard()}${body}</div>`
+  host.innerHTML=`<div class="obs-pane active">${obsUsageScopeBar()}${obsPlatformCard()}${body}${obsConnectCard()}</div>`;
   state.obsSelects=obsEnhanceSelects(host);
+  host.querySelectorAll('[data-obs-copy]').forEach(b=>b.onclick=async e=>{
+    e.stopPropagation();
+    try{await navigator.clipboard.writeText(b.dataset.obsCopy);toast('已复制')}catch(err){toast('请手动复制')}
+  });
   host.querySelectorAll('[data-obs-usage-grain]').forEach(b=>b.onclick=()=>setObsUsageGrain(b.dataset.obsUsageGrain));
   host.querySelectorAll('[data-obs-usage-metric]').forEach(b=>b.onclick=()=>{state.usageMetric=b.dataset.obsUsageMetric;renderObservability()});
   host.querySelectorAll('[data-obs-bucket-step]').forEach(b=>b.onclick=()=>shiftObsUsageBucket(Number(b.dataset.obsBucketStep)));
@@ -578,7 +615,20 @@ async function openObsSources(){
     button.disabled=true;
     try{
       const result=await api('/api/insights/v1/sources',{method:'POST',body:JSON.stringify({projectId:project.id,name:form.elements.name.value,expiresInDays:Number(form.elements.days.value),userMappings})});
-      dialog.querySelector('[data-created]').hidden=false;dialog.querySelector('[data-token]').value=result.token;form.reset();selects.forEach(picker=>picker.refresh());await refresh();
+      const created=dialog.querySelector('[data-created]');
+      created.hidden=false;
+      dialog.querySelector('[data-token]').value=result.token;
+      // The command carrying this token is the only chance to put it into a
+      // working setup, so it sits next to the token itself.
+      const commands=document.createElement('div');
+      commands.className='obs-plat-dist';
+      commands.dataset.commands='';
+      commands.innerHTML=`<h5>把命令粘到终端</h5>${obsSourceCommands(result.token)}`;
+      created.querySelector('[data-commands]')?.remove();
+      created.appendChild(commands);
+      commands.querySelectorAll('[data-obs-copy]').forEach(b=>b.onclick=async()=>{try{await navigator.clipboard.writeText(b.dataset.obsCopy);toast('已复制')}catch(err){toast('请手动复制')}});
+      obsHydrateIcons(commands);
+      form.reset();selects.forEach(picker=>picker.refresh());await refresh();
     }catch(e){toast(e.message)}finally{button.disabled=false}
   };
   await refresh();

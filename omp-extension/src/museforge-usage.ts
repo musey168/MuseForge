@@ -24,7 +24,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
+import { createHash } from "node:crypto";
 
 const INGEST_PATH = "/api/insights/v1/ingest";
 // Every sender names a session the same way: `<agent>:<session key>`. The
@@ -38,8 +39,9 @@ const DEFAULT_STATS_DB = [".omp", "stats.db"];
 const USER_CONFIG_PATH = [".config", "museforge", "omp-usage.json"];
 const PROJECT_CONFIG_PATH = [".omp", "museforge-usage.json"];
 const MAX_USAGE_ENTRIES = 64;
-// The platform caps record IDs at 256 bytes; the prefix leaves room to spare.
-const MAX_SESSION_KEY_BYTES = 200;
+// The platform caps record IDs at 256 bytes; the prefix and the path hash
+// leave room to spare.
+const MAX_SESSION_KEY_BYTES = 191;
 
 // One row set per (model, provider) group. omp's `input_tokens` excludes the
 // cache counters and `total_tokens` is their sum, so the reported input adds
@@ -123,10 +125,15 @@ function openStatsDb(file) {
   });
 }
 
+// The file name alone is not unique: two folders can hold the same session
+// file name, and the platform refuses the second one as a conflict. The hash
+// of the full path makes the key collide only for the same file.
 function sessionKey(sessionFile) {
-  const name = basename(sessionFile).replace(/\.jsonl$/i, "");
-  if (Buffer.byteLength(name) <= MAX_SESSION_KEY_BYTES) return name;
-  return Buffer.from(name).subarray(0, MAX_SESSION_KEY_BYTES).toString("utf8");
+  const full = resolve(sessionFile);
+  const name = basename(full).replace(/\.jsonl$/i, "");
+  const hash = createHash("sha256").update(full).digest("hex").slice(0, 8);
+  const base = Buffer.byteLength(name) <= MAX_SESSION_KEY_BYTES ? name : Buffer.from(name).subarray(0, MAX_SESSION_KEY_BYTES).toString("utf8");
+  return `${base}-${hash}`;
 }
 
 function amount(value) {

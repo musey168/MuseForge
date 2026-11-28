@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	serverName    = "agentflow-platform"
-	serverVersion = "1.0.0"
+	serverName    = "museforge"
+	serverVersion = "1.0.1"
 )
 
 type ToolInput struct {
@@ -280,7 +280,7 @@ func (s *Server) handle(ctx context.Context, request rpcRequest) *rpcResponse {
 				"resources": map[string]any{"subscribe": false, "listChanged": false},
 			},
 			"serverInfo":   map[string]string{"name": serverName, "version": serverVersion},
-			"instructions": "LoopForge business operations. Mutating tools can start agents, change external trackers, or alter saved definitions.",
+			"instructions": "MuseForge 个人项目工作台。工具覆盖需求、项目、代码仓库、机器清单、用量数据源与统计的读写；写入即生效，没有审批步骤，也没有任何会启动 Agent 或执行任务的工具。",
 		}}
 	case "ping":
 		return &rpcResponse{JSONRPC: "2.0", ID: request.ID, Result: map[string]any{}}

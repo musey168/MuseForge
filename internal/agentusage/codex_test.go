@@ -2,6 +2,7 @@ package agentusage
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -18,8 +19,8 @@ func TestCodexReaderReadsRollouts(t *testing.T) {
 		t.Fatalf("want 2 rollouts, got %d", len(sessions))
 	}
 	first := sessions[0]
-	if first.Key != "rollout-2026-11-19T12-18-26-01a1f206" {
-		t.Fatalf("key = %q", first.Key)
+	if !strings.HasPrefix(first.Key, "rollout-2026-11-19T12-18-26-01a1f206-") || len(first.Key) != len("rollout-2026-11-19T12-18-26-01a1f206")+9 {
+		t.Fatalf("key = %q: the name plus an 8-hex path hash", first.Key)
 	}
 	if len(first.Usage) != 1 {
 		t.Fatalf("want one usage entry, got %d", len(first.Usage))

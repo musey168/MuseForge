@@ -2,6 +2,8 @@ package agentusage
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"io/fs"
@@ -71,15 +73,22 @@ func walkJSONL(root string, match func(name string) bool) ([]string, error) {
 	return paths, nil
 }
 
-// sessionKeyFromPath is the stable session identity shared by every sender:
-// the file's basename without its .jsonl suffix, bounded to 200 bytes (the
-// platform caps execution IDs at 256, and the agent prefix must fit).
+// sessionKeyFromPath is the stable session identity every sender shares:
+// the file's name plus a short hash of its absolute path. The name alone is
+// not unique — omp keeps two sessions both named CryptoSources.jsonl in
+// different folders — and a key that collides turns the second session into a
+// 409 the platform then refuses to count.
 func sessionKeyFromPath(path string) string {
-	name := filepath.Base(path)
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = path
+	}
+	name := filepath.Base(abs)
 	if len(name) >= 6 && strings.EqualFold(name[len(name)-6:], ".jsonl") {
 		name = name[:len(name)-6]
 	}
-	return clip(name, 200)
+	sum := sha256.Sum256([]byte(filepath.ToSlash(abs)))
+	return clip(name, 191) + "-" + hex.EncodeToString(sum[:])[:8]
 }
 
 // fileTime is the fallback when a record carries no usable timestamp.

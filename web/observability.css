@@ -545,3 +545,8 @@ body.obs-expand-open{overflow:hidden}
 #observabilityView .obs-plat-spark{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--muted)}
 #observabilityView .obs-plat-spark .obs-spark{flex:0 0 120px}
 #observabilityView .obs-plat-spark b{margin-left:auto;color:var(--text);font-variant-numeric:tabular-nums}
+
+/* 统计台 · Agent 对接命令 */
+#observabilityView .obs-cmd-row{display:grid;grid-template-columns:84px minmax(0,1fr) 28px;align-items:center;gap:8px;font-size:11.5px}
+#observabilityView .obs-cmd-row span{color:var(--muted)}
+#observabilityView .obs-cmd-row code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 7px;border-radius:6px;background:var(--panel-3);font-size:11px;color:var(--text)}
