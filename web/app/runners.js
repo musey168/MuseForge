@@ -4,7 +4,6 @@ let runnerRefreshRequest=0;
 const runnerRuntimeTests=new Set();
 const runnerAuthChanges=new Map();
 const runnerMaintenancePending=new Set();
-const runnerPrivilegedSandboxPending=new Map();
 let runnerRuntimeMenu=null,runnerRuntimeTrigger=null;
 async function refreshRunners(silent){
   const request=++runnerRefreshRequest;
@@ -25,9 +24,7 @@ async function refreshRunners(silent){
     state.projectDefaultRunnerId=def?.projectRunnerId||'';
     state.projectRunnerMode=def?.projectRunnerMode||'';
     state.platformRunner=def?.platformRunner||null;
-    state.cloudPool=def?.cloudPool||null;
     state.minRunnerVersion=def?.minRunnerVersion||'';
-    state.minPrivilegedSandboxRunnerVersion=def?.minPrivilegedSandboxRunnerVersion||'';
     renderRunnersView();
   }catch(e){if(!silent)toast(e.message)}
 }
@@ -39,84 +36,6 @@ async function ensureRunnerBindCode(silent){
     const out=await api('/api/runners/bind-codes',{method:'POST',silent:true,body:'{}'});
     if(out?.code){state.runnerBindCode=out;renderRunnersView()}
   }catch(e){if(!silent)toast(e.message)}
-}
-function runnerConcurrencyLabel(runner){
-  const limit=Number(runner?.runLimit)||0;
-  return limit>0?`最多同时运行 ${limit} 条`:'不限同时运行数';
-}
-function runnerRunLimitHTML(runner,platform=false){
-  if(platform?!runner.canEditLimit:!(Number(runner?.ownerUserId)>0))return '';
-  const limit=Number(runner?.runLimit)||0;
-  const scope=platform?'默认 10 条，平台所有项目共用此名额。按顶层 LOOP 计数。':'新绑定机器默认 10 条。按顶层 LOOP 计数，共享项目共用机器名额。';
-  const tip=scope+'超出名额后排队。失败、暂停、待确认的 LOOP 空闲 1 小时后自动归档并回收工作区，释放名额。继续或重试时自动恢复工作区。输入 0 或留空表示不限。';
-  const id=platform?'runLimit-platform-runner':`runLimit-${escapeHTML(runner.id)}`;
-  const control=platform?'data-platform-run-limit':`data-runner-run-limit="${escapeHTML(runner.id)}"`;
-  return `<div class="runner-run-limit"><label for="${id}">最多同时运行<input id="${id}" type="number" inputmode="numeric" min="0" step="1" placeholder="不限" value="${limit>0?limit:''}" ${control} aria-label="${escapeHTML(runner.name||runner.id)} 最多同时运行条数">条</label><span class="runner-tip" tabindex="0" role="note" aria-label="${tip}" data-tip="${tip}">?</span></div>`;
-}
-async function saveRunnerRunLimit(runnerId,raw,platform=false){
-  const text=String(raw??'').trim();
-  const value=text===''?0:Number(text);
-  if(!Number.isSafeInteger(value)||value<0){toast('请输入非负整数，0 或留空表示不限');refreshRunners(true);return}
-  try{
-    const target=platform?'platform':encodeURIComponent(runnerId);
-    const projectId=platform?currentProject()?.id||'':'';
-    const query=projectId?`?projectId=${encodeURIComponent(projectId)}`:'';
-    const runner=await api(`/api/runners/${target}/run-limit${query}`,{method:'PUT',body:JSON.stringify({runLimit:value})});
-    if(platform){
-      if(state.runnerProjectId===projectId)state.platformRunner=runner;
-    }else{
-      const i=(state.runners||[]).findIndex(r=>r.id===runnerId);
-      if(i>=0&&runner?.id)state.runners[i]={...state.runners[i],...runner};
-    }
-    toast(value>0?`已设置：最多同时运行 ${value} 条`:'已设为不限','ok');renderRunnersView();
-    void refreshRunners(true);
-  }catch(err){toast(err.message);refreshRunners(true)}
-}
-function runnerPrivilegedSandboxHTML(runner,canEdit,platform=false){
-  const allowed=runner.allowPrivilegedSandbox;
-  if(typeof allowed!=='boolean')return '';
-  const target=platform?'platform':runner.id;
-  const minVersion=state.minPrivilegedSandboxRunnerVersion;
-  const supported=platform||minVersion&&runnerVersionAtLeast(runner.runnerVersion,minVersion);
-  const pending=runnerPrivilegedSandboxPending.get(target);
-  const editable=canEdit&&supported;
-  const status=supported?(allowed?lfT('已允许','Allowed'):lfT('已关闭','Off')):lfT('需升级 Runner','Runner upgrade required');
-  const help=lfT('只影响后续启动的特权容器。特权容器可以访问宿主机设备。','Applies to future starts. Privileged containers can access host devices.');
-  const toggle=editable?`<input type="checkbox" role="switch" data-runner-privileged-sandbox="${escapeHTML(target)}" ${(pending??allowed)?'checked':''} ${pending!==undefined?'disabled':''}>`:'';
-  const label=toggle?`<label>${toggle}<span>${lfT('允许特权 Docker 沙箱','Allow privileged Docker sandboxes')}</span></label>`:`<span>${lfT('特权 Docker 沙箱','Privileged Docker sandboxes')}</span>`;
-  return `<div class="runner-privileged-sandbox">
-    ${label}
-    ${editable?'':`<span class="runner-privileged-state">${status}</span>`}
-    <span class="runner-tip" tabindex="0" role="note" aria-label="${help}" data-tip="${help}">?</span>
-  </div>`;
-}
-async function saveRunnerPrivilegedSandbox(target,allowed){
-  if(runnerPrivilegedSandboxPending.has(target))return;
-  runnerPrivilegedSandboxPending.set(target,allowed);
-  renderRunnersView();
-  try{
-    await api(`/api/runners/${encodeURIComponent(target)}/privileged-sandbox`,{method:'PUT',body:JSON.stringify({allowed}),silent:true});
-    const runner=target==='platform'?state.platformRunner:(state.runners||[]).find(r=>r.id===target);
-    if(runner)runner.allowPrivilegedSandbox=allowed;
-    toast(lfT('特权 Docker 沙箱设置已保存','Privileged Docker sandbox setting saved'),'ok');
-    await refreshRunners(true);
-  }catch(err){
-    toast(err.message,'err');
-  }finally{
-    runnerPrivilegedSandboxPending.delete(target);
-    renderRunnersView();
-  }
-}
-function runnerLoadHTML(runner){
-  const parts=[];
-  const limit=Number(runner.runLimit)||0;
-  if(runner.load){
-    parts.push(`运行中 ${Number(runner.load.runningRuns)||0}`);
-    parts.push(limit>0?`已占 ${Number(runner.load.occupiedRuns)||0} / ${limit}`:'不限');
-    if(runner.load.queuedRuns>0)parts.push(`排队 ${Number(runner.load.queuedRuns)}`);
-  }
-  if(runner.cloudPool)parts.push(`云端池 ${Number(runner.cloudPoolOnline)||0} 台在线`);
-  return parts.length?`<small class="runner-load">${parts.join(' · ')}</small>`:'';
 }
 function runnerStatusLabel(status,lastSeen){
   const label=status==='online'?'在线':status==='offline'?'离线':(status||'未知');
@@ -145,19 +64,19 @@ function runnerRuntimeSupportsLogin(runtime){
 function runnerRuntimeAuthMode(runtime){
   return runnerRuntimeSupportsLogin(runtime)&&runtime.authMode!=='personal'?'local':'personal';
 }
-function runnerAuthHTML(runtime,key,busy,shared){
+function runnerAuthHTML(runtime,key,busy){
   const supportsLogin=runnerRuntimeSupportsLogin(runtime);
-  const mode=shared?'personal':runnerAuthChanges.get(key)||runnerRuntimeAuthMode(runtime);
+  const mode=runnerAuthChanges.get(key)||runnerRuntimeAuthMode(runtime);
   const missing=mode==='personal'&&!runnerPersonalCredentialConfigured(runtime.provider);
   const title=missing?' title="请在个人配置中填写 API Key"':'';
-  if(!shared&&supportsLogin)return `<select class="runner-auth-select${mode==='personal'?' is-personal':''}" data-runner-auth="${escapeHTML(key)}" aria-label="${runnerCLILabels[runtime.provider]} 认证方式"${title} ${busy?'disabled':''}>
+  if(supportsLogin)return `<select class="runner-auth-select${mode==='personal'?' is-personal':''}" data-runner-auth="${escapeHTML(key)}" aria-label="${runnerCLILabels[runtime.provider]} 认证方式"${title} ${busy?'disabled':''}>
     <option value="local" ${mode==='local'?'selected':''}>${runnerAuthLabel.local}</option>
     <option value="personal" ${mode==='personal'?'selected':''}>${runnerAuthLabel.personal}</option>
   </select>`;
   const keyHelp=supportsLogin?'':`<button class="runner-auth-tip" type="button" data-runner-key-help="${runtime.provider}" aria-label="${runnerCLILabels[runtime.provider]} API Key 说明" aria-haspopup="dialog" title="${escapeHTML(runnerKeyDescription(runtime.provider))}"><span aria-hidden="true">?</span></button>`;
   return `<span class="runner-auth-fixed"${title}><span>${runnerAuthLabel[mode]}</span>${keyHelp}</span>`;
 }
-function runnerRuntimeHTML(runner,runtime,shared){
+function runnerRuntimeHTML(runner,runtime){
   const provider=runtime.provider,label=runnerCLILabels[provider];
   const key=`${runner.id}|${provider}`,safeKey=escapeHTML(key);
   const testing=runnerRuntimeTests.has(key),updating=runnerMaintenancePending.has(key);
@@ -166,12 +85,12 @@ function runnerRuntimeHTML(runner,runtime,shared){
   const icon=window.AgentFlowAssistantModels?.cliIcon(provider);
   return `<div class="runner-runtime-row ${disabled?'off':''}">
     <label class="runner-runtime-label">
-      <input type="checkbox" data-runner-cli="${safeKey}" ${disabled?'':'checked'} ${shared?'disabled':''} aria-label="启用 ${label}">
+      <input type="checkbox" data-runner-cli="${safeKey}" ${disabled?'':'checked'} aria-label="启用 ${label}">
       <span class="runner-runtime-icon ${provider}" aria-hidden="true">${icon?`<img src="${icon}" alt="">`:''}</span>
       <span class="runner-runtime-name"><b>${label}</b><small title="${escapeHTML(runtime.binaryPath||'')}">${escapeHTML(runtime.version||runtime.binaryPath||'已发现')}</small></span>
     </label>
-    ${runnerAuthHTML(runtime,key,busy,shared)}
-    ${shared?'':`<button class="runner-more" type="button" data-runner-runtime-menu="${safeKey}" aria-label="${label} 更多操作" aria-haspopup="menu" aria-expanded="false" aria-busy="${testing||updating}">${huiIcon(testing||updating?'arc-spinner':'more-horizontal')}</button>`}
+    ${runnerAuthHTML(runtime,key,busy)}
+    <button class="runner-more" type="button" data-runner-runtime-menu="${safeKey}" aria-label="${label} 更多操作" aria-haspopup="menu" aria-expanded="false" aria-busy="${testing||updating}">${huiIcon(testing||updating?'arc-spinner':'more-horizontal')}</button>
   </div>`;
 }
 function runnerLastSeen(value){
@@ -198,13 +117,11 @@ function runnerProjectWritable(project){
 }
 function platformRunnerCardHTML(runner,isDefault,canSetDefault){
   const name=escapeHTML(runner.name||'平台执行机器（云端）');
-  const limit=runner.canEditLimit?runnerRunLimitHTML(runner,true):`<span class="runner-limit-label">${runnerConcurrencyLabel(runner)}</span>`;
   return `<article class="runner-card runner-platform-card panel ${isDefault?'is-default':''}">
     <div class="runner-platform-main">
       <span class="runner-machine-icon" aria-hidden="true">${huiIcon('server')}</span>
       <div class="runner-card-title">
         <div class="runner-card-name"><b title="${name}">${name}</b><span class="runner-tag">平台自带</span>${isDefault?'<span class="runner-tag default">此项目默认</span>':''}</div>
-        ${runnerLoadHTML(runner)}
       </div>
     </div>
     <div class="runner-platform-controls">
@@ -248,58 +165,8 @@ function renderRunnersView(){
   const projectDefaultId=projectLoaded?state.projectDefaultRunnerId||'':'';
   const defaultId=projectLoaded?state.defaultRunnerId||'':'';
   $('#runnerCount').textContent=String(runners.length);
-  const dispatchBar=$('#runnerDispatchBar');
-  if(dispatchBar)dispatchBar.classList.toggle('is-auto',projectMode==='auto');
-  const dispatchLabel=$('#runnerDispatchLabel');
-  if(dispatchLabel)dispatchLabel.textContent=projectId?'本项目执行调度':'当前执行调度';
-  const dispatchHint=$('#runnerDispatchHint');
-  if(dispatchHint){
-    dispatchHint.hidden=!canSetMode;
-    dispatchHint.textContent=!canSetMode?'':projectMode==='auto'
-      ?'已开启自动分配：新建顶层 LOOP 将在「平台机器」和兼容的「可用机器」间自动调度。'
-      :'开启「自动分配」后，新建顶层 LOOP 将在「平台机器」和兼容的「可用机器」间自动调度；也可在下方指定单台机器为项目默认。';
-  }
-  const autoAssign=$('#runnerAutoAssign');
-  if(autoAssign){
-    const active=projectMode==='auto';
-    autoAssign.hidden=!canSetMode;
-    autoAssign.classList.toggle('hui-btn-soft',active);
-    autoAssign.classList.toggle('ghost',!active);
-    autoAssign.setAttribute('aria-pressed',String(active));
-    autoAssign.textContent=active?'已开启自动分配':'自动分配';
-    autoAssign.title='自动分配涵盖平台机器与兼容的可用机器';
-    autoAssign.onclick=()=>setDefaultRunner('',projectId,active?'':'auto');
-  }
-  const poolStatus=$('#runnerPoolStatus');
-  if(poolStatus){
-    const def=runners.find(r=>r.id===defaultId),pool=state.cloudPool;
-    let text='',warn=false;
-    if(projectMode==='auto'){
-      const usable=runners.filter(r=>r.canUseInProject&&!runnerDefaultBlocker(r)).length+(platform?.status==='online'?1:0);
-      text=`此项目 LOOP 自动分配 · ${usable} 台在线机器可用`;
-      warn=usable===0;
-    }else if(projectMode==='platform'){
-      text='此项目默认 · 平台执行机器（云端）';
-      warn=platform?.status==='offline';
-    }else if(def){
-      warn=def.status!=='online';
-      const label=projectDefaultId?'此项目默认':'个人默认';
-      text=warn?`${label}执行机器已离线，请启动机器或更改默认`:`${label} · ${def.name||def.id}`;
-    }else if(platform){
-      warn=platform.status!=='online';
-      text=warn?'平台执行机器离线':'在平台云端执行';
-    }else if(pool?.configured){
-      warn=!pool.online;
-      text=pool.online?`云端执行 · ${pool.online} 台在线`:'云端暂无在线机器，新任务最多等待 10 分钟';
-    }else{
-      text='在平台云端执行';
-    }
-    poolStatus.textContent=text;poolStatus.classList.toggle('warn',warn);
-  }
   const focusedMenu=document.activeElement?.dataset.runnerRuntimeMenu;
   const focusedUpdate=document.activeElement?.dataset.runnerCheckUpdate;
-  const focusedShare=document.activeElement?.dataset.runnerShare;
-  const focusedPrivilege=document.activeElement?.dataset.runnerPrivilegedSandbox;
   const focusedPlatform=document.activeElement?.hasAttribute('data-runner-platform-default');
   closeRunnerRuntimeMenu();
   const platformSection=$('#platformRunnerSection');
@@ -311,11 +178,10 @@ function renderRunnersView(){
   const runnerCards=runners.map(r=>{
     const isDefault=r.id===defaultId;
     const discoveredCLIs=(r.runtimes||[]).filter(rt=>runnerCLILabels[rt.provider]);
-    const shared=!own(r);
+    const cliRows=discoveredCLIs.map(rt=>runnerRuntimeHTML(r,rt)).join('');
     const isPersonalDefault=r.id===personalDefaultId;
     const isProjectDefault=r.id===projectDefaultId;
     const canSetProjectDefault=projectLoaded&&projectId&&r.canUseInProject&&!isProjectDefault;
-    const cliRows=discoveredCLIs.map(rt=>runnerRuntimeHTML(r,rt,shared)).join('');
     const cliSection=cliRows||'<div class="runner-runtime-empty">未发现支持的 Agent CLI</div>';
     const osLabel=runnerOSLabels[r.os]||r.os||'?';
     const defaultBlocker=runnerDefaultBlocker(r);
@@ -324,24 +190,20 @@ function renderRunnersView(){
       <div class="runner-card-head">
         <span class="runner-machine-icon" aria-hidden="true">${huiIcon('monitor')}</span>
         <div class="runner-card-title">
-          <div class="runner-card-name"><b title="${escapeHTML(r.name||r.id)}">${escapeHTML(r.name||r.id)}</b>${isProjectDefault?'<span class="runner-tag default">此项目默认</span>':isPersonalDefault?'<span class="runner-tag default">个人默认</span>':''}${shared?'<span class="runner-tag">项目共享</span>':''}</div>
+          <div class="runner-card-name"><b title="${escapeHTML(r.name||r.id)}">${escapeHTML(r.name||r.id)}</b>${isProjectDefault?'<span class="runner-tag default">此项目默认</span>':isPersonalDefault?'<span class="runner-tag default">个人默认</span>':''}</div>
           <small>${escapeHTML(osLabel)} · ${escapeHTML(r.arch||'?')} · Runner ${escapeHTML(r.runnerVersion||'未知')}</small>
-          ${runnerLoadHTML(r)}
         </div>
-        <div class="runner-head-actions">${runnerStatusLabel(r.status,r.lastSeenAt)}${shared?'':`<button class="button ghost runner-check-update" type="button" data-runner-check-update="${escapeHTML(r.id)}" ${r.status!=='online'?'disabled':checking?'aria-disabled="true"':''}>${huiIcon(checking?'arc-spinner':'refresh')}${checking?'处理中…':'检查更新'}</button>`}</div>
+        <div class="runner-head-actions">${runnerStatusLabel(r.status,r.lastSeenAt)}<button class="button ghost runner-check-update" type="button" data-runner-check-update="${escapeHTML(r.id)}" ${r.status!=='online'?'disabled':checking?'aria-disabled="true"':''}>${huiIcon(checking?'arc-spinner':'refresh')}${checking?'处理中…':'检查更新'}</button></div>
       </div>
       <div class="runner-runtime-list">
         ${cliRows?`<div class="runner-runtime-heading"><span>CLI</span><button class="runner-auth-help" type="button" data-runner-auth-help aria-label="模型认证说明" aria-haspopup="dialog">模型认证 ${huiIcon('info')}</button></div>`:''}
         ${cliSection}
       </div>
       <div class="runner-card-action">
-        ${shared?`<span class="runner-limit-label">${runnerConcurrencyLabel(r)}</span>`:runnerRunLimitHTML(r)}
-        ${runnerPrivilegedSandboxHTML(r,!shared)}
         <span class="runner-card-spacer"></span>
-        ${shared?'':`<button class="button ghost small runner-text-button" type="button" data-runner-share="${escapeHTML(r.id)}" aria-haspopup="dialog">共享项目${r.sharedProjectIds?.length?`（${r.sharedProjectIds.length}）`:''}</button>`}
         ${isPersonalDefault?'<button class="button ghost small runner-text-button" type="button" data-set-default="">清除个人默认</button>':''}
-        ${shared||r.status==='online'?'':`<button class="button ghost small runner-text-button" type="button" data-remove-runner="${escapeHTML(r.id)}" title="机器已不再使用时移除绑定">移除</button>`}
-        ${!shared&&!isPersonalDefault?`<button class="button hui-btn-soft small" type="button" ${defaultBlocker?`disabled title="${escapeHTML(defaultBlocker)}"`:''} data-set-default="${escapeHTML(r.id)}">设为个人默认</button>`:''}
+        ${r.status==='online'?'':`<button class="button ghost small runner-text-button" type="button" data-remove-runner="${escapeHTML(r.id)}" title="机器已不再使用时移除绑定">移除</button>`}
+        ${!isPersonalDefault?`<button class="button hui-btn-soft small" type="button" ${defaultBlocker?`disabled title="${escapeHTML(defaultBlocker)}"`:''} data-set-default="${escapeHTML(r.id)}">设为个人默认</button>`:''}
         ${isProjectDefault?'<button class="button ghost small runner-text-button" type="button" data-set-project-default="">清除项目默认</button>':''}
         ${canSetProjectDefault?`<button class="button hui-btn-soft small" type="button" ${defaultBlocker?`disabled title="${escapeHTML(defaultBlocker)}"`:''} data-set-project-default="${escapeHTML(r.id)}">设为项目默认</button>`:''}
       </div>
@@ -360,26 +222,12 @@ function renderRunnersView(){
   list.querySelectorAll('[data-set-project-default]').forEach(btn=>{
     btn.onclick=()=>setDefaultRunner(btn.dataset.setProjectDefault,projectId);
   });
-  list.querySelectorAll('[data-runner-share]').forEach(btn=>{
-    btn.onclick=()=>editRunnerSharing(runners.find(r=>r.id===btn.dataset.runnerShare));
-    if(btn.dataset.runnerShare===focusedShare)btn.focus({preventScroll:true});
-  });
   list.querySelectorAll('[data-remove-runner]').forEach(btn=>btn.onclick=()=>removeRunner(btn.dataset.removeRunner));
   list.querySelectorAll('[data-runner-cli]').forEach(cb=>cb.onchange=()=>{
     cb.closest('.runner-runtime-row')?.classList.toggle('off',!cb.checked);
     const [runnerId,provider]=cb.dataset.runnerCli.split('|');
     toggleRunnerRuntime(runnerId,provider,cb.checked);
   });
-  for(const scope of [platformHost,list]){
-    scope?.querySelectorAll('[data-runner-run-limit],[data-platform-run-limit]').forEach(input=>{
-      input.onchange=()=>saveRunnerRunLimit(input.dataset.runnerRunLimit,input.value,input.hasAttribute('data-platform-run-limit'));
-      input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();input.blur()}};
-    });
-    scope?.querySelectorAll('[data-runner-privileged-sandbox]').forEach(input=>{
-      input.onchange=()=>saveRunnerPrivilegedSandbox(input.dataset.runnerPrivilegedSandbox,input.checked);
-      if(input.dataset.runnerPrivilegedSandbox===focusedPrivilege&&!input.disabled)input.focus({preventScroll:true});
-    });
-  }
   list.querySelectorAll('[data-runner-auth]').forEach(select=>select.onchange=()=>{
     const [runnerId,provider]=select.dataset.runnerAuth.split('|');
     setRunnerRuntimeAuth(runnerId,provider,select.value);
@@ -406,38 +254,8 @@ function renderRunnersView(){
   });
   [platformHost,list].forEach(el=>el&&window.AgentFlowHarnessIcons?.hydrate?.(el));
   if(!runnerRefreshTimer)runnerRefreshTimer=setInterval(()=>{
-    if(!document.hidden&&activeViewName()==='runners'&&!runnerRuntimeTrigger&&!$('#confirmModal.open')&&!document.activeElement?.matches?.('[data-runner-run-limit],[data-platform-run-limit],[data-runner-auth],[data-runner-key-help]'))refreshRunners(true);
+    if(!document.hidden&&activeViewName()==='runners'&&!runnerRuntimeTrigger&&!$('#confirmModal.open')&&!document.activeElement?.matches?.('[data-runner-auth],[data-runner-key-help]'))refreshRunners(true);
   },15000);
-}
-async function editRunnerSharing(runner){
-  const projects=(state.data.projects||[]).filter(runnerProjectWritable);
-  const shared=new Set(runner.sharedProjectIds||[]);
-  const projectIds=await afOpenDialog(modal=>{
-    $('#confirmTitle').textContent=`共享 ${runner.name||runner.id}`;
-    $('#confirmMessage').textContent=projects.length
-      ?'所选项目的负责人可以在这台机器上运行代码，执行时使用自己的凭据。'
-      :'你负责的项目可以共享这台机器。';
-    const ok=$('#confirmOkBtn');
-    ok.textContent='保存';
-    ok.className='button primary';
-    $('#confirmCancelBtn').textContent='取消';
-    setConfirmIcon('info','monitor');
-    const fields=document.createElement('fieldset');
-    fields.className='runner-share-projects';
-    fields.setAttribute('aria-label','共享项目');
-    fields.innerHTML=projects.map(p=>`<label><input type="checkbox" value="${escapeHTML(p.id)}" ${shared.has(p.id)?'checked':''}> <span>${escapeHTML(p.name||p.id)}</span></label>`).join('');
-    if(projects.length)modal.querySelector('.confirm-modal-footer').before(fields);
-    return {focus:fields.querySelector('input')||ok,value:accepted=>{
-      fields.remove();
-      return accepted?[...fields.querySelectorAll('input:checked')].map(input=>input.value):null;
-    }};
-  });
-  if(!projectIds)return;
-  try{
-    await api(`/api/runners/${encodeURIComponent(runner.id)}/shared-projects`,{method:'PUT',body:JSON.stringify({projectIds})});
-    toast('已更新共享项目','ok');
-    await refreshRunners(true);
-  }catch(err){toast(err.message,'err')}
 }
 async function removeRunner(runnerId){
   const runner=(state.runners||[]).find(r=>r.id===runnerId);
