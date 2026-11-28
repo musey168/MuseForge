@@ -697,7 +697,7 @@ function credentialEditorHTML(kind,user){
 function credentialRuntimeStatus(kind) {
   const engine=kind.models?.engine;
   const option=credentialUI().catalog?.engines?.find(item=>item.id===engine);
-  return option?.serverMissing?'<small class="credential-runtime-status">这台机器没有装这个 CLI</small>':'';
+  return option?.serverMissing?'<small class="credential-runtime-status">本机未安装 CLI</small>':'';
 }
 function credentialRowMainHTML(kind,user){
   const managed=!!kind.dialog,on=credentialConfigured(kind,user),open=on&&credentialUI().open===kind.key,status=credentialStatus(kind,user);
@@ -705,10 +705,7 @@ function credentialRowMainHTML(kind,user){
     ?`${kind.key==='gitToken'?`${credentialBadgeHTML(status)}<span class="credential-tip" data-tip="重新校验"><button type="button" class="credential-btn ghost icon credential-ink git-token-verify" data-credential-act="verify" aria-label="重新校验"${status==='busy'?' disabled':''}>${credentialGlyph('refresh',15)}</button></span>`:''}<span class="credential-row-action" aria-hidden="true"><span data-credential-fold-label>${open?'收起':'编辑'}</span><span class="credential-chevron">${credentialGlyph('chevron-down',14)}</span></span>`
     :`${credentialBadgeHTML(status)}<button type="button" class="credential-btn secondary credential-ink" data-credential-act="setup"${managed?' aria-haspopup="dialog"':''}>${managed?kind.action:'去配置'}<span class="credential-nudge">${credentialGlyph('chevron-right',13)}</span></button>`;
   const interaction=managed?'':` role="button" tabindex="0"${on?` aria-expanded="${open}"`:''}`;
-  const preferred=credentialDefaultsExecutor(credentialUI().catalog);
-  const executor=on&&kind.models?.engine;
-  const active=executor&&executor===preferred?.id;
-  return `<div class="credential-row-main credential-ink"${interaction}>${credentialLogo(kind,on?'':'is-dim')}<div class="credential-row-who"><b>${escapeHTML(kind.name)}${active?'<span class="credential-default-badge">默认</span>':''}</b><small>${credentialSubline(kind,user)}</small>${credentialRuntimeStatus(kind)}</div><div class="credential-row-end">${end}</div></div>`;
+  return `<div class="credential-row-main credential-ink"${interaction}>${credentialLogo(kind,on?'':'is-dim')}<div class="credential-row-who"><b>${escapeHTML(kind.name)}</b><small>${credentialSubline(kind,user)}</small>${credentialRuntimeStatus(kind)}</div><div class="credential-row-end">${end}</div></div>`;
 }
 function credentialRowHTML(kind,user){
   const on=credentialConfigured(kind,user),open=on&&credentialUI().open===kind.key;
@@ -762,10 +759,8 @@ function credentialGroupHTML(group,user){
   </section>`;
 }
 function credentialPanelHTML(user){
-  const hasCLI=CREDENTIAL_KINDS.some(kind=>kind.group==='model'&&credentialConfigured(kind,user));
   return `<div class="credential-list">
     ${CREDENTIAL_GROUPS.map(group=>credentialGroupHTML(group,user)).join('')}
-    ${hasCLI?`<section class="credential-group credential-defaults" aria-labelledby="credentialDefaultsTitle" data-credential-defaults>${credentialDefaultsHeader()}<p class="credential-default-status" role="status">正在读取执行器…</p></section>`:''}
   </div>`;
 }
 function credentialGitRowsHTML(http,ssh,showGitHub){
@@ -799,111 +794,9 @@ function credentialMenuReady(panel){
     menu?.panel.classList.add('credential-add-panel');
   });
 }
-function credentialDefaultsExecutor(catalog){
-  if(!catalog)return null;
-  const engines=window.AgentFlowAssistantModels?.featureExecutors(catalog)||[];
-  return engines.find(engine=>engine.id===catalog.preferences?.executor)||engines.find(engine=>engine.models.length)||engines[0]||null;
-}
-const ASSISTANT_APPROVAL_CHOICES=[['confirm','请求批准'],['assisted','帮我批准'],['auto','完全权限']];
-const DEFAULT_EFFORT_LABELS={none:'关闭',minimal:'极低',low:'低',medium:'中',high:'高',xhigh:'极高',max:'最大',ultra:'Ultra',ultracode:'Ultracode',thinking:'开启'};
-function credentialDefaultOptions(options,value){
-  return options.map(([id,name])=>credentialOptionHTML({id,name},value)).join('');
-}
-function credentialDefaultsHeader(){
-  return `<header class="credential-group-title">
-    <h2 id="credentialDefaultsTitle" class="credential-group-heading">AI 默认设置</h2>
-    <span class="credential-default-feedback" role="status" data-default-feedback></span>
-  </header>`;
-}
-function credentialDefaultField(label,name,icon,options=''){
-  const id=`credentialDefault-${name}`;
-  return `<div class="credential-default-field">
-    <label class="credential-default-label" id="${id}-label" for="${id}">${credentialGlyph(icon,16)}<span>${label}</span></label>
-    <select class="select credential-default-select" id="${id}" name="${name}" data-align="end" data-min-width="${name==='model'?280:216}" data-reveal-selected>${options}</select>
-  </div>`;
-}
-function credentialDefaultValues(form){
-  const {executor,model,effort,approval}=form.elements;
-  return {executor:executor.value,model:model.value.replace(executor.value+':',''),effort:effort.value,approval:approval.value};
-}
-function syncCredentialDefaultActions(form){
-  form.querySelector('[data-default-actions]').hidden=JSON.stringify(credentialDefaultValues(form))===form.dataset.initial;
-  form.querySelector('[data-default-error]').hidden=true;
-}
-function paintCredentialDefaultEffort(form,engine,value){
-  const model=engine?.models.find(item=>item.id===form.elements.model.value);
-  const options=(model?.efforts||[]).map(level=>[level,DEFAULT_EFFORT_LABELS[level]||level]);
-  form.elements.effort.innerHTML=credentialDefaultOptions([['','默认'],...options],value);
-  form.elements.effort.disabled=!options.length;
-}
-function paintCredentialDefaults(host,catalog){
-  const models=window.AgentFlowAssistantModels;
-  const engines=models.featureExecutors(catalog),engine=credentialDefaultsExecutor(catalog);
-  if(!engine)return;
-  const prefs=catalog.preferences||{};
-  const executorOptions=engines.map(item=>credentialOptionHTML({...credentialKind(item.credential),id:item.id,name:item.name},engine.id)).join('');
-  host.innerHTML=`${credentialDefaultsHeader()}
-    <form class="credential-default-form" data-ai-defaults-form>
-      <fieldset>
-        <div class="credential-group-body">
-          ${credentialDefaultField('默认执行器','executor','terminal',executorOptions)}
-          ${credentialDefaultField('默认模型','model','sparkles')}
-          ${credentialDefaultField('思考强度','effort','brain')}
-          ${credentialDefaultField('操作确认方式','approval','gate',credentialDefaultOptions(ASSISTANT_APPROVAL_CHOICES,prefs.approval||'confirm'))}
-        </div>
-        <div class="credential-default-actions" data-default-actions hidden>
-          <button type="reset" class="credential-btn secondary">取消</button>
-          <button type="submit" class="credential-btn primary" data-save-ai-defaults>保存设置</button>
-        </div>
-      </fieldset>
-      <p class="credential-default-error" role="alert" data-default-error hidden></p>
-    </form>`;
-  const form=host.querySelector('form');
-  const feedback=host.querySelector('[data-default-feedback]');
-  const selectedExecutor=()=>engines.find(item=>item.id===form.elements.executor.value);
-  const syncEffort=()=>{
-    const {executor,model}=form.elements;
-    const savedModel=executor.value===prefs.executor&&model.value===`${prefs.executor}:${prefs.model}`;
-    paintCredentialDefaultEffort(form,selectedExecutor(),savedModel?prefs.effort:'');
-  };
-  const fillModels=()=>{
-    const selected=selectedExecutor();
-    if(!selected)return;
-    const model=models.preferredFeatureModel(catalog,selected.id,selected.models);
-    const options=selected.models.map(item=>[item.id,item.name||item.id]);
-    form.elements.model.innerHTML=credentialDefaultOptions(options.length?options:[['','暂无可选模型']],model);
-    form.elements.model.disabled=!options.length;
-    syncEffort();
-  };
-  fillModels();
-  for(const select of form.querySelectorAll('.credential-default-select')){
-    const menu=window.HuiSelect?.enhance(select);
-    if(!menu)continue;
-    menu.panel.classList.add('credential-default-panel');
-    const value=menu.trigger.querySelector('.hui-select-value');
-    value.id=`${select.id}-value`;
-    menu.trigger.setAttribute('aria-labelledby',`${select.id}-label ${value.id}`);
-  }
-  form.dataset.initial=JSON.stringify(credentialDefaultValues(form));
-  form.onchange=event=>{
-    feedback.textContent='';
-    if(event.target===form.elements.executor)fillModels();
-    if(event.target===form.elements.model)syncEffort();
-    syncCredentialDefaultActions(form);
-  };
-  form.onreset=event=>{
-    event.preventDefault();
-    form.elements.executor.value=engine.id;
-    form.elements.approval.value=prefs.approval||'confirm';
-    fillModels();
-    syncCredentialDefaultActions(form);
-    form.elements.executor.focus({preventScroll:true});
-  };
-  form.onsubmit=event=>{event.preventDefault();void saveCredentialDefaults(form,host)};
-  hydrateCredentialIcons(host);
-}
-async function loadCredentialDefaults(panel){
-  const host=panel.querySelector('[data-credential-defaults]');
+// The shared model catalogue tells the settings which CLIs this machine can
+// run. The assistant's own preferences are gone with the assistant.
+async function loadCredentialCatalog(panel){
   const models=window.AgentFlowAssistantModels;
   if(!models||!state.currentUser?.id||state.currentUser.isGuest)return;
   const ui=credentialUI();
@@ -911,46 +804,9 @@ async function loadCredentialDefaults(panel){
     const catalog=await models.fetchCatalog();
     if(!panel.isConnected||credentialUI()!==ui)return;
     ui.catalog=catalog;
-    state.data.assistantDefaults=catalog.preferences||{};
     CREDENTIAL_KINDS.filter(kind=>kind.group==='model').forEach(kind=>repaintCredentialRow(kind.key));
-    if(!host?.isConnected)return;
-    if(!credentialDefaultsExecutor(catalog)){
-      host.querySelector('.credential-default-status').textContent='当前账号暂无可用执行器';
-      return;
-    }
-    paintCredentialDefaults(host,catalog);
-  }catch(error){
-    if(host?.isConnected){const status=host.querySelector('.credential-default-status');if(status)status.textContent=error.message}
-  }
-}
-async function saveCredentialDefaults(form,host){
-  const ui=credentialUI(),catalog=ui.catalog,userId=ui.userId;
-  const defaults=credentialDefaultValues(form);
-  if(!catalog||ui.savingDefaults||JSON.stringify(defaults)===form.dataset.initial)return;
-  const fields=form.querySelector('fieldset'),button=form.querySelector('[data-save-ai-defaults]');
-  const error=form.querySelector('[data-default-error]');
-  ui.savingDefaults=true;
-  fields.disabled=true;
-  error.hidden=true;
-  setCredentialButtonBusy(button,'保存中');
-  try{
-    await api(`/api/users/${userId}/credentials`,{method:'PUT',body:JSON.stringify({assistantDefaults:defaults})});
-    if(credentialUI()!==ui)return;
-    ui.catalog={...catalog,preferences:defaults};
-    state.data.assistantDefaults=defaults;
-    if(host.isConnected){
-      paintCredentialDefaults(host,ui.catalog);
-      CREDENTIAL_KINDS.filter(kind=>kind.group==='model').forEach(kind=>repaintCredentialRow(kind.key));
-      const executor=host.querySelector('.credential-default-field .hui-select-trigger, [name="executor"]:not(.hui-select-native)');
-      executor?.focus({preventScroll:true});
-      host.querySelector('[data-default-feedback]').textContent='已保存';
-    }
-    notifyCredentialsChanged();
-  }catch(failure){
-    if(error.isConnected){error.textContent=failure.message;error.hidden=false}
-  }finally{
-    ui.savingDefaults=false;
-    if(form.isConnected){fields.disabled=false;setCredentialButtonBusy(button,'')}
+  }catch{
+    // The catalogue is a hint: a failure leaves the rows as they are.
   }
 }
 function renderCredentialPanel(){
@@ -958,14 +814,13 @@ function renderCredentialPanel(){
   const user=credentialUser();
   if(!CREDENTIAL_KINDS.some(kind=>kind.group==='model'&&credentialConfigured(kind,user))){
     credentialUI().catalog=null;
-    state.data.assistantDefaults={};
   }
   panel.innerHTML=credentialPanelHTML(user);
   if(typeof hydrateGitHubConnections==='function')hydrateGitHubConnections(panel);
   credentialMenuReady(panel);
   hydrateCredentialIcons(panel);
   void loadCredentialGitRows(panel,user);
-  void loadCredentialDefaults(panel);
+  void loadCredentialCatalog(panel);
 }
 function renderCredentialGitGroup(panel=$('#credentialPanel'),user=credentialUser()){
   const group=panel?.querySelector('[data-credential-group="platform"]');
