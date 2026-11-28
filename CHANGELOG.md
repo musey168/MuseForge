@@ -5,6 +5,24 @@ GitHub release once the `platform` workflow succeeded on that commit. The `local
 edition has its own `local-vX.Y.Z` tags, published by the `release-local` workflow.
 Entries below `1.0.0` describe the platform this repository came from.
 
+## 1.0.2 — 统计台，以及真正能接进来的 Agent
+
+1.0.0 的「用量台」只数外部上报的执行。没有发送者时它永远是空的，也看不见
+MuseForge 自己的项目、需求、仓库和机器。
+
+- 页面改名 **统计台**：上半部分是平台自己的数据 —— 项目、需求（状态/来源/优先级/
+  标签/未完成与已完成）、按日/周/月的创建与关闭趋势、仓库、在线机器；下半部分才是
+  Agent 用量。空库也会说清楚"还没有数据"，不再是一张零图。
+- **四个 Agent 的用量都能进来**：omp 扩展在会话结束时实时上报；新增
+  `museforge-usage sync --agent omp|codex|pi|claude` 回填历史会话
+  （本机实测：omp 477、Codex 27、pi 21 个会话）。
+- **会话身份防冲突**：`<agent>:<文件名>-<路径哈希>`。同一台机器上有三个不同目录的
+  会话文件同名，旧身份让第二个被 409 拒收；现在两个发送者对同一会话产出同一条记录，
+  重跑按 `200 duplicate` 处理。
+- 统计台底部 **Agent 对接**：omp / Codex / Claude Code / pi 的 MCP 配置片段与用量
+  命令都可复制；创建数据源时直接给出带真实 Token 的命令。
+- MCP 服务自报 `museforge`，并停止承诺"可以启动 Agent"——那个引擎已经删了。
+
 ## 1.0.1 — the console matches the trim
 
 Found by deploying 1.0.0 the documented way and looking at the running console.
