@@ -13,7 +13,7 @@ const state = {
   selectedIssue:null, projectFilter:'', projectDraft:null, requirementIssueId:null, sourceFilter:'',
   projectAdminDetailId:null, projectAdminTab:'basic', projectAdminQuery:'', projectAdminFilter:'all', projectDraftFor:'', projectDraftBase:null, projectIdentCustom:false, projectIdentSeed:'', projectAdminErrors:{},
   sopScope:'project', agentScope:'project', ruleScope:'project', skillScope:'project', sandboxScope:'project',
-  issueRunFilter:'', issueStatusFilter:'', issueAssigneeFilter:'', issueQuery:'', issueView:localStorage.getItem('agentflow.issueView')||'table',
+  issueRunFilter:'', issueStatusFilter:'', issueAssigneeFilter:'', issueTagFilter:'', issueQuery:'', issueView:localStorage.getItem('agentflow.issueView')||'table',
   assetType:'sandboxes', selectedAsset:null, assetQuery:'', assetDirty:false, mcpTab:'installed', mcpScope:'project', mcpMarket:[], mcpQuery:'', editingMCPId:'', poll:null, runStream:null,
   usage:null, usageLoading:false, usageError:'', usageGrain:['day','week','month'].includes(localStorage.getItem('agentflow.usageGrain'))?localStorage.getItem('agentflow.usageGrain'):'day', usageBucket:'', usageBuckets:[], usageMetric:'tokens', usageExpanded:'', drawerOpen:false, issueDetailTab:'overview', issueDetailData:null, propTab:'basic',
   uiScroll:{runId:'', nodeId:'', graphLeft:0, feedTop:0, telTop:0, feedStick:true, telStick:true},
@@ -982,6 +982,7 @@ function bind(){
   $('#sourceFilter').onchange=e=>{state.sourceFilter=e.target.value;resetListPage('issues');renderIssues()};
   $('#issueStatusFilter')&&($('#issueStatusFilter').onchange=e=>{state.issueStatusFilter=e.target.value;resetListPage('issues');renderIssues()});
   $('#issueAssigneeFilter')&&($('#issueAssigneeFilter').onchange=e=>{state.issueAssigneeFilter=e.target.value;resetListPage('issues');renderIssues()});
+  $('#issueTagFilter')&&($('#issueTagFilter').onchange=e=>{state.issueTagFilter=e.target.value;resetListPage('issues');renderIssues()});
   $('#issueSearch').oninput=e=>{state.issueQuery=e.target.value.trim().toLowerCase();resetListPage('issues');renderIssues()};
   $$('.issue-close').forEach(b=>b.onclick=()=>$('#issueModal').classList.remove('open'));
   $('#issueForm').onsubmit=saveIssue;

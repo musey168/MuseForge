@@ -9,19 +9,17 @@ const code = bundle.slice(start, end);
 const helpers = bundle.slice(bundle.indexOf('function issueDeletePath('), bundle.indexOf('function issueDeletionContextHTML('));
 const visibilityStart = bundle.indexOf('function issueCanDelete(');
 const visibilityEnd = bundle.indexOf('\n}', visibilityStart) + 2;
-const visibility = {issueClarifying: id => id === 'busy'};
+const visibility = {};
 vm.createContext(visibility);
 vm.runInContext(bundle.slice(visibilityStart, visibilityEnd), visibility);
 assert.equal(visibility.issueCanDelete({id:'idle',deletionAllowed:true}),true);
 assert.equal(visibility.issueCanDelete({id:'success',deletionAllowed:false}),false);
-assert.equal(visibility.issueCanDelete({id:'busy',deletionAllowed:true}),false);
 assert.equal(visibility.issueCanDelete({id:'unknown'}),false);
 const closeStart = bundle.indexOf('function issueCanClose(');
 const closeEnd = bundle.indexOf('\n}', closeStart) + 2;
 vm.runInContext(bundle.slice(closeStart, closeEnd), visibility);
 assert.equal(visibility.issueCanClose({id:'settled',closureAllowed:true}),true);
 assert.equal(visibility.issueCanClose({id:'active',closureAllowed:false}),false);
-assert.equal(visibility.issueCanClose({id:'busy',closureAllowed:true}),false);
 async function run({confirm=true, busy=false, fail=false, batch=false, force=false, historyChanged=false}={}) {
  const issue={id:'issue/1',title:'测试需求',source:'tapd',deletionAllowed:true,deletionRequiresForce:force};
  const calls=[];
@@ -29,7 +27,7 @@ async function run({confirm=true, busy=false, fail=false, batch=false, force=fal
  const context={state,issueCanDelete:()=>!busy,issueDeletionBlock:()=>({reason:'正在澄清'}),toast:()=>{},refreshRuns:async()=>{},refreshIssues:async()=>calls.push('refresh issues'),renderIssues:()=>calls.push('render'),closeIssueDrawer:()=>calls.push('close'),
   afConfirm:async opts=>{
    assert(opts.message.includes('后续同步可能重新导入'));
-   assert.equal(opts.message.includes('任务、运行记录、日志、产物和执行工作区'),force);
+   assert.equal(opts.message.includes('执行记录将一并清理'),force);
    assert.equal(opts.confirmText,force?'确认强制删除':'确认删除');
    if(historyChanged)issue.deletionRequiresForce=true;
    return confirm;

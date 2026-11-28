@@ -73,10 +73,6 @@ function projectTAPDReady(project){
     return /tapd/i.test(`${s.id||''} ${s.name||''} ${s.url||''}`);
   });
 }
-function issueCanPushTAPD(issue){
-  if(!issue||trackerRefOf(issue)||(issue.tapdId||'').trim())return false;
-  return projectTAPDReady((state.data.projects||[]).find(p=>p.id===issue.projectId)||currentProject());
-}
 function reqProjectRepositories(){
   const project=currentProject();
   return (state.data.repositories||[]).filter(r=>r.projectId===project?.id);
@@ -368,18 +364,6 @@ function rememberIssue(saved, prevId){
 async function pushExistingIssueToTAPD(issue){
   const updated=await api('/api/sync/create',{method:'POST',body:JSON.stringify({issueId:issue.id,target:'tapd'})});
   return rememberIssue(updated, issue.id);
-}
-async function pushIssueToTAPDFromDetail(issueId){
-  if(!issueId)return;
-  try{
-    const current=(state.data.issues||[]).find(i=>i.id===issueId)||state.issueDetailData?.issue;
-    if(!current)return toast('未找到工作项');
-    if(!projectTAPDReady((state.data.projects||[]).find(p=>p.id===current.projectId)))return toast('当前项目未配置 TAPD，无法同步');
-    const updated=await pushExistingIssueToTAPD(current);
-    renderIssues();
-    toast(`已在 TAPD 创建需求 ${updated.externalRef?.externalId||''}`,'ok');
-    if(state.drawerOpen)openIssueDetail(updated.id);
-  }catch(e){toast(e.message,'err')}
 }
 // createIssueFromChat 直接建单，不再在弹窗里澄清。
 async function createIssueFromChat(target){

@@ -22,21 +22,12 @@ vm.runInContext(slice('function issueStatusIcon(', 'function issueStatusText('),
 vm.runInContext(slice('function issueKeyColumnWidth(', 'function issueTagTone('), ctx);
 
 const tones = [
-  [{ key: 'active', label: '编码实现' }, 'info', 'lamp'],
-  [{ key: 'active', label: '排队中' }, 'info', 'clock'],
-  [{ key: 'waiting', label: '方案设计' }, 'warn', 'user-hold'],
-  [{ key: 'confirm', label: '待确认结论 · 82 分' }, 'warn', 'pending-review'],
-  [{ key: 'clarifying', label: '待澄清' }, 'warn', 'user-hold'],
-  [{ key: 'attention', label: '失败 · 编码实现' }, 'error', 'alert'],
-  [{ key: 'attention', label: '已取消 · 方案设计' }, 'error', 'alert'],
-  [{ key: 'closed', label: 'MR 已合入' }, 'success', 'check'],
-  [{ key: 'closed', label: '交付闭环' }, 'success', 'check'],
+  [{ key: 'active', label: '进行中' }, 'info', 'lamp'],
+  [{ key: 'active', label: '评审中' }, 'info', 'lamp'],
+  [{ key: 'attention', label: '已阻塞' }, 'error', 'alert'],
   [{ key: 'closed', label: '已完成' }, 'success', 'check'],
-  [{ key: 'closed', label: '已合入基线' }, 'success', 'check'],
   [{ key: 'closed', label: '已关闭' }, 'neutral', 'close'],
-  [{ key: 'closed', label: 'MR 已关闭' }, 'neutral', 'close'],
-  [{ key: 'closed', label: '工蜂已关闭' }, 'neutral', 'close'],
-  [{ key: 'not_started', label: '等待执行' }, 'neutral', 'circle'],
+  [{ key: 'not_started', label: '待规划' }, 'neutral', 'circle'],
   [undefined, 'neutral', 'circle'],
 ];
 for (const [stage, tone, icon] of tones) {

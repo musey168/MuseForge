@@ -25,7 +25,7 @@ const repositories = [
   {id:"r2",projectId:"agentflow",name:"agent-test",gongfengProjectId:"example-maintainer/agent-test",defaultBranch:"master",integrateBranch:"",updatedAt:"0001-01-01T00:00:00Z"},
   {id:"r3",projectId:"web-console",name:"web",gongfengProjectId:"web/web",defaultBranch:"main"},
 ];
-const issues = [{projectId:"agentflow",h:"active"},{projectId:"agentflow",h:"active"},{projectId:"agentflow",h:"done"}];
+const issues = [{projectId:"agentflow",status:"in_progress"},{projectId:"agentflow",status:"in_progress"},{projectId:"agentflow",status:"done"}];
 
 // Minimal element stubs for the drawer save path.
 function el(props = {}) {
@@ -54,7 +54,6 @@ const ctx = {
   userById:id=>users.find(u=>u.id===Number(id)),
   userDisplay:u=>u.chineseName||u.loginName,
   userAvatarHTML:u=>`<i>${(u&&u.loginName||"?")[0]}</i>`,
-  issueRunHealth:i=>i.h,
   knownTime:v=>{const d=v?new Date(v):null;return d&&d.getFullYear()>1970?d:null},
   relativeTime:()=>"3 天前",
   defaultRunEval:()=>({enabled:true}),
@@ -80,6 +79,8 @@ for (const name of ["parseGongfengRepoURL","repoDisplayPath","repoProviderLabel"
 vm.runInContext(extract(fs.readFileSync(require("node:path").join(__dirname, "app.js"),"utf8"),"resourceIdProblem"),ctx);
 vm.runInContext(fs.readFileSync(projectsPath,"utf8"),ctx);
 vm.runInContext(fs.readFileSync(drawerPath,"utf8"),ctx);
+// The requirement list module carries the stage helper the project cards read.
+vm.runInContext(fs.readFileSync(issuesPath,"utf8"),ctx);
 vm.runInContext("projectAdminFail=(form,name,message)=>{globalThis.__fail={name,message};return false}",ctx);
 
 // Identity generation.

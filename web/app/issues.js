@@ -6,7 +6,7 @@ function setIssueView(view, rerender=true){
 }
 
 function enhanceIssueFilters(){
-  ['#issueStatusFilter','#issueAssigneeFilter','#sourceFilter'].forEach(sel=>window.enhanceSelect?.($(sel)));
+  ['#issueStatusFilter','#issueAssigneeFilter','#sourceFilter','#issueTagFilter'].forEach(sel=>window.enhanceSelect?.($(sel)));
 }
 
 // Items keep the click handlers app.js assigns; the menu only adds open/close
@@ -95,6 +95,19 @@ function renderIssueAssigneeFilter(projectIssues=[]){
   sel.value=current;
 }
 
+function renderIssueTagFilter(projectIssues=[]){
+  const sel=$('#issueTagFilter');if(!sel)return;
+  const current=state.issueTagFilter||'';
+  const counts=new Map();
+  projectIssues.forEach(i=>issueTagList(i).forEach(tag=>counts.set(tag,(counts.get(tag)||0)+1)));
+  const tags=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+  const meta=n=>n?` data-meta="${n} 条"`:'';
+  let html='<option value="">全部标签</option>';
+  for(const [tag,count] of tags)html+=`<option value="${escapeHTML(tag)}"${meta(count)}${current===tag?' selected':''}>${escapeHTML(tag)}</option>`;
+  sel.innerHTML=html;
+  sel.value=current;
+}
+
 function normalizeIssueTitleSearch(value){
   return String(value||'').normalize('NFKC').toLocaleLowerCase().replace(/[\s\p{P}\p{S}]+/gu,'');
 }
@@ -122,10 +135,11 @@ function filteredIssues(){
       issues=issues.filter(i=>String(i.assigneeUserId)===state.issueAssigneeFilter||String(i.assigneeId)===state.issueAssigneeFilter||(i.sopBindings||[]).some(b=>String(b.assigneeUserId)===state.issueAssigneeFilter));
     }
   }
+  if(state.issueTagFilter)issues=issues.filter(i=>issueTagList(i).includes(state.issueTagFilter));
   const issueFilter=state.issueDeliveryFilter||'';
   if(issueFilter==='mr')issues=issues.filter(i=>pendingDeliveryMRCount(i)>0);
   else if(issueFilter==='active')issues=issues.filter(i=>['in_progress','in_review'].includes(i.status));
-  else if(issueFilter==='attention')issues=issues.filter(i=>['attention','confirm'].includes(issueCurrentStage(i).key));
+  else if(issueFilter==='attention')issues=issues.filter(i=>issueCurrentStage(i).key==='attention');
   if(state.issueQuery){
     issues=issues.filter(i=>issueMatchesQuery(i,projects.find(x=>x.id===i.projectId),state.issueQuery));
   }
@@ -135,10 +149,10 @@ function filteredIssues(){
 
 function renderIssues(){
   const tapdImport=document.querySelector("#importTAPDIssue");if(tapdImport)tapdImport.hidden=!currentProject()?.tapdWorkspaceId;
-  watchClarifyingIssues();
   const projectIssues=(state.data.issues||[]).filter(i=>!state.projectFilter||i.projectId===state.projectFilter);
   renderProjectContext(projectIssues);
   renderIssueAssigneeFilter(projectIssues);
+  renderIssueTagFilter(projectIssues);
   const statusSel=$('#issueStatusFilter');if(statusSel&&statusSel.value!==state.issueStatusFilter)statusSel.value=state.issueStatusFilter||'';
   const issues=filteredIssues();
   syncIssueSelection(issues);
@@ -165,21 +179,13 @@ function renderIssues(){
   bindIssueSelection(visibleIssues);
 }
 
-let clarifyPoll=null;
-function watchClarifyingIssues(){
-  const busy=(state.data.issues||[]).some(i=>i.clarification?.status==='analyzing')||issueClarifyJobs.size>0;
-  if(busy&&!clarifyPoll)clarifyPoll=setInterval(()=>{if(!document.hidden)refreshIssues()},4000);
-  if(!busy&&clarifyPoll){clearInterval(clarifyPoll);clarifyPoll=null}
-}
-
 function issueKanbanCard(i){
   const stage=issueCurrentStage(i);
   const key=issueKeyLabel(i);
-  const needsConfirm=clarificationNeedsConfirm(i);
-  const cardTone=needsConfirm?' needs-confirm':(stage.key==='attention'?' needs-attention':'');
+  const cardTone=stage.key==='attention'?' needs-attention':'';
   return `<article class="kanban-card${cardTone}" draggable="true" data-id="${escapeHTML(i.id)}">
     <div class="kanban-card-top"><b>${escapeHTML(key)}</b>${issueSelectionCheckbox(i)}</div>
-    <h4 title="${escapeHTML(i.title)}">${issueTitleMarkup(i.title)}</h4>
+    <h4 title="${escapeHTML(i.title)}">${issueTagsMarkup(i)}${issueTitleMarkup(i.title)}</h4>
     <div class="kanban-card-meta">
       ${issuePriorityMarkup(i.priority)}
       <span class="kanban-stage ${stage.key}" title="${escapeHTML(stage.hint||'')}">${issueStageBadge(stage)}</span>
@@ -237,17 +243,23 @@ function bindIssueKanban(){
   });
 }
 function issueStatusLabel(value){return ({backlog:'待规划',todo:'待处理',in_progress:'进行中',in_review:'评审中',done:'已完成',blocked:'已阻塞',cancelled:'已取消',closed:'已关闭'}[value]||value||'—')}
+// A requirement's own status drives its stage: no run, no flow and no tracker
+// state can move it.
+function issueCurrentStage(i){
+  const status=String(i?.status||'').toLowerCase();
+  if(status==='blocked')return{key:'attention',label:'已阻塞',hint:'需求被标记为阻塞，需要处理'};
+  if(status==='done'||status==='closed')return{key:'closed',label:issueStatusLabel(status),hint:status==='done'?'需求已完成':'需求已关闭'};
+  if(status==='in_progress'||status==='in_review')return{key:'active',label:issueStatusLabel(status),hint:'需求正在推进'};
+  return{key:'not_started',label:issueStatusLabel(status),hint:'需求尚未开始'};
+}
 function issueStatusIcon(value){return ({backlog:'circle',todo:'clock',in_progress:'user-hold',in_review:'pending-review',done:'check',closed:'close',blocked:'alert',cancelled:'close'}[value]||'circle')}
 function huiIcon(name,cls=''){return `<svg class="agent-icon harness-icon${cls?` ${cls}`:''}" data-icon="${escapeHTML(name)}" width="14" height="14" aria-hidden="true" focusable="false"></svg>`}
-// stage.key alone is not enough: 「已关闭」 shares closed with merged deliveries.
+// stage.key alone is not enough: 「已关闭」 shares closed with a finished requirement.
 function issueStageTone(stage){
   const key=stage?.key||'',label=String(stage?.label||'');
-  if(key==='active')return /排队/.test(label)?{tone:'info',icon:'clock'}:{tone:'info',icon:'lamp'};
-  if(key==='waiting')return {tone:'warn',icon:'user-hold'};
-  if(key==='confirm')return {tone:'warn',icon:'pending-review'};
-  if(key==='clarifying')return {tone:'warn',icon:'user-hold'};
-  if(key==='attention')return {tone:'error',icon:'alert'};
-  if(key==='closed')return ['已完成','交付闭环','MR 已合入','已合入基线'].includes(label)?{tone:'success',icon:'check'}:{tone:'neutral',icon:'close'};
+  if(key==='active')return{tone:'info',icon:'lamp'};
+  if(key==='attention')return{tone:'error',icon:'alert'};
+  if(key==='closed')return label==='已完成'?{tone:'success',icon:'check'}:{tone:'neutral',icon:'close'};
   return {tone:'neutral',icon:'circle'};
 }
 function issueStageBadge(stage){
@@ -288,13 +300,6 @@ function issueStatusText(issue){
 }
 function issueStatusBucket(issue){
   if(!issue)return 'backlog';
-  if((issue.status==='closed'||issueTrackerClosed(issue))&&!issueMergedDelivery(issue))return 'closed';
-  const stage=issueCurrentStage(issue);
-  if(stage.key==='closed'){
-    const label=stage.label||'';
-    if(label==='已关闭'||label==='关闭'||label==='MR 已关闭'||label==='工蜂已关闭')return 'closed';
-    if(label==='已完成'||label==='交付闭环'||label==='MR 已合入'||label==='已合入基线')return 'done';
-  }
   return issue.status||'backlog';
 }
 function issueMatchesStatusFilter(issue,filter){
@@ -331,6 +336,18 @@ function issueTagTone(tag){
   if(/前端|ui|交互/.test(t)) return 'cyan';
   return 'neutral';
 }
+// 需求标签：一条需求可以带多个标签，列表按标签筛选，详情里也显示它们。
+function issueTagList(i){
+  const raw=Array.isArray(i?.tags)?i.tags:(typeof i?.tags==='string'?i.tags.split(/[,，;；\s]+/):[]);
+  return [...new Set(raw.map(t=>String(t||'').trim()).filter(Boolean))];
+}
+function issueTagsMarkup(i){
+  return issueTagList(i).map(t=>`<span class="issue-title-tag tone-${issueTagTone(t)}" title="${escapeHTML(t)}">${escapeHTML(t)}</span>`).join('');
+}
+function parseIssueTags(value){
+  const raw=Array.isArray(value)?value:String(value||'').split(/[,，;；\s]+/);
+  return [...new Set(raw.map(t=>String(t||'').trim()).filter(Boolean))].slice(0,12);
+}
 function issueTitleMarkup(title){
   const tags=[];
   let rest=String(title||'');
@@ -347,15 +364,14 @@ function issueRow(i){
   const issueRepos=[boundRepos.find(x=>x.id===i.repositoryId),...boundRepos.filter(x=>x.id!==i.repositoryId)].filter(Boolean);
   const repo=issueRepos[0],repoLabel=issueRepos.length>1?`${repo?.name||'未绑定'} 等${issueRepos.length}个`:repo?.name||'未绑定';
   const stage=issueCurrentStage(i);
-  const needsConfirm=clarificationNeedsConfirm(i);
-  const rowTone=needsConfirm?' needs-confirm':(stage.key==='attention'?' needs-attention':'');
+  const rowTone=stage.key==='attention'?' needs-attention':'';
   const owner=issueOwnerSummary(i);
   const pri=i.priority||'medium';
   const stageCell=`<div class="issue-stage-cell"><span class="issue-stage-pill ${stage.key}" title="${escapeHTML(stage.hint||'')}">${escapeHTML(stage.label)}</span></div>`;
-  return `<div class="issue-table-row${rowTone}" role="row" data-id="${escapeHTML(i.id)}">${state.issueSelectionMode?`<div class="issue-select-cell">${issueSelectionCheckbox(i)}</div>`:''}<div class="issue-key-cell" title="${escapeHTML(String(issueKeyLabel(i)||''))}">${issueKeyMarkup(i)}</div><div class="issue-title-cell">${issueTitleMarkup(i.title)}</div><div class="issue-source-cell">${issueSourceMarkup(i)}</div><div class="issue-assignee-cell" title="${escapeHTML(owner)}">${issueOwnerAvatar(i)}<span class="issue-assignee-name">${escapeHTML(owner)}</span></div><div class="issue-repository-cell" title="${escapeHTML(issueRepos.map(r=>r.name).join('、')||'未绑定')} · ${escapeHTML(i.baseBranch||repo?.defaultBranch||'')}">${escapeHTML(repoLabel)}</div><div class="issue-priority-cell">${issuePriorityMarkup(i.priority)}</div>${stageCell}<div class="issue-actions-cell">${issueActionButtons(i)}</div></div>`;
+  return `<div class="issue-table-row${rowTone}" role="row" data-id="${escapeHTML(i.id)}">${state.issueSelectionMode?`<div class="issue-select-cell">${issueSelectionCheckbox(i)}</div>`:''}<div class="issue-key-cell" title="${escapeHTML(String(issueKeyLabel(i)||''))}">${issueKeyMarkup(i)}</div><div class="issue-title-cell">${issueTagsMarkup(i)}${issueTitleMarkup(i.title)}</div><div class="issue-source-cell">${issueSourceMarkup(i)}</div><div class="issue-assignee-cell" title="${escapeHTML(owner)}">${issueOwnerAvatar(i)}<span class="issue-assignee-name">${escapeHTML(owner)}</span></div><div class="issue-repository-cell" title="${escapeHTML(issueRepos.map(r=>r.name).join('、')||'未绑定')} · ${escapeHTML(i.baseBranch||repo?.defaultBranch||'')}">${escapeHTML(repoLabel)}</div><div class="issue-priority-cell">${issuePriorityMarkup(i.priority)}</div>${stageCell}<div class="issue-actions-cell">${issueActionButtons(i)}</div></div>`;
 }
 let refreshIssuesPending=null;
-async function refreshIssues(){if(refreshIssuesPending)return refreshIssuesPending;refreshIssuesPending=(async()=>{try{const opt={silent:true};const issues=await api('/api/issues',opt);state.data.issues=issues;renderIssues();if(state.drawerOpen&&state.issueDetailData?.issue?.id){const curId=state.issueDetailData.issue.id,updatedIssue=issues.find(i=>i.id===curId);if(updatedIssue){const keepClarifyStream=state.issueDetailTab==='clarify'&&!!state.issueDetailData.issue.clarification;state.issueDetailData.issue=Object.assign({},state.issueDetailData.issue,updatedIssue);if(!keepClarifyStream)renderIssueDetailTab();}}}catch(e){}});return refreshIssuesPending}
+async function refreshIssues(){if(refreshIssuesPending)return refreshIssuesPending;refreshIssuesPending=(async()=>{try{const opt={silent:true};const issues=await api('/api/issues',opt);state.data.issues=issues;renderIssues();if(state.drawerOpen&&state.issueDetailData?.issue?.id){const curId=state.issueDetailData.issue.id,updatedIssue=issues.find(i=>i.id===curId);if(updatedIssue){state.issueDetailData.issue=Object.assign({},state.issueDetailData.issue,updatedIssue);renderIssueDetailTab();}}}catch(e){}});return refreshIssuesPending}
 function fillIssueRepositories(projectId,selected){
   const f=$('#issueForm'),project=(state.data.projects||[]).find(p=>p.id===projectId),repos=(state.data.repositories||[]).filter(r=>r.projectId===projectId),box=$('#issueRepoChecks');
   if(!box)return;
@@ -425,6 +441,7 @@ function openIssue(issue=null){
   f.elements.projectId.innerHTML=projects.map(p=>`<option value="${p.id}">${escapeHTML(p.name)}</option>`).join('');
   const v=issue||{id:'',projectId:state.projectFilter||projects[0]?.id||'',title:'',description:'',priority:'medium',status:'backlog',repositoryId:'',repositoryIds:[],baseBranch:''};
   ['id','projectId','title','description','priority','status','baseBranch','tapdId'].forEach(k=>f.elements[k].value=v[k]||'');
+  if(f.elements.tags)f.elements.tags.value=issueTagList(v).join(', ');
   f.elements.baseBranch.value=storedIssueWorkBranch(v);
   fillIssueRepositories(v.projectId,(v.repositoryIds&&v.repositoryIds.length)?v.repositoryIds:(v.repositoryId?[v.repositoryId]:null));
   fillIssueAssignees(v.projectId,v.assigneeUserId||'');
@@ -434,11 +451,12 @@ function openIssue(issue=null){
   $('#issueRepoChecks').onchange=refreshIssueBaseBranchInput;
   $('#issueModalTitle').textContent=issue?`${(projects.find(p=>p.id===v.projectId)?.key||'ISS')}-${v.number} ${v.title}`:'新建工作项';
   let stateHtml='';
-  if(v.deliveryState==='merged')stateHtml+=`交付状态：<b>${escapeHTML(deliveryLockedLabel(v))}</b>`;
+  const delivery=deliveryLockedLabel(v);
+  if(delivery==='MR 已合入'||delivery==='已合入基线')stateHtml+=`交付状态：<b>${escapeHTML(delivery)}</b>`;
   if(v.externalRef){stateHtml+=`<br>外部来源: <b>${escapeHTML(v.externalRef.source)}</b> · <a href="${escapeHTML(safeURL(v.externalRef.externalUrl))}" target="_blank" rel="noopener noreferrer">${escapeHTML(v.externalRef.externalId||v.externalRef.externalUrl)}</a>`;}
   const reopenBtn=$('#reopenDeliveredIssue');
   if(reopenBtn){
-    const locked=issue&&deliveryLocked(v);
+    const locked=issue&&issueReopenable(v);
     reopenBtn.hidden=!locked;
     reopenBtn.onclick=locked?()=>reopenDeliveredIssue(issue.id):null;
   }
@@ -466,7 +484,7 @@ function issueFromForm(){
   const source=old.source||(id?'local':syncTarget);
   const repositoryIds=selectedIssueRepositoryIds(),status=f.elements.status.value;
   const closeSource=status==='closed'?(old.status==='closed'?old.closeSource||'manual':'manual'):'';
-  return {...old,id,projectId:f.elements.projectId.value,title:f.elements.title.value.trim(),description:f.elements.description.value,priority:f.elements.priority.value,status,closeSource,source,repositoryId:repositoryIds[0]||'',repositoryIds,baseBranch:f.elements.baseBranch.value.trim(),repositoryBranches:selectedIssueRepositoryBranches(f.elements.baseBranch,$('#issueRepositoryBranches')),assigneeUserId,tapdId:source==='local'?f.elements.tapdId.value.trim():'',externalRef:trackerRefOf(old)||old.externalRef||undefined};
+  return {...old,id,projectId:f.elements.projectId.value,title:f.elements.title.value.trim(),description:f.elements.description.value,priority:f.elements.priority.value,status,closeSource,source,tags:parseIssueTags(f.elements.tags?.value),repositoryId:repositoryIds[0]||'',repositoryIds,baseBranch:f.elements.baseBranch.value.trim(),repositoryBranches:selectedIssueRepositoryBranches(f.elements.baseBranch,$('#issueRepositoryBranches')),assigneeUserId,tapdId:source==='local'?f.elements.tapdId.value.trim():'',externalRef:trackerRefOf(old)||old.externalRef||undefined};
 }
 
 // ParseGongfengRepoURL 与后端 domain.ParseGongfengRepoURL 保持一致：把粘贴的

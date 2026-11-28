@@ -15,12 +15,15 @@ test('the requirement model derives stages, outcomes, and action markup from the
     const closed={...base,status:'closed',closeSource:'manual'};
     return {
       stages:{
-        backlog:issueCurrentStage(base).label,
-        inProgress:issueCurrentStage({...base,status:'in_progress'}).label,
+        backlog:issueCurrentStage(base).key,
+        backlogLabel:issueCurrentStage(base).label,
+        todo:issueCurrentStage({...base,status:'todo'}).key,
+        inProgress:issueCurrentStage({...base,status:'in_progress'}).key,
+        inProgressLabel:issueCurrentStage({...base,status:'in_progress'}).label,
+        inReview:issueCurrentStage({...base,status:'in_review'}).key,
         blocked:issueCurrentStage({...base,status:'blocked'}).key,
         done:issueCurrentStage({...base,status:'done'}).key,
         closed:issueCurrentStage(closed).key,
-        clarifying:issueCurrentStage({...base,clarification:{status:'analyzing'}}).label,
       },
       outcomes:{
         backlog:issueOutcome(base).key,
@@ -36,15 +39,26 @@ test('the requirement model derives stages, outcomes, and action markup from the
       mrButtons:deliveryMRButtons(mrIssue),
       reopen:reopenDeliveredButton(closed),
       removed:['clientIssueLanes','issueActor','issueRunHealth','triggerSOPButton','canRetriggerIssue',
-               'normalizeSOPLane','inferSOPLane','projectSOPBindings','normalizePlaybookList','issueLaneDots']
+               'normalizeSOPLane','inferSOPLane','projectSOPBindings','normalizePlaybookList','issueLaneDots',
+               'issueClarifying','clarificationNeedsConfirm','issueTrackerClosed','issueMergedDelivery',
+               'issueManuallyClosed','deliveryLocked','gongfengIssueClosed']
         .filter(name=>typeof window[name]!=='undefined'),
     };
   })()`));
+  assert.equal(result.stages.backlog, 'not_started');
+  assert.equal(result.stages.backlogLabel, '待规划');
+  assert.equal(result.stages.todo, 'not_started');
+  assert.equal(result.stages.inProgress, 'active');
+  assert.equal(result.stages.inProgressLabel, '进行中');
+  assert.equal(result.stages.inReview, 'active');
   assert.equal(result.stages.blocked, 'attention');
   assert.equal(result.stages.done, 'closed');
   assert.equal(result.stages.closed, 'closed');
+  assert.equal(result.outcomes.backlog, 'idle');
   assert.equal(result.outcomes.closed, '需求已关闭');
   assert.equal(result.outcomes.merged, 'closed');
+  assert.match(result.actions.open, /查看/);
+  assert.equal(result.actions.closed.includes('查看'), false, 'a closed requirement shows only its menu');
   assert.equal(result.mrList[0].iid, 17);
   assert.equal(result.mrLabel, 'MR 已合入');
   assert.match(result.mrButtons, /merge_requests\/17/);

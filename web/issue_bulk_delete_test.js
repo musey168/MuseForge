@@ -19,7 +19,7 @@ function setup(items, options = {}) {
   const state = {data:{issues:items, tasks:items.map(i => ({id:`task-${i.id}`, issueId:i.id}))},
     issueSelectionMode:false, issueSelection:new Set(), issueBulkDeleting:false, issueView:'table'};
   const c = {state, Set, escapeHTML, $:s => s === '#issueBulkActions' ? host : s === '#startIssueSelection' ? (buttons[s] ||= {}) : root,
-    issueCanDelete:i => i?.deletionAllowed === true && i.clarification?.status !== 'analyzing',
+    issueCanDelete:i => i?.deletionAllowed === true,
     issueDeletionBlock:i => i.deletionBlock || {reason:'暂时无法确认删除条件，请刷新后重试'},
     issueDeletionContextHTML:() => '', bindIssueDeletionContext:() => {},
     filteredIssues:() => state.data.issues.filter(i => !state.projectFilter || i.projectId === state.projectFilter),
@@ -105,7 +105,7 @@ const deletes = f => f.calls.filter(call => call[1] === 'DELETE');
   assert.deepEqual(deletes(f),[['/api/issues/a%2F1?force=true','DELETE'],['/api/issues/b','DELETE']]);
   assert.equal(f.calls.filter(c => c[0] === 'confirm').length,1);
   assert.match(f.calls[0][1].message,/后续同步可能重新导入/);
-  assert.match(f.calls[0][1].message,/其中 1 条.*工作区将一并清理/);
+  assert.match(f.calls[0][1].message,/其中 1 条.*执行记录将一并清理/);
   assert.equal(f.calls[0][1].confirmText,'确认强制删除 2 条需求');
   assert.equal(f.calls.filter(c => c[0] === 'close').length,1);
   assert.equal(f.state.issueDetailData,null);
