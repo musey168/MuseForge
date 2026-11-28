@@ -38,3 +38,17 @@ test('the requirement list renders the surviving columns and no dispatch control
   assert.equal(head.includes('进度'), false);
   assert.equal(app.document.querySelector('#dispatchIssue'), null);
 });
+
+// The refresh button and every view change have to see the current list: a
+// single in-flight fetch may be shared, but it must not latch forever.
+test('refreshing the requirement list fetches again after the first load', async (t) => {
+  const app = await loadApp();
+  t.after(app.close);
+  const before = app.router.calls.filter(c => c.path === '/api/issues' && c.method === 'GET').length;
+  app.evaluate(`refreshIssues()`);
+  await settle(4);
+  app.evaluate(`refreshIssues()`);
+  await settle(4);
+  const after = app.router.calls.filter(c => c.path === '/api/issues' && c.method === 'GET').length;
+  assert.equal(after - before, 2, 'each refresh must fetch the list');
+});

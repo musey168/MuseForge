@@ -158,3 +158,16 @@ test('credential management still issues, shows and revokes reporting credential
   assert.equal(call.body.expiresInDays, 30);
   assert.equal(dialog.querySelector('[data-token]').value, 'secret-token');
 });
+
+// The cost panel reads the summary's total, not only a row's own amount: a
+// reported cost must show as the total, never as ¥0.00.
+test('the cost panel shows the summary total', async (t) => {
+  const app = await loadApp();
+  t.after(app.close);
+  const html = app.evaluate(`(() => {
+    state.usage = { summary: { totalCostUsd: 0.25, totalCostCny: 1.75, costCurrency: 'CNY', usdToCny: 7,
+      costReportedUsd: 0.25, costEstimatedUsd: 0, costCoveragePct: 100, reportedExecutions: 1, executions: 1 }, trend: [], models: [], providers: [], workflows: [], executions: [] };
+    return obsUsageCostPanel();
+  })()`);
+  assert.match(html, /¥1\.75/, html);
+});

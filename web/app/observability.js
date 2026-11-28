@@ -167,9 +167,11 @@ function obsUsageIsEmpty(){
 }
 // 费用按阅读者货币显示；无法确定的费用不写成 0。
 function obsUsageCurrency(){return obsUsageSummary().costCurrency||'CNY'}
+// One amount, from whichever shape carries it: an execution row names its own
+// cost, the summary names the total.
 function obsUsageAmount(source,currency){
   const cur=currency||obsUsageCurrency();
-  const value=cur==='USD'?source?.costUsd:source?.costCny;
+  const value=cur==='USD'?(source?.costUsd??source?.totalCostUsd):(source?.costCny??source?.totalCostCny);
   return Number(value||0);
 }
 function obsUsageMoney(value,currency){

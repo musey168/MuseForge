@@ -314,7 +314,24 @@ function issueRow(i){
   return `<div class="issue-table-row${rowTone}" role="row" data-id="${escapeHTML(i.id)}">${state.issueSelectionMode?`<div class="issue-select-cell">${issueSelectionCheckbox(i)}</div>`:''}<div class="issue-key-cell" title="${escapeHTML(String(issueKeyLabel(i)||''))}">${issueKeyMarkup(i)}</div><div class="issue-title-cell">${issueTagsMarkup(i)}${issueTitleMarkup(i.title)}</div><div class="issue-source-cell">${issueSourceMarkup(i)}</div><div class="issue-assignee-cell" title="${escapeHTML(owner)}">${issueOwnerAvatar(i)}<span class="issue-assignee-name">${escapeHTML(owner)}</span></div><div class="issue-repository-cell" title="${escapeHTML(issueRepos.map(r=>r.name).join('、')||'未绑定')} · ${escapeHTML(i.baseBranch||repo?.defaultBranch||'')}">${escapeHTML(repoLabel)}</div><div class="issue-priority-cell">${issuePriorityMarkup(i.priority)}</div>${stageCell}<div class="issue-actions-cell">${issueActionButtons(i)}</div></div>`;
 }
 let refreshIssuesPending=null;
-async function refreshIssues(){if(refreshIssuesPending)return refreshIssuesPending;refreshIssuesPending=(async()=>{try{const opt={silent:true};const issues=await api('/api/issues',opt);state.data.issues=issues;renderIssues();if(state.drawerOpen&&state.issueDetailData?.issue?.id){const curId=state.issueDetailData.issue.id,updatedIssue=issues.find(i=>i.id===curId);if(updatedIssue){state.issueDetailData.issue=Object.assign({},state.issueDetailData.issue,updatedIssue);renderIssueDetailTab();}}}catch(e){}});return refreshIssuesPending}
+// One fetch at a time, but never latched: the refresh button, a view change and
+// a write all have to see the current list.
+async function refreshIssues(){
+  if(refreshIssuesPending)return refreshIssuesPending;
+  refreshIssuesPending=(async()=>{
+    try{
+      const issues=await api('/api/issues',{silent:true});
+      state.data.issues=issues;
+      renderIssues();
+      if(state.drawerOpen&&state.issueDetailData?.issue?.id){
+        const curId=state.issueDetailData.issue.id,updatedIssue=issues.find(i=>i.id===curId);
+        if(updatedIssue){state.issueDetailData.issue=Object.assign({},state.issueDetailData.issue,updatedIssue);renderIssueDetailTab()}
+      }
+    }catch(e){}
+    finally{refreshIssuesPending=null}
+  })();
+  return refreshIssuesPending;
+}
 function fillIssueRepositories(projectId,selected){
   const f=$('#issueForm'),project=(state.data.projects||[]).find(p=>p.id===projectId),repos=(state.data.repositories||[]).filter(r=>r.projectId===projectId),box=$('#issueRepoChecks');
   if(!box)return;
