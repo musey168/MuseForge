@@ -20,6 +20,29 @@ test('personal settings lists a managed Git credential even without personal Git
   assert.equal(group.querySelector('.credential-group-note').hidden, false);
 });
 
+test('personal settings has no assistant preferences section', async (t) => {
+  const app = await loadApp();
+  t.after(app.close);
+  app.evaluate(`
+    state.currentUser={...state.data.users[0],id:1,isGuest:false,codeBuddyApiKeyConfigured:true};
+    state.data.users[0]=state.currentUser;
+    renderPersonalSettings();
+  `);
+  await settle(4);
+  const panel = app.document.querySelector('#credentialPanel');
+  assert.ok(panel, 'the credential panel renders');
+  assert.equal(panel.querySelector('[data-credential-defaults]'), null, 'the assistant preferences section is gone');
+  assert.equal(panel.textContent.includes('AI 默认设置'), false);
+  assert.equal(panel.textContent.includes('默认执行器'), false);
+  assert.equal(panel.textContent.includes('操作确认方式'), false);
+  for (const name of ['paintCredentialDefaults','loadCredentialDefaults','saveCredentialDefaults',
+    'credentialDefaultsHeader','credentialDefaultField','credentialDefaultValues',
+    'syncCredentialDefaultActions','paintCredentialDefaultEffort','credentialDefaultsExecutor',
+    'credentialDefaultOptions']) {
+    assert.equal(app.evaluate(`typeof window['${name}']`), 'undefined', `${name} is gone`);
+  }
+});
+
 test('credential wizard selects a provider, validates input, saves, and finishes', async (t) => {
   const app = await loadApp();
   t.after(app.close);
