@@ -1,4 +1,5 @@
-name: loopforge
+# The Compose project names the container, network and volumes: museforge_*.
+name: museforge
 services:
   mysql:
     # MySQL stays supported next to SQLite. It is opt-in: start it with the
