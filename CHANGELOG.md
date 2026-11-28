@@ -5,6 +5,23 @@ GitHub release once the `platform` workflow succeeded on that commit. The `local
 edition has its own `local-vX.Y.Z` tags, published by the `release-local` workflow.
 Entries below `1.0.0` describe the platform this repository came from.
 
+## 1.0.1 — the console matches the trim
+
+Found by deploying 1.0.0 the documented way and looking at the running console.
+
+- The requirement list no longer has a 责任人 column or a 全部责任人 filter, and the
+  detail panel no longer has 统计关联 TAPD or 继续开发分支. The personal build has one
+  identity and runs no work, so those fields only ever read 未指定 and 未绑定. (#6, #10)
+- A GitLab-imported requirement is labelled **GitLab** in the list, on its chip and in
+  the 来源 filter. It used to read 平台新建, because the console only knew GitHub and
+  工蜂 while the backend had recorded `source=gitlab` since #15. (#15)
+- The Compose project is `museforge`, so a fresh install names the container
+  `museforge-platform-1` and the volume `museforge_platform-data` instead of
+  `loopforge-*`. The data lives in the bind mount `.env` points at, so renaming keeps
+  it.
+- The repository hint says what the token is for — importing and refreshing
+  requirements — instead of a per-requirement identity and a LOOP that never runs.
+
 ## 1.0.0 — the personal project board
 
 MuseForge is the personal edition of the platform this repository came from; the
