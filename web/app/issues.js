@@ -62,31 +62,15 @@ function renderIssueAssigneeFilter(projectIssues=[]){
   const owner=project?userById(project.ownerId):null;
   if(owner)userMap.set(String(owner.id),userDisplay(owner));
   projectIssues.forEach(i=>{
-    if(i.assigneeUserId){
-      const uid=String(i.assigneeUserId);
-      if(!userMap.has(uid)){
-        const u=userById(i.assigneeUserId);
-        userMap.set(uid, u?userDisplay(u):`用户 ${uid}`);
-      }
-    }else if(i.assigneeId&&i.assigneeType==='agent'){
-      const aid=String(i.assigneeId);
-      if(!userMap.has(aid)){
-        const a=(state.data.agents||[]).find(x=>x.id===aid);
-        userMap.set(aid, a?.name?`Agent: ${a.name}`:`Agent: ${aid}`);
-      }
-    }
-    (i.sopBindings||[]).forEach(b=>{
-      const uid=Number(b.assigneeUserId)||0;
-      if(!uid)return;
-      const key=String(uid);
-      if(userMap.has(key))return;
-      const u=userById(uid);
-      userMap.set(key, u?userDisplay(u):`用户 ${key}`);
-    });
+    if(!i.assigneeUserId)return;
+    const uid=String(i.assigneeUserId);
+    if(userMap.has(uid))return;
+    const u=userById(i.assigneeUserId);
+    userMap.set(uid, u?userDisplay(u):`用户 ${uid}`);
   });
-  const owns=(i,id)=>String(i.assigneeUserId)===id||String(i.assigneeId)===id||(i.sopBindings||[]).some(b=>String(b.assigneeUserId)===id);
+  const owns=(i,id)=>String(i.assigneeUserId)===id;
   const meta=n=>n?` data-meta="${n} 条"`:'';
-  const unassigned=projectIssues.filter(i=>!i.assigneeUserId&&!i.assigneeId&&!(i.sopBindings||[]).some(b=>b.assigneeUserId)).length;
+  const unassigned=projectIssues.filter(i=>!i.assigneeUserId).length;
   let html=`<option value="">全部责任人</option><option value="unassigned"${meta(unassigned)}${current==='unassigned'?' selected':''}>未指定责任人</option>`;
   for(const [id, label] of userMap.entries()){
     html+=`<option value="${escapeHTML(id)}"${meta(projectIssues.filter(i=>owns(i,id)).length)}${current===id?' selected':''}>${escapeHTML(label)}</option>`;
@@ -130,9 +114,9 @@ function filteredIssues(){
   if(state.issueStatusFilter)issues=issues.filter(i=>issueMatchesStatusFilter(i,state.issueStatusFilter));
   if(state.issueAssigneeFilter){
     if(state.issueAssigneeFilter==='unassigned'){
-      issues=issues.filter(i=>!i.assigneeUserId&&!i.assigneeId&&!(i.sopBindings||[]).some(b=>b.assigneeUserId));
+      issues=issues.filter(i=>!i.assigneeUserId);
     }else{
-      issues=issues.filter(i=>String(i.assigneeUserId)===state.issueAssigneeFilter||String(i.assigneeId)===state.issueAssigneeFilter||(i.sopBindings||[]).some(b=>String(b.assigneeUserId)===state.issueAssigneeFilter));
+      issues=issues.filter(i=>String(i.assigneeUserId)===state.issueAssigneeFilter);
     }
   }
   if(state.issueTagFilter)issues=issues.filter(i=>issueTagList(i).includes(state.issueTagFilter));
@@ -288,9 +272,8 @@ function issueSourceMarkup(i){
 }
 // 与顶栏、项目成员保持一致：复用统一头像组件（真实头像 + 首字回退），不再自绘姓氏。
 function issueOwnerAvatar(i){
-  if(!i.assigneeUserId&&i.assigneeId&&i.assigneeType==='agent')return `<span class="hui-avatar is-agent" aria-hidden="true">${huiIcon('robot')}</span>`;
   // 未指定责任人时只留「未指定」文字，不再额外画一个占位头像框。
-  if(!i.assigneeUserId&&!i.assigneeId)return '';
+  if(!i.assigneeUserId)return '';
   const user=i.assigneeUserId?userById(i.assigneeUserId):null;
   if(!user)return `<span class="hui-avatar is-empty" aria-hidden="true">${huiIcon('user')}</span>`;
   return `<span class="issue-assignee-avatar">${userAvatarHTML(user,48)}</span>`;
