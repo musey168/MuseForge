@@ -767,7 +767,12 @@ async function boot(){
 
   const shell = await api('/api/bootstrap', {silent: true});
   state.data = Object.assign(state.data, shell);
-  // There is one account and no sign-in: the bootstrap names it.
+  // There is one account and no sign-in: the bootstrap names it. A fresh
+  // database has none yet, so ask the platform to record one now.
+  if(!(state.data.users||[]).length){
+    const account=await api('/api/account',{method:'POST',silent:true,body:'{}'});
+    if(account&&account.id)state.data.users=[account];
+  }
   if(!state.currentUser && (state.data.users||[]).length) state.currentUser = state.data.users[0];
   const savedProject=urlParams.get('projectId')||localStorage.getItem('agentflow.activeProject');
   state.projectFilter=(state.data.projects||[]).some(p=>p.id===savedProject)?savedProject:defaultProjectId(state.data.projects,state.currentUser?.id);

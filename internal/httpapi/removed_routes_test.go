@@ -582,6 +582,7 @@ var personalRoutes = []struct {
 	method string
 	path   string
 }{
+	{"POST", "/api/account"},
 	{"GET", "/api/auth/github"},
 	{"PUT", "/api/auth/github/config"},
 	{"POST", "/api/auth/github/device"},

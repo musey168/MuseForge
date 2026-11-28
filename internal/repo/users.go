@@ -119,6 +119,34 @@ func (r *UsersRepo) userQuery(where string, args ...any) (domain.User, bool) {
 	return row.toDomain(), true
 }
 
+// CreateAccount records the platform's single account. The personal build has
+// no sign-in, so the account is created the first time the person opens the
+// console — not at startup, and not from a migration.
+//
+// An account that already exists is returned unchanged, so the call is safe to
+// repeat.
+func (r *UsersRepo) CreateAccount(loginName string) (domain.User, error) {
+	if account, ok := r.Account(); ok {
+		return account, nil
+	}
+	loginName = strings.TrimSpace(loginName)
+	if loginName == "" {
+		loginName = "me"
+	}
+	if _, ok := r.UserByLoginName(loginName); ok {
+		return domain.User{}, fmt.Errorf("账号 %s 已存在", loginName)
+	}
+	account := domain.User{LoginName: loginName}
+	if err := r.PutUser(account); err != nil {
+		return domain.User{}, err
+	}
+	saved, ok := r.UserByLoginName(loginName)
+	if !ok {
+		return domain.User{}, fmt.Errorf("账号 %s 创建后读不回来", loginName)
+	}
+	return saved, nil
+}
+
 func (r *UsersRepo) Users() []domain.User {
 	var rows []userWithConfig
 	if err := r.DB.Raw(`SELECT ` + userSelectColumns + ` FROM users u LEFT JOIN user_configs c ON c.user_id=u.id ORDER BY u.login_name ASC`).Scan(&rows).Error; err != nil {

@@ -12,19 +12,10 @@ async function refreshRunners(silent){
   if(state.runnerProjectId!==projectId)renderRunnersView();
   void ensureRunnerBindCode(silent);
   try{
-    const [runners,def]=await Promise.all([
-      api('/api/runners'+(query||'?mine=1'),{silent:true}),
-      api('/api/runners/default'+query,{silent:true})
-    ]);
+    const runners=await api('/api/runners'+(query||'?mine=1'),{silent:true});
     if(request!==runnerRefreshRequest||projectId!==(currentProject()?.id||''))return;
     state.runners=runners||[];
     state.runnerProjectId=projectId;
-    state.defaultRunnerId=def?.runnerId||'';
-    state.personalDefaultRunnerId=def?.personalRunnerId??state.defaultRunnerId;
-    state.projectDefaultRunnerId=def?.projectRunnerId||'';
-    state.projectRunnerMode=def?.projectRunnerMode||'';
-    state.platformRunner=def?.platformRunner||null;
-    state.minRunnerVersion=def?.minRunnerVersion||'';
     renderRunnersView();
   }catch(e){if(!silent)toast(e.message)}
 }
@@ -115,24 +106,6 @@ function runnerProjectWritable(project){
   const userId=Number(state.currentUser?.id)||0;
   return !!(userId>0&&project&&!project.archivedAt&&Number(project.ownerId)===userId);
 }
-function platformRunnerCardHTML(runner,isDefault,canSetDefault){
-  const name=escapeHTML(runner.name||'平台执行机器（云端）');
-  return `<article class="runner-card runner-platform-card panel ${isDefault?'is-default':''}">
-    <div class="runner-platform-main">
-      <span class="runner-machine-icon" aria-hidden="true">${huiIcon('server')}</span>
-      <div class="runner-card-title">
-        <div class="runner-card-name"><b title="${name}">${name}</b><span class="runner-tag">平台自带</span>${isDefault?'<span class="runner-tag default">此项目默认</span>':''}</div>
-      </div>
-    </div>
-    <div class="runner-platform-controls">
-      ${runnerStatusLabel(runner.status)}
-      <span class="runner-platform-sep" aria-hidden="true"></span>
-      ${limit}
-      ${runnerPrivilegedSandboxHTML(runner,runner.canEditLimit,true)}
-      ${canSetDefault?`<button type="button" class="button small ${isDefault?'ghost runner-text-button':'hui-btn-soft'}" data-runner-platform-default>${isDefault?'清除项目默认':'设为项目默认'}</button>`:''}
-    </div>
-  </article>`;
-}
 function renderRunnersView(){
   const list=$('#runnersList');if(!list)return;
   const host=location.host;
@@ -156,41 +129,23 @@ function renderRunnersView(){
   const project=currentProject();
   const projectId=project?.id||'';
   const projectLoaded=state.runnerProjectId===projectId;
-  const canSetMode=projectLoaded&&!!projectId&&runnerProjectWritable(project);
-  const projectMode=projectLoaded?state.projectRunnerMode||'':'';
-  const platform=projectLoaded?state.platformRunner:null;
   const own=r=>r.ownerUserId===state.currentUser?.id;
   const runners=(state.runners||[]).filter(r=>own(r)||projectLoaded);
-  const personalDefaultId=state.personalDefaultRunnerId??state.defaultRunnerId??'';
-  const projectDefaultId=projectLoaded?state.projectDefaultRunnerId||'':'';
-  const defaultId=projectLoaded?state.defaultRunnerId||'':'';
   $('#runnerCount').textContent=String(runners.length);
   const focusedMenu=document.activeElement?.dataset.runnerRuntimeMenu;
   const focusedUpdate=document.activeElement?.dataset.runnerCheckUpdate;
-  const focusedPlatform=document.activeElement?.hasAttribute('data-runner-platform-default');
   closeRunnerRuntimeMenu();
-  const platformSection=$('#platformRunnerSection');
-  const platformHost=$('#platformRunnerHost');
-  if(platformSection&&platformHost){
-    platformSection.hidden=!platform;
-    platformHost.innerHTML=platform?platformRunnerCardHTML(platform,projectMode==='platform',canSetMode):'';
-  }
   const runnerCards=runners.map(r=>{
-    const isDefault=r.id===defaultId;
     const discoveredCLIs=(r.runtimes||[]).filter(rt=>runnerCLILabels[rt.provider]);
     const cliRows=discoveredCLIs.map(rt=>runnerRuntimeHTML(r,rt)).join('');
-    const isPersonalDefault=r.id===personalDefaultId;
-    const isProjectDefault=r.id===projectDefaultId;
-    const canSetProjectDefault=projectLoaded&&projectId&&r.canUseInProject&&!isProjectDefault;
     const cliSection=cliRows||'<div class="runner-runtime-empty">未发现支持的 Agent CLI</div>';
     const osLabel=runnerOSLabels[r.os]||r.os||'?';
-    const defaultBlocker=runnerDefaultBlocker(r);
     const checking=runnerMaintenancePending.has(r.id);
-    return `<article class="runner-card panel ${isDefault?'is-default':''}">
+    return `<article class="runner-card panel">
       <div class="runner-card-head">
         <span class="runner-machine-icon" aria-hidden="true">${huiIcon('monitor')}</span>
         <div class="runner-card-title">
-          <div class="runner-card-name"><b title="${escapeHTML(r.name||r.id)}">${escapeHTML(r.name||r.id)}</b>${isProjectDefault?'<span class="runner-tag default">此项目默认</span>':isPersonalDefault?'<span class="runner-tag default">个人默认</span>':''}</div>
+          <div class="runner-card-name"><b title="${escapeHTML(r.name||r.id)}">${escapeHTML(r.name||r.id)}</b></div>
           <small>${escapeHTML(osLabel)} · ${escapeHTML(r.arch||'?')} · Runner ${escapeHTML(r.runnerVersion||'未知')}</small>
         </div>
         <div class="runner-head-actions">${runnerStatusLabel(r.status,r.lastSeenAt)}<button class="button ghost runner-check-update" type="button" data-runner-check-update="${escapeHTML(r.id)}" ${r.status!=='online'?'disabled':checking?'aria-disabled="true"':''}>${huiIcon(checking?'arc-spinner':'refresh')}${checking?'处理中…':'检查更新'}</button></div>
@@ -201,27 +156,12 @@ function renderRunnersView(){
       </div>
       <div class="runner-card-action">
         <span class="runner-card-spacer"></span>
-        ${isPersonalDefault?'<button class="button ghost small runner-text-button" type="button" data-set-default="">清除个人默认</button>':''}
         ${r.status==='online'?'':`<button class="button ghost small runner-text-button" type="button" data-remove-runner="${escapeHTML(r.id)}" title="机器已不再使用时移除绑定">移除</button>`}
-        ${!isPersonalDefault?`<button class="button hui-btn-soft small" type="button" ${defaultBlocker?`disabled title="${escapeHTML(defaultBlocker)}"`:''} data-set-default="${escapeHTML(r.id)}">设为个人默认</button>`:''}
-        ${isProjectDefault?'<button class="button ghost small runner-text-button" type="button" data-set-project-default="">清除项目默认</button>':''}
-        ${canSetProjectDefault?`<button class="button hui-btn-soft small" type="button" ${defaultBlocker?`disabled title="${escapeHTML(defaultBlocker)}"`:''} data-set-project-default="${escapeHTML(r.id)}">设为项目默认</button>`:''}
       </div>
     </article>`;
   }).join('');
   list.innerHTML=runnerCards||'<div class="runner-empty"><b>还没有机器</b><span>执行上方命令后自动出现</span></div>';
-  const platformDefault=platformHost?.querySelector('[data-runner-platform-default]');
-  if(platformDefault){
-    platformDefault.onclick=()=>setDefaultRunner('',projectId,projectMode==='platform'?'':'platform');
-    if(focusedPlatform)platformDefault.focus({preventScroll:true});
-  }
   // Bind click handlers via JS (CSP blocks inline onclick attributes).
-  list.querySelectorAll('[data-set-default]').forEach(btn=>btn.onclick=()=>{
-    setDefaultRunner(btn.dataset.setDefault||'');
-  });
-  list.querySelectorAll('[data-set-project-default]').forEach(btn=>{
-    btn.onclick=()=>setDefaultRunner(btn.dataset.setProjectDefault,projectId);
-  });
   list.querySelectorAll('[data-remove-runner]').forEach(btn=>btn.onclick=()=>removeRunner(btn.dataset.removeRunner));
   list.querySelectorAll('[data-runner-cli]').forEach(cb=>cb.onchange=()=>{
     cb.closest('.runner-runtime-row')?.classList.toggle('off',!cb.checked);
@@ -252,7 +192,7 @@ function renderRunnersView(){
     btn.onclick=()=>checkRunnerUpdate(btn.dataset.runnerCheckUpdate);
     if(!btn.disabled&&btn.dataset.runnerCheckUpdate===focusedUpdate)btn.focus({preventScroll:true});
   });
-  [platformHost,list].forEach(el=>el&&window.AgentFlowHarnessIcons?.hydrate?.(el));
+  list&&window.AgentFlowHarnessIcons?.hydrate?.(list);
   if(!runnerRefreshTimer)runnerRefreshTimer=setInterval(()=>{
     if(!document.hidden&&activeViewName()==='runners'&&!runnerRuntimeTrigger&&!$('#confirmModal.open')&&!document.activeElement?.matches?.('[data-runner-auth],[data-runner-key-help]'))refreshRunners(true);
   },15000);
@@ -265,8 +205,7 @@ async function removeRunner(runnerId){
     toast('已移除','ok');refreshRunners(true);
   }catch(err){toast(err.message)}
 }
-// Mirrors domain.Runner.DefaultSelectionBlocker so the page and
-// PUT /api/runners/default refuse the same machines with the same reason.
+// Compares dotted numeric versions; a malformed version counts as older.
 function runnerVersionAtLeast(have,want){
   const parse=v=>{const parts=String(v||'').trim().replace(/^v/,'').split('.');return parts.every(p=>/^\d+$/.test(p))?parts.map(Number):null};
   const h=parse(have),w=parse(want);
@@ -275,23 +214,7 @@ function runnerVersionAtLeast(have,want){
   for(let i=0;i<w.length;i++){const hv=h[i]||0;if(hv!==w[i])return hv>w[i]}
   return true;
 }
-function runnerDefaultBlocker(r){
-  if(r.status!=='online')return '机器离线';
-  const min=state.minRunnerVersion||'';
-  if(min&&!runnerVersionAtLeast(r.runnerVersion,min))return `执行机器版本 ${r.runnerVersion||'未知'} 过低，需升级至 ${min} 及以上`;
-  return '';
-}
 let runnerPreferenceSaving=false;
-async function setDefaultRunner(runnerId,projectId='',mode=''){
-  if(runnerPreferenceSaving)return;
-  runnerPreferenceSaving=true;
-  try{
-    const query=projectId?`?projectId=${encodeURIComponent(projectId)}`:'';
-    const out=await api('/api/runners/default'+query,{method:'PUT',body:JSON.stringify(mode?{mode}:{runnerId,mode})});
-    toast(out?.message||'已更新','ok');await refreshRunners(true);
-  }catch(err){toast(err.message)}
-  finally{runnerPreferenceSaving=false}
-}
 function toggleRunnerRuntime(runnerId,provider,enabled){
   return runnerRuntimeRequest(runnerId,provider,enabled?'online':'disabled');
 }
@@ -316,14 +239,16 @@ async function setRunnerRuntimeAuth(runnerId,provider,authMode){
     renderRunnersView();
   }
 }
+// The model probe answers which models a machine's CLI can reach.
 async function testRunnerRuntime(runnerId,provider){
   const key=`${runnerId}|${provider}`;
   if(runnerRuntimeTests.has(key)||runnerAuthChanges.has(key))return;
   runnerRuntimeTests.add(key);
   renderRunnersView();
   try{
-    await api('/api/runners/runtimes/test',{method:'POST',silent:true,body:JSON.stringify({runnerId,provider})});
-    toast(`${runnerCLILabels[provider]} 测试通过`,'ok');
+    const result=await api(`/api/runners/${encodeURIComponent(runnerId)}/models/probe`,{method:'POST',silent:true,body:JSON.stringify({provider,useSaved:false})});
+    const count=Array.isArray(result?.models)?result.models.length:0;
+    toast(count?`${runnerCLILabels[provider]} 可用 ${count} 个模型`:`${runnerCLILabels[provider]} 没有返回模型`,'ok');
   }catch(err){toast(`${runnerCLILabels[provider]}：${err.message}`,'err',5000)}
   finally{
     runnerRuntimeTests.delete(key);
