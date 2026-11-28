@@ -5,25 +5,25 @@ import (
 	"testing"
 )
 
-func TestIssueIdentityBlockTAPD(t *testing.T) {
+func TestIssueIdentityBlockGitHub(t *testing.T) {
 	issue := Issue{
-		ID:     "tapd-1010000000100001887",
-		Source: "tapd",
+		ID:     "gh-42",
+		Source: "github",
 		ExternalRef: &ExternalRef{
-			Source:       "tapd",
-			ExternalID:   "1010000000100001887",
-			ExternalType: "story",
-			ExternalURL:  "https://tapd.example.com/tapd_fe/10000000/story/detail/1010000000100001887",
+			Source:       "github",
+			ExternalID:   "42",
+			ExternalType: "issue",
+			ExternalURL:  "https://github.com/acme/app/issues/42",
 		},
 	}
 	got := issue.IdentityBlock()
 	for _, want := range []string{
 		"需求身份（平台权威，禁止忽略）",
-		"平台工作项：tapd-1010000000100001887",
-		"来源：TAPD",
-		"类型：story",
-		"外部 ID：1010000000100001887",
-		"https://tapd.example.com/tapd_fe/10000000/story/detail/1010000000100001887",
+		"平台工作项：gh-42",
+		"来源：GitHub",
+		"类型：issue",
+		"外部 ID：42",
+		"https://github.com/acme/app/issues/42",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("identity block missing %q:\n%s", want, got)

@@ -4,13 +4,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
 )
 
@@ -18,13 +15,12 @@ import (
 // engine: the stamped index renders with an explicit 200 even though gin's
 // NoRoute preset is 404, and missing assets still return a real 404.
 func TestStaticRoutes(t *testing.T) {
-	root := t.TempDir()
 	s, err := repo.OpenTest()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	for _, tc := range []struct {
 		path     string
 		wantCT   string
@@ -32,15 +28,8 @@ func TestStaticRoutes(t *testing.T) {
 	}{
 		{"/", "text/html", 200},
 		{"/index.html", "text/html", 200},
-		{"/vscode.html", "text/html", 200},
-		{"/vscode.js", "javascript", 200},
-		{"/vscode-web/out/vs/loader.js", "javascript", 200},
-		{"/extensions/agentflow-workspace/package.json", "json", 200},
 		{"/app.js", "javascript", 200},
 		{"/app/start.js", "javascript", 200},
-		{"/bot-bind.html", "text/html", 200},
-		{"/bot-approve.html", "text/html", 200},
-		{"/bot-approve.js", "javascript", 200},
 		{"/no-such-file.js", "", 404},
 		{"/no/such/dir/", "", 404},
 	} {

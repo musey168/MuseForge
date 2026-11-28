@@ -71,11 +71,8 @@ type AnalyticsSummary struct {
 	// of TotalRuns and every run status or duration metric.
 	ConversationWorkspaces int `json:"conversationWorkspaces"`
 	// ConversationLinkedWorkspaces have a requirement linked.
-	ConversationLinkedWorkspaces int `json:"conversationLinkedWorkspaces"`
-	ConversationIssues           int `json:"conversationIssues"`
-	// Of ConversationIssues, those with a submitted MR and those whose MR
-	// merged to the default branch. Unlike Delivery, also set in overview scope.
-	ConversationIssuesWithMR          int     `json:"conversationIssuesWithMr"`
+	ConversationLinkedWorkspaces      int     `json:"conversationLinkedWorkspaces"`
+	ConversationIssues                int     `json:"conversationIssues"`
 	ConversationIssuesDelivered       int     `json:"conversationIssuesDelivered"`
 	ConversationTokens                int64   `json:"conversationTokens"`
 	ConversationCostUSD               float64 `json:"conversationCostUsd"`
@@ -129,11 +126,6 @@ type AnalyticsSummary struct {
 	WeeklyDeliveredIssues    int     `json:"weeklyDeliveredIssues"`
 	WeeklyActiveContributors int     `json:"weeklyActiveContributors"`
 	WeeklyThroughputPerUser  float64 `json:"weeklyThroughputPerUser"`
-
-	// MergedMRs counts unique linked work MRs by their actual merge time.
-	MergedMRs int `json:"mergedMrs"`
-	// MergedMRsMissingTime cannot be assigned to the requested date window.
-	MergedMRsMissingTime int `json:"mergedMrsMissingTime"`
 }
 
 type AnalyticsTrendPoint struct {
@@ -156,8 +148,7 @@ type AnalyticsTrendPoint struct {
 	CacheWriteTokens    int64 `json:"cacheWriteTokens"`
 
 	// Issues 为当日有执行的去重需求数，供周/月需求量趋势使用。
-	Issues    int `json:"issues,omitempty"`
-	MergedMRs int `json:"mergedMrs"`
+	Issues int `json:"issues,omitempty"`
 
 	// Conversation* is the share of Tokens/Cost* used by conversation
 	// workspaces in this bucket; they are not LOOP runs, and their
@@ -179,17 +170,6 @@ type AnalyticsWeekHourCell struct {
 	Tokens  int64   `json:"tokens"`
 	CostUSD float64 `json:"costUsd"`
 	CostCNY float64 `json:"costCny"`
-}
-
-// AnalyticsMRMerge retains the timestamp evidence used for the MR count.
-type AnalyticsMRMerge struct {
-	MRProject    string    `json:"mrProject"`
-	MRIID        int       `json:"mrIid"`
-	MRURL        string    `json:"mrUrl"`
-	TargetBranch string    `json:"targetBranch"`
-	IssueID      string    `json:"issueId"`
-	Title        string    `json:"title"`
-	MergedAt     time.Time `json:"mergedAt"`
 }
 
 type AnalyticsBreakdown struct {
@@ -260,118 +240,6 @@ type AnalyticsCoverage struct {
 	RunsWithLogs      int            `json:"runsWithLogs"`
 	AdapterEvents     map[string]int `json:"adapterEvents"`
 	LogLevels         map[string]int `json:"logLevels"`
-}
-
-type AnalyticsDelivery struct {
-	IssueID      string `json:"issueId"`
-	ExternalID   string `json:"externalId,omitempty"`
-	ExternalIID  int    `json:"externalIid,omitempty"`
-	Title        string `json:"title"`
-	Source       string `json:"source"`
-	IssueURL     string `json:"issueUrl,omitempty"`
-	WorkflowID   string `json:"workflowId"`
-	WorkflowName string `json:"workflowName"`
-	RunID        string `json:"runId"`
-	RunStatus    string `json:"runStatus"`
-	SOPSucceeded bool   `json:"sopSucceeded"`
-	// DirectDelivery marks a requirement delivered only from conversation
-	// workspaces, without a LOOP run: it counts as delivered once its MR merges.
-	DirectDelivery bool    `json:"directDelivery,omitempty"`
-	DurationMs     int64   `json:"durationMs"`
-	Tokens         int64   `json:"tokens"`
-	CostUSD        float64 `json:"costUsd"`
-	CostCNY        float64 `json:"costCny"`
-	MRURL          string  `json:"mrUrl,omitempty"`
-	MRProject      string  `json:"mrProject,omitempty"`
-	MRIID          int     `json:"mrIid,omitempty"`
-	MRState        string  `json:"mrState,omitempty"` // merged (default branch), integrated (baseline), opened, closed, reopened, none, unknown
-	// MRs retains every associated MR; the singular fields are compatibility / primary-link fields.
-	MRs       []DeliveryMR `json:"mrs,omitempty"`
-	Delivered bool         `json:"delivered"`
-
-	// 该需求全部关联执行（含失败与返工）的聚合结果。
-	RunCount   int `json:"runCount"`
-	FailedRuns int `json:"failedRuns"`
-	// Reworks 为该需求全部关联执行中的节点退回/返工次数。
-	Reworks int `json:"reworks"`
-	// ExecutionDurationMs 为该需求全部执行按节点求和的累计耗时。
-	ExecutionDurationMs int64 `json:"executionDurationMs"`
-	// CycleDurationMs 为需求首次执行开始 → 最后一次执行结束（端到端）。
-	CycleDurationMs int64 `json:"cycleDurationMs"`
-	// ClarificationDurationMs is the wall-clock interval from the first observed
-	// clarification start to the first development node start. Development and
-	// testing still sum completed execution nodes across associated Runs.
-	ClarificationDurationMs int64     `json:"clarificationDurationMs"`
-	DevelopmentDurationMs   int64     `json:"developmentDurationMs"`
-	TestDurationMs          int64     `json:"testDurationMs"`
-	ClarificationStartedAt  time.Time `json:"clarificationStartedAt,omitempty"`
-	DevelopmentStartedAt    time.Time `json:"developmentStartedAt,omitempty"`
-	// PhaseSamples distinguishes an observed zero duration from an uncollected phase.
-	PhaseSamples AnalyticsPhaseSamples `json:"phaseSamples"`
-	// PhaseEvidence links node durations and the clarification boundary to Run evidence.
-	PhaseEvidence []AnalyticsPhaseEvidence `json:"phaseEvidence,omitempty"`
-	// UnclassifiedPhaseNodes are completed nodes without an explicit or legacy phase.
-	UnclassifiedPhaseNodes int `json:"unclassifiedPhaseNodes"`
-	// FirstRunAt/LastRunAt 交付周期计算的时间边界。
-	FirstRunAt time.Time `json:"firstRunAt,omitempty"`
-	LastRunAt  time.Time `json:"lastRunAt,omitempty"`
-	// UserID 为该需求的责任人（取最近一次执行的 ResponsibleUserID）。
-	UserID string `json:"userId,omitempty"`
-	// Category 来自 LOOP 的受控统计标签 metricCategory。
-	Category string `json:"category,omitempty"`
-	// CostKnown 为 false 表示成本未识别，前端展示"未识别"而非 ¥0。
-	CostKnown bool `json:"costKnown"`
-	// Lanes 按产品/前端/后端等角色链拆开该需求的执行。
-	Lanes []RequirementLane `json:"lanes,omitempty"`
-}
-
-type AnalyticsPhaseSamples struct {
-	Clarification int `json:"clarification"`
-	Development   int `json:"development"`
-	Testing       int `json:"testing"`
-	Inferred      int `json:"inferred"`
-}
-
-type AnalyticsPhaseEvidence struct {
-	RunID      string    `json:"runId"`
-	NodeID     string    `json:"nodeId"`
-	Stage      string    `json:"stage"`
-	Source     string    `json:"source"` // explicit or inferred
-	DurationMs int64     `json:"durationMs"`
-	StartedAt  time.Time `json:"startedAt,omitempty"`
-	FinishedAt time.Time `json:"finishedAt,omitempty"`
-}
-
-type AnalyticsDeliverySummary struct {
-	Issues       int `json:"issues"`
-	SOPSucceeded int `json:"sopSucceeded"`
-	// DirectIssues were worked on only in conversations, without a LOOP run;
-	// DirectWithMR of them have submitted an MR, DirectDelivered are delivered.
-	DirectIssues       int     `json:"directIssues"`
-	DirectWithMR       int     `json:"directWithMr"`
-	DirectDelivered    int     `json:"directDelivered"`
-	WithMR             int     `json:"withMr"`
-	TotalMRs           int     `json:"totalMrs"`
-	MRMerged           int     `json:"mrMerged"`
-	MRIntegrated       int     `json:"mrIntegrated,omitempty"`
-	IssuesWithMergedMR int     `json:"issuesWithMergedMr"`
-	Delivered          int     `json:"delivered"`
-	AverageDurationMs  int64   `json:"averageDurationMs"`
-	TotalTokens        int64   `json:"totalTokens"`
-	TotalCostUSD       float64 `json:"totalCostUsd"`
-	TotalCostCNY       float64 `json:"totalCostCny"`
-
-	// CompletedIssues 按 IssueID 去重后的成功需求数（同一需求多次成功只计一次）。
-	CompletedIssues int `json:"completedIssues"`
-	// AverageExecutionDurationMs/IssueP50 为节点求和口径的交付周期。
-	AverageExecutionDurationMs int64 `json:"averageExecutionDurationMs"`
-	P50ExecutionDurationMs     int64 `json:"p50ExecutionDurationMs"`
-	P95ExecutionDurationMs     int64 `json:"p95ExecutionDurationMs"`
-	// RequirementCount 按 metricCategory 去重统计的需求数（如需求开发/Bug 修复）。
-	RequirementCount int `json:"requirementCount"`
-	BugFixCount      int `json:"bugFixCount"`
-	// CostUnknownIssues 表示成本未识别的需求数。
-	CostUnknownIssues int `json:"costUnknownIssues"`
 }
 
 // AnalyticsWorkflowVersion 对比同一 LOOP 不同版本的执行效果。
@@ -533,9 +401,6 @@ type AnalyticsSnapshot struct {
 	Nodes         []AnalyticsBreakdown     `json:"nodes"`
 	Failures      []AnalyticsFailure       `json:"failures"`
 	Coverage      AnalyticsCoverage        `json:"coverage"`
-	Deliveries    []AnalyticsDelivery      `json:"deliveries,omitempty"`
-	Delivery      AnalyticsDeliverySummary `json:"delivery"`
-	MRMerges      []AnalyticsMRMerge       `json:"mrMerges"`
 
 	TokenUsage []AnalyticsTokenUsagePoint `json:"tokenUsage,omitempty"`
 

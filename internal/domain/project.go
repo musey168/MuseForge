@@ -20,10 +20,10 @@ type Project struct {
 	SOPPlaybooks []SOPPlaybook `json:"sopPlaybooks,omitempty"`
 	// SOPBindings is the legacy single playbook. Empty SOPPlaybooks still
 	// expose it as the default combo so old projects keep working.
-	SOPBindings         []IssueSOPBinding `json:"sopBindings,omitempty"`
-	DefaultRepositoryID string            `json:"defaultRepositoryId,omitempty"`
-	OwnerID             int64             `json:"ownerId,omitempty"`
-	RunEval             RunEvalPolicy     `json:"runEval,omitempty"`
+	SOPBindings         []IssueSOPBinding   `json:"sopBindings,omitempty"`
+	DefaultRepositoryID string              `json:"defaultRepositoryId,omitempty"`
+	OwnerID             int64               `json:"ownerId,omitempty"`
+	RunEval             RunEvalPolicy       `json:"runEval,omitempty"`
 	SOPDetection        *SOPDetectionConfig `json:"sopDetection,omitempty"`
 	// Deprecated project-level credential fields are kept only so old payloads
 	// can be decoded and scrubbed by the schema migration.
@@ -32,8 +32,6 @@ type Project struct {
 	CodeBuddyAPIKey              string    `json:"-"`
 	CodeBuddyAPIKeyConfigured    bool      `json:"-"`
 	CodeBuddyInternetEnvironment string    `json:"-"`
-	TAPDWorkspaceID              string    `json:"tapdWorkspaceId,omitempty"`
-	TAPDIterationID              string    `json:"tapdIterationId,omitempty"`
 	CreatedAt                    time.Time `json:"createdAt"`
 	UpdatedAt                    time.Time `json:"updatedAt"`
 	// ArchivedAt marks a deleted project. It is hidden from project lists and

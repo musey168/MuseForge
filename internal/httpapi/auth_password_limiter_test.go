@@ -8,9 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 )
 
 // limiterServer is a full API server with one existing local account.
@@ -26,7 +24,7 @@ func limiterServer(t *testing.T) func(path, body string) int {
 	if _, err := s.CreateLocalAccount("owner", "a-long-enough-password"); err != nil {
 		t.Fatal(err)
 	}
-	h := New(s, engine.New(s, runtime.NewManager(t.TempDir())), nil, "", "")
+	h := New(s, nil, "", "")
 	return func(path, body string) int {
 		r := httptest.NewRequest(http.MethodPost, "http://localhost"+path, bytes.NewBufferString(body))
 		r.Header.Set("Content-Type", "application/json")

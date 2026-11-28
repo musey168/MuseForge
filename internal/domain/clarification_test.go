@@ -10,7 +10,7 @@ func TestShouldResumeClarificationOnlyForCrashedAnalysis(t *testing.T) {
 	}{
 		{"analyzing", Issue{ID: "a", Clarification: ClarificationAssessment{Status: ClarificationAnalyzing}}, true},
 		{"fresh import", Issue{ID: "a", Kind: "requirement"}, false},
-		{"legacy needs_user", Issue{ID: "a", Kind: "requirement", Clarification: ClarificationAssessment{Status: ClarificationNeedsUser, Gated: true}}, false},
+		{"needs_user", Issue{ID: "a", Kind: "requirement", Clarification: ClarificationAssessment{Status: ClarificationNeedsUser}}, false},
 		{"waiting for answers", Issue{ID: "a", Clarification: ClarificationAssessment{Status: ClarificationInProgress}}, false},
 		{"no id", Issue{Clarification: ClarificationAssessment{Status: ClarificationAnalyzing}}, false},
 	}

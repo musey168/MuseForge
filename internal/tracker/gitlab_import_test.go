@@ -36,7 +36,7 @@ func gitlabImportFixture(t *testing.T, handler http.Handler) (*repo.Store, *Serv
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 	s := NewService()
-	s.ConfigureWithStore(domain.SyncConfig{}, st)
+	s.ConfigureWithStore(st)
 	s.gitlabAPIBase = srv.URL
 	return st, s, repository
 }
@@ -187,7 +187,7 @@ func TestGitLabImportRecordsEveryProjectOutcome(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	s := NewService()
-	s.ConfigureWithStore(domain.SyncConfig{}, st)
+	s.ConfigureWithStore(st)
 	s.gitlabAPIBase = srv.URL
 
 	run := s.ImportTracker(st, "gitlab", "")

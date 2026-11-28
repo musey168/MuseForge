@@ -85,7 +85,7 @@ func (h *usersHandlers) gitHTTPCredentialOwner(c *gin.Context) (int64, bool) {
 
 func respondGitHTTPCredentialError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, repo.ErrGitHTTPTokenRequired), errors.Is(err, repo.ErrGitHTTPCredentialManaged):
+	case errors.Is(err, repo.ErrGitHTTPTokenRequired):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case errors.Is(err, repo.ErrGitHTTPCredentialExists):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
@@ -184,9 +184,6 @@ func (h *usersHandlers) verifyPlainGitRepository(ctx context.Context, cred domai
 }
 
 func verifyGitHTTPToken(ctx context.Context, cred domain.GitHTTPCredentialSecret, client *http.Client) gitTokenVerifyResult {
-	if cred.Managed {
-		return verifyGongfengToken(ctx, cred.Token)
-	}
 	base := cred.APIBase()
 	if base == "" {
 		return gitTokenVerifyResult{Error: "该平台不支持在线校验，令牌会在 Git 操作时使用"}

@@ -13,9 +13,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"agentflow/internal/engine"
 	"agentflow/internal/repo"
-	"agentflow/internal/runtime"
 	"agentflow/internal/tracker"
 	webassets "agentflow/web"
 )
@@ -31,13 +29,12 @@ func TestStudioIndexStampsAssetsWithContentHash(t *testing.T) {
 	}
 	sum := sha256.Sum256(js)
 	want := hex.EncodeToString(sum[:8])
-	root := t.TempDir()
 	s, err := repo.OpenTest()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -95,73 +92,6 @@ func TestStudioStylesheetChangesInvalidateURLWithoutEditingIndex(t *testing.T) {
 			t.Fatalf("stamped URL must serve the matching stylesheet: status=%d body=%q", asset.Code, asset.Body.String())
 		}
 		previousURL = url
-	}
-}
-
-func TestStudioVscodePageStampsAssetsWithContentHash(t *testing.T) {
-	static, err := fs.Sub(webassets.Files, ".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	js, err := fs.ReadFile(static, "vscode.js")
-	if err != nil {
-		t.Fatal(err)
-	}
-	sum := sha256.Sum256(js)
-	want := hex.EncodeToString(sum[:8])
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
-	req := httptest.NewRequest(http.MethodGet, "/vscode.html", nil)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != 200 {
-		t.Fatalf("GET /vscode.html: %d", rec.Code)
-	}
-	body, _ := io.ReadAll(rec.Body)
-	html := string(body)
-	if !strings.Contains(html, "/vscode.js?v="+want) {
-		t.Fatalf("vscode.html should stamp vscode.js with content hash %s, got snippet around script: %s", want, snippet(html, "vscode.js"))
-	}
-	if !strings.Contains(html, `id="workbench"`) || !strings.Contains(html, "/vscode.js?v="+want) {
-		t.Fatal("vscode.html should host the vscode-web workbench")
-	}
-	if rec.Header().Get("X-Frame-Options") != "SAMEORIGIN" {
-		t.Fatalf("vscode.html must be embeddable same-origin, got X-Frame-Options=%q", rec.Header().Get("X-Frame-Options"))
-	}
-	if !strings.Contains(rec.Header().Get("Content-Security-Policy"), "frame-ancestors 'self'") {
-		t.Fatalf("vscode.html CSP should allow same-origin framing, got %q", rec.Header().Get("Content-Security-Policy"))
-	}
-}
-
-func TestStudioIndexInjectsAppDomain(t *testing.T) {
-	t.Setenv("AGENTFLOW_APP_DOMAIN", "loopforge-test.example.com")
-	root := t.TempDir()
-	s, err := repo.OpenTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != 200 {
-		t.Fatalf("GET /: %d", rec.Code)
-	}
-	body, _ := io.ReadAll(rec.Body)
-	html := string(body)
-	want := `<meta name="agentflow-app-domain" content="loopforge-test.example.com"></head>`
-	if !strings.Contains(html, want) {
-		t.Fatalf("expected injected domain meta %q, got snippet: %s", want, snippet(html, "agentflow-app-domain"))
-	}
-	// The CSP forbids inline scripts, so nothing may be injected as one.
-	if strings.Contains(html, "<script>") {
-		t.Fatalf("index.html carries an inline script the CSP would block: %s", snippet(html, "<script>"))
 	}
 }
 
@@ -240,13 +170,12 @@ func TestStudioPagesOmitUnsafeOrMissingBuildCommit(t *testing.T) {
 // The OAuth callback lands here in a separate tab; the page must render under
 // the global CSP, so its script is external and nothing secret is on it.
 func TestStudioServesGongfengOAuthDonePage(t *testing.T) {
-	root := t.TempDir()
 	s, err := repo.OpenTest()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	get := func(path string) (*httptest.ResponseRecorder, string) {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
@@ -285,13 +214,12 @@ func TestStudioServesGongfengOAuthDonePage(t *testing.T) {
 }
 
 func TestStudioServesSiteIcons(t *testing.T) {
-	root := t.TempDir()
 	s, err := repo.OpenTest()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	h := New(s, engine.New(s, runtime.NewManager(filepath.Join(root, "workspaces"))), tracker.NewService(), "", "")
+	h := New(s, tracker.NewService(), "", "")
 	icons := map[string]string{
 		"/favicon.svg":          "image/svg+xml",
 		"/favicon.png":          "image/png",
@@ -309,7 +237,7 @@ func TestStudioServesSiteIcons(t *testing.T) {
 			t.Fatalf("GET %s: Content-Type %q, want %s*", path, got, wantType)
 		}
 	}
-	for _, page := range []string{"/", "/vscode.html"} {
+	for _, page := range []string{"/"} {
 		req := httptest.NewRequest(http.MethodGet, page, nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)

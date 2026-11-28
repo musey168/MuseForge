@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"agentflow/internal/domain"
-	"agentflow/internal/repo"
 
 	"github.com/gin-gonic/gin"
 )
@@ -103,15 +102,6 @@ func (d deps) assetWriteGuard() gin.HandlerFunc {
 
 func (d deps) allowAssetWrite(c *gin.Context, path string) bool {
 	switch path {
-	case "/api/sync/config", "/api/sync/now":
-		return d.requireAccountWrite(c)
-	case "/api/sync/create":
-		var body struct {
-			IssueID string `json:"issueId"`
-		}
-		peekJSON(c, &body)
-		issue, _ := d.repo.Issue(strings.TrimSpace(body.IssueID))
-		return d.requireAccountWrite(c, issue.ProjectID)
 	case "/api/tracker/import":
 		// A project-scoped import needs a writer of that project; an import
 		// without one covers every project, so it needs the account.

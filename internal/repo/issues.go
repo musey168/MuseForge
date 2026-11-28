@@ -26,45 +26,31 @@ func (r *IssuesRepo) IssueAnalyticsViews() []domain.Issue {
 		AssigneeUserID         *int64    `gorm:"column:assignee_user_id"`
 		ExternalID             string    `gorm:"column:external_id"`
 		ExternalURL            string    `gorm:"column:external_url"`
-		TapdID                 string    `gorm:"column:tapd_id"`
 		ClarificationStartedAt string    `gorm:"column:clarification_started_at"`
 		DeliveryState          string    `gorm:"column:delivery_state"`
 		CreatedAt              time.Time `gorm:"column:created_at"`
-		DeliveryMRURL          string    `gorm:"column:delivery_mr_url"`
-		DeliveryMRState        string    `gorm:"column:delivery_mr_state"`
-		DeliveryMRs            string    `gorm:"column:delivery_mrs"`
 	}
 	var rows []liteRow
 	if err := r.DB.Table("issues").Select(
 		"id", "project_id", "title", "status", "kind", "source", "workflow_id", "assignee_user_id", "external_id", "created_at",
 		r.sqlPayloadJSONText("externalRef.externalUrl")+" AS external_url",
-		r.sqlPayloadJSONText("tapdId")+" AS tapd_id",
 		r.sqlPayloadJSONText("clarification.startedAt")+" AS clarification_started_at",
 		r.sqlPayloadJSONText("deliveryState")+" AS delivery_state",
-		r.sqlPayloadJSONText("deliveryMrUrl")+" AS delivery_mr_url",
-		r.sqlPayloadJSONText("deliveryMrState")+" AS delivery_mr_state",
-		r.sqlPayloadJSONText("deliveryMrs")+" AS delivery_mrs",
 	).Find(&rows).Error; err != nil {
 		return []domain.Issue{}
 	}
 	out := make([]domain.Issue, 0, len(rows))
 	for _, row := range rows {
 		issue := domain.Issue{
-			ID:              row.ID,
-			ProjectID:       row.ProjectID,
-			Title:           row.Title,
-			Status:          row.Status,
-			Kind:            row.Kind,
-			Source:          row.Source,
-			TapdID:          strings.TrimSpace(row.TapdID),
-			WorkflowID:      row.WorkflowID,
-			DeliveryState:   strings.TrimSpace(row.DeliveryState),
-			DeliveryMRURL:   strings.TrimSpace(row.DeliveryMRURL),
-			DeliveryMRState: strings.TrimSpace(row.DeliveryMRState),
-			CreatedAt:       row.CreatedAt,
-		}
-		if row.DeliveryMRs != "" {
-			_ = jsonUnmarshal([]byte(row.DeliveryMRs), &issue.DeliveryMRs)
+			ID:            row.ID,
+			ProjectID:     row.ProjectID,
+			Title:         row.Title,
+			Status:        row.Status,
+			Kind:          row.Kind,
+			Source:        row.Source,
+			WorkflowID:    row.WorkflowID,
+			DeliveryState: strings.TrimSpace(row.DeliveryState),
+			CreatedAt:     row.CreatedAt,
 		}
 		if started, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(row.ClarificationStartedAt)); err == nil {
 			issue.Clarification.StartedAt = started
@@ -131,29 +117,6 @@ func (r *IssuesRepo) Issue(id string) (domain.Issue, bool) {
 		issue.AssigneeUserID = 0
 	}
 	return issue, true
-}
-
-// preserveIssueDeliveryFields keeps delivery lock metadata when Gongfeng/TAPD sync
-// writes an issue snapshot that omitted those fields (race with MR reconcile).
-func preserveIssueDeliveryFields(v *domain.Issue, old domain.Issue) {
-	if strings.TrimSpace(old.DeliveryState) == "" {
-		return
-	}
-	if strings.TrimSpace(v.DeliveryState) == "" {
-		v.DeliveryState = old.DeliveryState
-	}
-	if strings.TrimSpace(v.DeliveryMRURL) == "" {
-		v.DeliveryMRURL = old.DeliveryMRURL
-	}
-	if strings.TrimSpace(v.DeliveryMRState) == "" {
-		v.DeliveryMRState = old.DeliveryMRState
-	}
-	if len(v.DeliveryMRs) == 0 && domain.SameGongfengMR(v.DeliveryMRURL, old.DeliveryMRURL) {
-		v.DeliveryMRs = old.DeliveryMRs
-	}
-	if v.DeliveryUpdatedAt.IsZero() {
-		v.DeliveryUpdatedAt = old.DeliveryUpdatedAt
-	}
 }
 
 func (r *IssuesRepo) PutIssue(v domain.Issue) error {
@@ -283,7 +246,9 @@ func (r *IssuesRepo) prepareIssueForSave(v domain.Issue, mode issueWriteMode, ex
 		if !old.Clarification.StartedAt.IsZero() && (v.Clarification.StartedAt.IsZero() || v.Clarification.StartedAt.After(old.Clarification.StartedAt)) {
 			v.Clarification.StartedAt = old.Clarification.StartedAt
 		}
-		preserveIssueDeliveryFields(&v, old)
+		if strings.TrimSpace(v.DeliveryState) == "" {
+			v.DeliveryState = old.DeliveryState
+		}
 	} else {
 		v.CreatedAt = now
 		if v.Number == 0 {
@@ -323,7 +288,7 @@ func (r *IssuesRepo) prepareIssueForSave(v domain.Issue, mode issueWriteMode, ex
 				v.CloseSource = ""
 			}
 		}
-		if v.Status == "done" || v.Status == "closed" || v.Status == "cancelled" || v.GongfengClosed() {
+		if v.Status == "done" || v.Status == "closed" || v.Status == "cancelled" {
 			v.AutomationState = "ignored"
 		}
 	}

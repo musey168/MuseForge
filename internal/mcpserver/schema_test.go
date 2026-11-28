@@ -25,13 +25,10 @@ func TestToolContractsCoverManifest(t *testing.T) {
 		}
 	}
 }
-func TestDraftContractRejectsMissingImportURLAndAcceptsRepositoryPaste(t *testing.T) {
+func TestDraftContractAcceptsRepositoryPaste(t *testing.T) {
 	ops := map[string]application.Operation{}
 	for _, op := range application.PublicOperations() {
 		ops[op.Name] = op
-	}
-	if err := ValidateToolInput(ops["issues_import_tapd"], map[string]any{"body": map[string]any{"projectId": "p"}}); err == nil || !strings.Contains(err.Error(), "url") {
-		t.Fatalf("missing URL accepted: %v", err)
 	}
 	if err := ValidateToolInput(ops["repositories_save"], map[string]any{"body": map[string]any{"projectId": "p", "url": "https://git.example.com/example/login"}}); err != nil {
 		t.Fatal(err)

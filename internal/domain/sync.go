@@ -7,22 +7,6 @@ import (
 	"time"
 )
 
-// SyncConfig holds platform-level external sync settings. TAPD workspace/iteration
-// belong on each Project; legacy sync_config TAPD fields are migrated on startup.
-type SyncConfig struct {
-	PlaybookSeedRev     int       `json:"playbookSeedRev,omitempty"`
-	GongfengProjectID   string    `json:"gongfengProjectId"`
-	GongfengMCPURL      string    `json:"gongfengMcpUrl"`
-	TAPDWorkspaceID     string    `json:"tapdWorkspaceId"`
-	TAPDIterationID     string    `json:"tapdIterationId"`
-	TAPDMCPURL          string    `json:"tapdMcpUrl"`
-	AutoSyncEnabled     bool      `json:"autoSyncEnabled"`
-	AutoSyncIntervalSec int       `json:"autoSyncIntervalSec"`
-	LastSyncAt          time.Time `json:"lastSyncAt"`
-	LastSyncStatus      string    `json:"lastSyncStatus"`
-	LastSyncError       string    `json:"lastSyncError,omitempty"`
-}
-
 const DefaultIntegrateBranch = "agentflow/integration"
 
 // NormalizeIntegrateBranch trims the configured integrate branch. Empty means
@@ -69,10 +53,8 @@ type ScheduleJob struct {
 	Enabled              bool                  `json:"enabled"`
 	ProjectID            string                `json:"projectId"`
 	// Source limits which issues a trigger job starts.
-	// Empty means 工蜂 and TAPD (and platform-local issues). "gongfeng" or "tapd" starts only that source.
+	// Empty means every source. "github" or "gitlab" starts only that source.
 	Source           string `json:"source,omitempty"`
-	TAPDWorkspaceID  string `json:"tapdWorkspaceId,omitempty"`
-	TAPDIterationID  string `json:"tapdIterationId,omitempty"`
 	WorkflowID       string `json:"workflowId,omitempty"`
 	UseIssueWorkflow bool   `json:"useIssueWorkflow,omitempty"`
 	SkipDispatch     bool   `json:"skipDispatch,omitempty"`
@@ -88,7 +70,7 @@ type ScheduleJob struct {
 	// executor resolves them at run time so edits to the referenced assets are
 	// reflected on the next run.
 	References     []AssetReference `json:"references,omitempty"`
-	AssistantModel string               `json:"assistantModel,omitempty"`
+	AssistantModel string           `json:"assistantModel,omitempty"`
 	// TimeoutMinutes bounds one AI execution, including tool calls and LOOP waits.
 	// Zero uses the default for jobs saved before this field existed.
 	TimeoutMinutes int `json:"timeoutMinutes,omitempty"`
@@ -124,8 +106,8 @@ type ScheduleJob struct {
 	// has been deleted or pruned by retention.
 	LastSessionGone bool                 `json:"lastSessionGone,omitempty"`
 	Blockers        []ScheduleJobBlocker `json:"blockers,omitempty"`
-	CreatedAt     time.Time            `json:"createdAt"`
-	UpdatedAt     time.Time            `json:"updatedAt"`
+	CreatedAt       time.Time            `json:"createdAt"`
+	UpdatedAt       time.Time            `json:"updatedAt"`
 }
 
 // ResolveWorkflow picks the LOOP for a scheduled dispatch: the issue's bound
@@ -199,15 +181,15 @@ func NormalizeScheduleSource(raw string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "", "all", "both":
 		return "", nil
-	case "github", "gongfeng", "tapd":
+	case "github", "gitlab":
 		return strings.ToLower(strings.TrimSpace(raw)), nil
 	default:
-		return "", fmt.Errorf("来源只能是工蜂、TAPD，或两边都同步")
+		return "", fmt.Errorf("来源只能是 GitHub 或 GitLab，或不限制")
 	}
 }
 
 // MatchesIssueSource reports whether a trigger job should start this issue.
-// An empty source matches 工蜂, TAPD, and platform-local issues.
+// An empty source matches every source, including platform-local issues.
 func (j ScheduleJob) MatchesIssueSource(source string) bool {
 	want := strings.ToLower(strings.TrimSpace(j.Source))
 	if want == "" || want == "all" || want == "both" {
@@ -223,20 +205,4 @@ func (j ScheduleJob) MatchesIssueStatus(status string) bool {
 		status = "backlog"
 	}
 	return slices.Contains(j.TriggerIssueStatuses(), status)
-}
-
-// SyncLog records a single sync execution.
-type SyncLog struct {
-	ID        string `json:"id"`
-	Direction string `json:"direction"` // pull, push
-	Source    string `json:"source"`    // gongfeng, tapd
-	Action    string `json:"action"`    // sync_issues, sync_stories, create_issue, create_story
-	Status    string `json:"status"`    // success, failed
-	Count     int    `json:"count"`
-	// ProjectID scopes the log to the project whose repositories/pools were
-	// synced (empty on legacy entries and cross-project aggregates).
-	ProjectID  string    `json:"projectId,omitempty"`
-	Message    string    `json:"message,omitempty"`
-	StartedAt  time.Time `json:"startedAt"`
-	FinishedAt time.Time `json:"finishedAt"`
 }

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"agentflow/internal/auth"
-	"agentflow/internal/domain"
 )
 
 // 回归用例：浏览器会话的 AuthTime 超过 authSessionTTL 后，/api/auth/current 必须
@@ -74,81 +73,3 @@ func TestAuthCurrent_ExpiredSessionFallsBackToGuest(t *testing.T) {
 }
 
 // 有效会话必须照旧保持登录，并续签 Cookie（防止修复把正常会话也踢成访客）。
-func TestAuthCurrent_FreshSessionStaysAuthenticated(t *testing.T) {
-	authClient := auth.NewClient(auth.Config{
-		AppDomain:     "loopforge.example.com",
-		SessionSecret: "secret-session-expiry",
-	})
-	handler, st := newTestAuthServer(t, authClient)
-
-	if err := st.PutUser(domain.User{LoginName: "fresh_user", ChineseName: "有效会话员"}); err != nil {
-		t.Fatalf("seed user failed: %v", err)
-	}
-
-	token, err := authClient.SignUser(&auth.User{
-		LoginName: "fresh_user",
-		IsGuest:   false,
-		AuthTime:  time.Now().UTC().Add(-authSessionTTL + time.Hour),
-	})
-	if err != nil {
-		t.Fatalf("sign user failed: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/auth/current", nil)
-	req.AddCookie(&http.Cookie{Name: authCookieName, Value: token})
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var body struct {
-		User auth.User `json:"user"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("unmarshal json: %v", err)
-	}
-	if body.User.IsGuest || body.User.LoginName != "fresh_user" {
-		t.Fatalf("expected authenticated fresh_user, got %+v", body.User)
-	}
-}
-
-// requestUser 是受保护接口的 401 判定来源，必须与 authCurrent 使用同一时长。
-func TestRequestUser_ExpiredSessionRejected(t *testing.T) {
-	authClient := auth.NewClient(auth.Config{SessionSecret: "secret-session-expiry"})
-	handler, st := newTestAuthServer(t, authClient)
-	_ = handler
-
-	if err := st.PutUser(domain.User{LoginName: "stale_user", ChineseName: "过期会话员"}); err != nil {
-		t.Fatalf("seed user failed: %v", err)
-	}
-	d := deps{repo: st, authClient: authClient}
-
-	expiredToken, err := authClient.SignUser(&auth.User{
-		LoginName: "stale_user",
-		IsGuest:   false,
-		AuthTime:  time.Now().UTC().Add(-authSessionTTL - time.Minute),
-	})
-	if err != nil {
-		t.Fatalf("sign user failed: %v", err)
-	}
-	expiredReq := httptest.NewRequest(http.MethodGet, "/api/bootstrap", nil)
-	expiredReq.AddCookie(&http.Cookie{Name: authCookieName, Value: expiredToken})
-	if user, ok := d.requestUser(expiredReq); ok {
-		t.Fatalf("expected expired session to be rejected, got user %+v", user)
-	}
-
-	freshToken, err := authClient.SignUser(&auth.User{
-		LoginName: "stale_user",
-		IsGuest:   false,
-		AuthTime:  time.Now().UTC(),
-	})
-	if err != nil {
-		t.Fatalf("sign user failed: %v", err)
-	}
-	freshReq := httptest.NewRequest(http.MethodGet, "/api/bootstrap", nil)
-	freshReq.AddCookie(&http.Cookie{Name: authCookieName, Value: freshToken})
-	if _, ok := d.requestUser(freshReq); !ok {
-		t.Fatalf("expected fresh session to be accepted")
-	}
-}

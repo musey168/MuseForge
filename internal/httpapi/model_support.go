@@ -20,7 +20,6 @@ import (
 	"agentflow/internal/agentcli"
 	"agentflow/internal/domain"
 	"agentflow/internal/managedcli"
-	"agentflow/internal/repo"
 
 	"github.com/gin-gonic/gin"
 
@@ -124,27 +123,6 @@ func runnerUsesLocalLogin(runner domain.Runner, engine string) bool {
 
 func assistantSupportsRunnerLogin(engine string) bool {
 	return domain.SupportsRunnerLogin(engine)
-}
-
-func scheduleLoginRunner(r *repo.Store, userID int64, projectID, engine string) domain.Runner {
-	if r == nil || userID <= 0 || !assistantSupportsRunnerLogin(engine) {
-		return domain.Runner{}
-	}
-	id := r.DefaultRunner(userID)
-	if id == "" {
-		return domain.Runner{}
-	}
-	machine, ok := r.Runner(id)
-	if !ok || machine.OwnerUserID != userID || !machine.SupportsCLISettings() ||
-		!machine.SupportsProvider(engine) || !runnerUsesLocalLogin(machine, engine) ||
-		!r.CanUseRunner(machine, projectID, userID) {
-		return domain.Runner{}
-	}
-	return machine
-}
-
-func scheduleCredentialUser(r *repo.Store, user domain.User, projectID, engine string) (domain.User, bool) {
-	return user, scheduleHasPersonalCredential(r, user, projectID, engine)
 }
 
 func sameScheduleReferenceIDs(a, b []domain.AssetReference) bool {
@@ -363,10 +341,6 @@ func dropNativeArg(argv []string, flag string) []string {
 	return out
 }
 
-func scheduleHasPersonalCredential(r *repo.Store, user domain.User, projectID, engine string) bool {
-	key, _ := assistantEngineCredential(user, engine)
-	return key != "" || scheduleLoginRunner(r, user.ID, projectID, engine).ID != ""
-}
 func assistantSessionBase() string {
 	if override := strings.TrimSpace(os.Getenv("AGENTFLOW_ASSISTANT_SESSION_DIR")); override != "" {
 		return override
@@ -399,32 +373,6 @@ func readAssistantImage(file io.Reader) ([]byte, string, error) {
 	return data, mime, nil
 }
 
-// botExecutionUser resolves the platform account behind an IM sender.
-func botExecutionUser(store *repo.Store, bot domain.NotificationBot, senderID string) (domain.User, error) {
-	current, err := store.NotificationBot(bot.ID)
-	if err != nil || !current.Enabled || !current.InteractionEnabled || current.BotID != bot.BotID || current.ChannelKind() != bot.ChannelKind() {
-		return domain.User{}, errors.New("Bot 对话已停用")
-	}
-	binding, err := store.BotUserBinding(current.IdentityScope(), senderID)
-	if err != nil {
-		return domain.User{}, errors.New("请先绑定平台账号")
-	}
-	if current.ChannelKind() != domain.BotChannelWeCom && binding.ConfigID != current.ID {
-		return domain.User{}, errors.New("请先绑定平台账号")
-	}
-	user, ok := store.User(binding.UserID)
-	if !ok {
-		return user, errors.New("绑定的平台账号不可用")
-	}
-	project, ok := store.Project(current.ProjectID)
-	if !ok {
-		return user, errors.New("Bot 项目不存在")
-	}
-	if project.AccountOwns(user.ID) {
-		return user, nil
-	}
-	return user, errors.New("你的平台账号没有该项目的执行权限")
-}
 func assistantEngineBinary(kind string) string {
 	switch kind {
 	case assistantEngineCodeBuddy:

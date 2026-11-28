@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -86,10 +85,6 @@ func (h *usersHandlers) user(c *gin.Context) {
 	}
 	saved, err := h.repo.UpdateUserCredentials(id, body)
 	if err != nil {
-		if errors.Is(err, repo.ErrAssistantDefaultExecutorUnavailable) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
 		respond(c, err)
 		return
 	}

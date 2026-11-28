@@ -8,7 +8,6 @@ import (
 
 	"agentflow/internal/domain"
 	"agentflow/internal/gitwork"
-	"agentflow/internal/repo"
 
 	"github.com/gin-gonic/gin"
 )
@@ -96,16 +95,6 @@ func (h *repositoriesHandlers) repositories(c *gin.Context) {
 	}
 	if !h.canManageProjectRepositories(c, v.ProjectID) {
 		return
-	}
-	if v.WorkBranchNaming != nil {
-		naming, err := repo.NormalizeRepositoryWorkBranchNaming(*v.WorkBranchNaming)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		v.WorkBranchNaming = &naming
-	} else if exists {
-		v.WorkBranchNaming = existing.WorkBranchNaming
 	}
 	// localPath copies a directory from the executing host into the task
 	// workspace, so only platform administrators may set it.

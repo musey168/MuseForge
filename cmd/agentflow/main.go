@@ -71,7 +71,6 @@ func main() {
 	addr := flag.String("addr", "", "HTTP listen address; overrides AGENTFLOW_HTTP_PORT")
 	basicUser := flag.String("basic-user", "", "optional HTTP Basic Auth username")
 	basicPass := flag.String("basic-pass", "", "optional HTTP Basic Auth password")
-	mcpToken := flag.String("mcp-token", "", "MCP gateway bearer token (or set AGENTFLOW_MCP_TOKEN env)")
 	tlsCert := flag.String("tls-cert", "", "optional TLS certificate path")
 	tlsKey := flag.String("tls-key", "", "optional TLS private key path")
 	datasource := flag.String("datasource", "", "platform datasource: a SQLite file path or \"file:\" URI, or a MySQL DSN; overrides AGENTFLOW_DATASOURCE_DSN and AGENTFLOW_MYSQL_DSN")
@@ -114,19 +113,8 @@ func main() {
 		log.Fatal(err)
 	}
 	syncSvc := tracker.NewService()
-	token := *mcpToken
-	if token == "" {
-		token = os.Getenv("AGENTFLOW_MCP_TOKEN")
-	}
-	if token != "" {
-		syncSvc.SetAuthToken(token)
-	}
+	syncSvc.ConfigureWithStore(s)
 	gin.SetMode(gin.ReleaseMode)
-	cfg := s.SyncConfig()
-	syncSvc.ConfigureWithStore(cfg, s)
-	if cfg.AutoSyncEnabled {
-		syncSvc.StartAutoSync(s)
-	}
 
 	handler := httpapi.New(s, syncSvc, *basicUser, *basicPass)
 	srv := &http.Server{Addr: endpoints.ListenAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
@@ -159,7 +147,6 @@ func main() {
 			log.Printf("handover complete: pid %d serves new requests", successor.Pid)
 			break wait
 		}
-		syncSvc.StopAutoSync()
 		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancelShutdown()
 		if err := srv.Shutdown(shutdownCtx); err != nil {

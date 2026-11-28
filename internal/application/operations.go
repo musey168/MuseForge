@@ -38,7 +38,6 @@ func PublicOperations() []Operation {
 		{Name: "issues_clarification_save", Description: "Save an existing work-item clarification and write it back to its external source", Method: "POST", Path: "/api/issues/{id}/clarification"},
 		{Name: "issues_reopen", Description: "Reopen a delivered issue", Method: "POST", Path: "/api/issues/{id}/reopen"},
 		{Name: "issues_dispatch", Description: "Dispatch or rerun the issue's LOOP", Method: "POST", Path: "/api/issues/{id}/dispatch"},
-		{Name: "issues_import_tapd", Description: "Import one TAPD story, bug or task from a URL or shared title and link. Requires repositoryIds; optional workflowId binds LOOP; repositoryBranches maps bound repository IDs to existing work branches to continue directly; single-repository clients may use baseBranch. Empty or unlisted branches create new work branches from each configured main branch; continuing branches always target that repository's configured main branch for MRs.", Method: "POST", Path: "/api/issues/import-tapd"},
 		{Name: "tasks_list", Description: "List execution tasks", Method: "GET", Path: "/api/tasks", ReadOnly: true},
 		{Name: "tasks_get", Description: "Get one execution task", Method: "GET", Path: "/api/tasks/{id}", ReadOnly: true},
 		{Name: "agents_list", Description: "List Agent definitions", Method: "GET", Path: "/api/agents", ReadOnly: true},
@@ -97,12 +96,6 @@ func PublicOperations() []Operation {
 		{Name: "runs_pause", Description: "Pause an active Run at its current node", Method: "POST", Path: "/api/runs/{id}/pause"},
 		{Name: "runs_resume", Description: "Resume a paused Run with optional human context", Method: "POST", Path: "/api/runs/{id}/resume"},
 		{Name: "runs_refresh_sop", Description: "Update a stopped Run to the latest LOOP definition", Method: "POST", Path: "/api/runs/{id}/refresh-sop"},
-		{Name: "sync_config_get", Description: "Get external tracker sync configuration", Method: "GET", Path: "/api/sync/config", ReadOnly: true},
-		{Name: "sync_config_save", Description: "Save external tracker sync configuration", Method: "PUT", Path: "/api/sync/config"},
-		{Name: "sync_start", Description: "Start an asynchronous external tracker sync", Method: "POST", Path: "/api/sync/now"},
-		{Name: "sync_logs_list", Description: "List external tracker sync logs", Method: "GET", Path: "/api/sync/logs", ReadOnly: true},
-		{Name: "sync_status_get", Description: "Get external tracker sync status", Method: "GET", Path: "/api/sync/status", ReadOnly: true},
-		{Name: "sync_issue_create", Description: "Create an issue through a configured external tracker connector", Method: "POST", Path: "/api/sync/create"},
 		{Name: "notification_bots_list", Description: "List configured project notification Bots and bound chat names/types. Requires projectId. Bot ID here is a platform reference; credentials are never returned.", Method: "GET", Path: "/api/notification-bots", ReadOnly: true},
 		{Name: "shared_schedule_tasks_list", Description: "List latest immutable shared AI task definitions", Method: "GET", Path: "/api/shared-schedule-tasks", ReadOnly: true},
 		{Name: "shared_schedule_versions_list", Description: "List published versions for a shared AI task", Method: "GET", Path: "/api/shared-schedule-tasks/{id}/versions", ReadOnly: true},
@@ -112,5 +105,5 @@ func PublicOperations() []Operation {
 		{Name: "schedule_jobs_save", Description: "Create or update a scheduled job. Two exclusive kinds: trigger jobs (skipDispatch=false, require workflowId) scan issues in issueStatuses (backlog/todo/in_progress/in_review/blocked; default backlog+todo), run baseline guard, and dispatch LOOP with optional maxDispatch (1-10 successful issue dispatches per execution; omitted or 0 defaults to 10). AI jobs (skipDispatch=true, require assistantPrompt or sharedTaskId+sharedTaskVersion+parameterValues) run a prompt using the executor and model selected by assistantModel (for example codex:<model>). Omit assistantModel to use the execution account's default. Set timeoutMinutes (1-240; omitted or 0 defaults to 30). Timing is intervalSec or 5-field cron (Asia/Shanghai). Optional notifications bind up to 3 configured project Bots (botId, events succeeded/failed, template, contentMode template/ai, aiInstruction). Use notification_bots_list to select an existing Bot. AI content reuses this task output; {{task.name}}, {{result}} and {{ai.summary}} are supported.", Method: "PUT", Path: "/api/schedule-jobs"},
 		{Name: "schedule_jobs_delete", Description: "Delete a scheduled LOOP job", Method: "DELETE", Path: "/api/schedule-jobs/{id}"},
 		{Name: "schedule_jobs_run", Description: "Start a scheduled job on the server and return immediately (lastStatus=running). Closing the client does not cancel it; poll schedule_jobs_list until lastStatus leaves running.", Method: "POST", Path: "/api/schedule-jobs/{id}/run"},
-		}
+	}
 }

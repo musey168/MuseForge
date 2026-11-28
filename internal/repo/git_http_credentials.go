@@ -13,9 +13,8 @@ import (
 )
 
 var (
-	ErrGitHTTPCredentialExists  = errors.New("该主机已有访问令牌，请编辑现有凭据")
-	ErrGitHTTPTokenRequired     = errors.New("添加凭据时请填写访问令牌")
-	ErrGitHTTPCredentialManaged = errors.New("内部托管凭据由平台维护，不能在这里修改或删除")
+	ErrGitHTTPCredentialExists = errors.New("该主机已有访问令牌，请编辑现有凭据")
+	ErrGitHTTPTokenRequired    = errors.New("添加凭据时请填写访问令牌")
 )
 
 func gitHTTPCredentialID(host string) string {
@@ -35,8 +34,7 @@ func (row gitHTTPCredentialRow) secret() domain.GitHTTPCredentialSecret {
 	}
 }
 
-// GitHTTPCredentials describes the user's HTTP(S) Git credentials, followed by
-// the managed internal credential unless a personal one covers its host.
+// GitHTTPCredentials describes the user's HTTP(S) Git credentials.
 // Tokens are never read into the description.
 func (r *UsersRepo) GitHTTPCredentials(userID int64) ([]domain.GitHTTPCredential, error) {
 	var rows []gitHTTPCredentialRow
@@ -45,12 +43,9 @@ func (r *UsersRepo) GitHTTPCredentials(userID int64) ([]domain.GitHTTPCredential
 	if err != nil {
 		return nil, err
 	}
-	out := make([]domain.GitHTTPCredential, 0, len(rows)+1)
-	hosts := make(map[string]bool, len(rows))
+	out := make([]domain.GitHTTPCredential, 0, len(rows))
 	for _, row := range rows {
-		credential := row.secret().GitHTTPCredential
-		out = append(out, credential)
-		hosts[credential.Host] = true
+		out = append(out, row.secret().GitHTTPCredential)
 	}
 	return out, nil
 }
@@ -59,9 +54,6 @@ func (r *UsersRepo) GitHTTPCredentials(userID int64) ([]domain.GitHTTPCredential
 // is empty, otherwise updates that credential; an empty token keeps the
 // stored one. The host of an existing credential cannot change.
 func (r *UsersRepo) SaveGitHTTPCredential(userID int64, existingID string, input domain.GitHTTPCredentialSecret) error {
-	if existingID == domain.ManagedGitHTTPCredentialID {
-		return ErrGitHTTPCredentialManaged
-	}
 	endpoint, err := domain.ParseGitHTTPEndpoint(input.Host)
 	if err != nil {
 		return err
@@ -114,9 +106,6 @@ func (r *UsersRepo) SaveGitHTTPCredential(userID int64, existingID string, input
 }
 
 func (r *UsersRepo) DeleteGitHTTPCredential(userID int64, id string) error {
-	if id == domain.ManagedGitHTTPCredentialID {
-		return ErrGitHTTPCredentialManaged
-	}
 	return r.DB.Where("user_id = ? AND id = ?", userID, id).Delete(&gitHTTPCredentialRow{}).Error
 }
 
