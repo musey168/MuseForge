@@ -26,7 +26,7 @@ function setup(items, options = {}) {
     toast:(...args) => notices.push(args),
     afConfirm:async opts => {calls.push(['confirm',opts]);return options.confirm !== false;},
     api:async (path,opts) => {calls.push([path,opts.method]);if(options.fail?.(path)) throw new Error('<conflict>');},
-    refreshRuns:async () => calls.push(['refresh']), closeIssueDrawer:() => calls.push(['close'])};
+    closeIssueDrawer:() => calls.push(['close'])};
   vm.createContext(c);
   vm.runInContext(helpers+'\n'+source,c);
   c.renderIssues = () => {c.syncIssueSelection(c.filteredIssues()); c.renderIssueBulkActions(c.filteredIssues());};
@@ -107,12 +107,10 @@ const deletes = f => f.calls.filter(call => call[1] === 'DELETE');
   assert.match(f.calls[0][1].message,/后续同步可能重新导入/);
   assert.match(f.calls[0][1].message,/其中 1 条.*工作区将一并清理/);
   assert.equal(f.calls[0][1].confirmText,'确认强制删除 2 条需求');
-  assert.equal(f.calls.filter(c => c[0] === 'refresh').length,1);
   assert.equal(f.calls.filter(c => c[0] === 'close').length,1);
   assert.equal(f.state.issueDetailData,null);
   assert.equal(f.state.selectedIssue,null);
   assert.deepEqual(ids(f.state.data.issues),['keep']);
-  assert.deepEqual(ids(f.state.data.tasks),['task-keep']);
   assert.equal(f.state.issueSelection.size,0);
   assert.equal(f.state.issueBulkDeleting,false);
   assert.equal(f.state.issueBulkDeleteProgress,null);
@@ -142,7 +140,6 @@ const deletes = f => f.calls.filter(call => call[1] === 'DELETE');
   assert.deepEqual(ids(f.state.issueSelection),['a','b']);
   assert.equal(f.state.issueBulkDeleteResult.deleted,0);
   assert.equal(f.state.issueBulkDeleteResult.failures.length,2);
-  assert.equal(f.calls.filter(c => c[0] === 'refresh').length,1, 'refresh permissions even when every item fails');
 
   // Lock submission during confirmation; a changed scope requires a fresh selection.
   f = setup([issue('a')]);select(f,'a');

@@ -618,7 +618,7 @@ func TestRequirementDirectCreateUI(t *testing.T) {
 	for _, want := range []string{
 		`id="reqStepDescribe"`, `id="reqFooter"`,
 		`id="chatInput"`, `placeholder="要做什么？例如：`, `id="reqRepoChip"`, `id="reqRepoPopover"`, `id="reqRepository"`, `id="reqBaseBranch"`,
-		`id="reqWorkflow"`, `LOOP 流程`, `id="reqTarget"`, `data-req-target="local"`, `data-req-target="tapd"`,
+		`id="reqTarget"`, `data-req-target="local"`, `data-req-target="tapd"`,
 		`id="reqCreate"`, `创建需求`, `先写一句需求`,
 	} {
 		if !strings.Contains(composer, want) {
@@ -657,7 +657,7 @@ func TestRequirementDirectCreateUI(t *testing.T) {
 	}
 	for _, want := range []string{
 		`function renderReqFooter(`, `function renderReqRepoChip(`, `persistRequirementComposer`, `agentflow.requirementComposer`, `未配置`, `if(modal.id==='requirementModal')return`,
-		`assigneeUserId:Number(state.currentUser?.id)||0`, `fillReqWorkflow`, `selectedReqWorkflowId`, `可在详情里触发 LOOP`,
+		`assigneeUserId:Number(state.currentUser?.id)||0`,
 	} {
 		if !strings.Contains(code, want) {
 			t.Fatalf("requirement composer behavior is missing %q", want)
@@ -854,7 +854,7 @@ func TestListPaginationUI(t *testing.T) {
 		"function goListPage(",
 		"function bindPager(",
 		"paginateList('issues'",
-		"paginateList('obs'",
+		"paginateList('obs-executions'",
 		"obs-executions",
 		"data-page-key",
 	} {
@@ -1022,7 +1022,7 @@ global.$ = () => mockEl();
 global.$$ = () => [];
 global.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 global.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-eval(code + '; global.state = state; global.renderIssues = renderIssues; global.issueMatchesStatusFilter = issueMatchesStatusFilter; global.issueFinished = issueFinished; global.issueRunHealth = issueRunHealth; global.issueStatusBucket = issueStatusBucket; global.deliveryLockedLabel = deliveryLockedLabel; global.reopenDeliveredButton = reopenDeliveredButton; global.canRetriggerIssue = canRetriggerIssue; global.issueOutcome = issueOutcome; global.issueCurrentStage = issueCurrentStage; global.issueListProgress = issueListProgress;');
+eval(code + '; global.state = state; global.renderIssues = renderIssues; global.issueMatchesStatusFilter = issueMatchesStatusFilter; global.issueStatusBucket = issueStatusBucket; global.deliveryLockedLabel = deliveryLockedLabel; global.reopenDeliveredButton = reopenDeliveredButton; global.issueOutcome = issueOutcome; global.issueCurrentStage = issueCurrentStage;');
 state.data = { issues: [], projects: [], repositories: [], workflows: [], runs: [], tasks: [] };
 state.listPages = {};
 renderIssues();
@@ -1042,74 +1042,29 @@ for (const [status, expected] of noRunCases) {
 if (!issueMatchesStatusFilter({ id: 'backlog-case', status: 'backlog' }, 'backlog') || issueMatchesStatusFilter({ id: 'backlog-case', status: 'backlog' }, 'todo')) {
   throw new Error('backlog must follow its persisted status instead of being folded into todo');
 }
-const namedNodeIssue = { id: 'named-node', status: 'in_progress', workflowId: 'wf' };
-state.data.workflows = [{ id: 'wf', nodes: [{ id: 'node', name: '已完成' }] }];
-state.data.runs = [{ id: 'named-node-run', status: 'running', executionContext: { issueId: namedNodeIssue.id }, nodes: { node: { status: 'running' } } }];
-if (issueFinished(namedNodeIssue) || issueMatchesStatusFilter(namedNodeIssue, 'done')) {
-  throw new Error('a running node named 已完成 must not mark its issue complete');
+// A requirement's own status drives its stage: no run, no flow and no tracker
+// state can move it.
+const stageCases = [
+  ['in_progress', 'active'],
+  ['in_review', 'active'],
+  ['blocked', 'attention'],
+  ['done', 'closed'],
+  ['closed', 'closed'],
+  ['todo', 'not_started'],
+  ['backlog', 'not_started']
+];
+for (const [status, key] of stageCases) {
+  const issue = { id: 'stage-' + status, status };
+  if (issueCurrentStage(issue).key !== key) {
+    throw new Error('status ' + status + ' must show the ' + key + ' stage');
+  }
 }
-const trackerClosed = { id: 'tapd-closed', source: 'tapd', status: 'closed', closeSource: 'external', externalRef: { externalState: 'closed' } };
-if (issueRunHealth(trackerClosed) !== 'closed' || issueStatusBucket(trackerClosed) !== 'closed' || !issueMatchesStatusFilter(trackerClosed, 'closed') || issueMatchesStatusFilter(trackerClosed, 'done')) {
-  throw new Error('closed external work item without delivery must use the closed filter');
+const closedRequirement = { id: 'closed-requirement', status: 'closed' };
+if (issueOutcome(closedRequirement).title !== '需求已关闭') {
+  throw new Error('a closed requirement must report that it is closed');
 }
-if (issueCurrentStage(trackerClosed).label !== '已关闭' || issueListProgress(trackerClosed, null, null).pct !== 0) {
-  throw new Error('externally closed item without a run must display closed with zero LOOP progress');
-}
-const gongfengClosed = { id: 'gf-closed', source: 'gongfeng', status: 'closed', closeSource: 'external', externalRef: { externalState: 'closed' } };
-if (issueStatusBucket(gongfengClosed) !== 'closed' || issueCurrentStage(gongfengClosed).label !== '工蜂已关闭') {
-  throw new Error('closed gongfeng issue without delivery must stay in the closed filter');
-}
-const gongfengMerged = { id: 'gf-merged', source: 'gongfeng', status: 'closed', closeSource: 'external', externalRef: { externalState: 'closed' }, deliveryState: 'merged', deliveryMrState: 'merged', deliveryMrUrl: 'https://git.example.com/org/repo/merge_requests/9' };
-if (issueCurrentStage(gongfengMerged).label !== 'MR 已合入' || issueOutcome(gongfengMerged).title !== 'MR 已合入' || issueStatusBucket(gongfengMerged) !== 'done' || issueMatchesStatusFilter(gongfengMerged, 'closed')) {
-  throw new Error('a merged MR must outrank a closed Gongfeng issue');
-}
-const gongfengIntegrated = { id: 'gf-integrated', source: 'gongfeng', status: 'closed', closeSource: 'external', externalRef: { externalState: 'closed' }, deliveryState: 'merged', deliveryMrState: 'integrated', deliveryMrUrl: 'https://git.example.com/org/repo/merge_requests/10' };
-if (issueCurrentStage(gongfengIntegrated).label !== '已合入基线' || issueStatusBucket(gongfengIntegrated) !== 'done') {
-  throw new Error('baseline merge must outrank a closed Gongfeng issue');
-}
-const delivered = { id: 'delivered', source: 'tapd', status: 'closed', closeSource: 'external', deliveryState: 'merged', deliveryMrState: 'opened', externalRef: { externalState: 'closed' } };
-if (issueStatusBucket(delivered) !== 'closed' || issueMatchesStatusFilter(delivered, 'done') || issueCurrentStage(delivered).label !== '已关闭' || reopenDeliveredButton(delivered)) {
-  throw new Error('external closure must remain closed even after local delivery');
-}
-if (canRetriggerIssue(delivered, { status: 'succeeded' }) || issueOutcome(delivered).title !== '外部工作项已关闭') {
-  throw new Error('externally closed TAPD delivery must not offer a local retrigger');
-}
-const closedMR = { id: 'closed-mr', status: 'done', deliveryState: 'merged', deliveryMrState: 'closed' };
-if (issueStatusBucket(closedMR) !== 'closed' || !issueMatchesStatusFilter(closedMR, 'closed') || issueMatchesStatusFilter(closedMR, 'done')) {
-  throw new Error('a closed MR marker without a link must leave the completed filter');
-}
-if (issueCurrentStage(closedMR).label !== '已关闭' || issueListProgress(closedMR, null, null).pct !== 0) {
-  throw new Error('manual close forged as a closed MR must display closed with zero progress');
-}
-const linkedClosedMR = { id: 'linked-closed-mr', status: 'done', deliveryState: 'merged', deliveryMrState: 'closed', deliveryMrUrl: 'https://git.example.com/org/repo/merge_requests/2' };
-if (issueCurrentStage(linkedClosedMR).label !== 'MR 已关闭' || issueStatusBucket(linkedClosedMR) !== 'closed' || issueListProgress(linkedClosedMR, null, null).pct !== 100) {
-  throw new Error('a linked closed MR must stay MR closed in the single stage column');
-}
-const mergedMR = { id: 'merged-mr', status: 'done', deliveryState: 'merged', deliveryMrState: 'merged', deliveryMrUrl: 'https://git.example.com/org/repo/merge_requests/1' };
-if (issueStatusBucket(mergedMR) !== 'done' || issueCurrentStage(mergedMR).label !== 'MR 已合入' || issueMatchesStatusFilter(mergedMR, 'closed')) {
-  throw new Error('merged MR must stay in the completed filter under the existing stage column');
-}
-if (issueOutcome(mergedMR).title !== 'MR 已合入' || !canRetriggerIssue(mergedMR, { status: 'succeeded' })) {
-  throw new Error('a delivered but externally open item must keep preview retrigger behavior');
-}
-const manuallyClosed = { id: 'manually-closed', status: 'closed', deliveryState: 'merged', deliveryMrState: 'integrated' };
-if (issueStatusBucket(manuallyClosed) !== 'closed' || issueMatchesStatusFilter(manuallyClosed, 'done')) {
-  throw new Error('persisted closed status must be authoritative');
-}
-if (deliveryLockedLabel(manuallyClosed) !== '关闭' || !reopenDeliveredButton(manuallyClosed).includes('data-reopen-issue')) {
-  throw new Error('manual close must display as closed and remain reopenable without fake delivery state');
-}
-const succeededIssue = { id: 'succeeded-issue', status: 'done' };
-state.data.tasks.push({ id: 'succeeded-task', issueId: succeededIssue.id, runId: 'succeeded-run', status: 'completed', createdAt: '2026-09-23T00:00:00Z' });
-state.data.runs.push({ id: 'succeeded-run', status: 'succeeded', nodes: {}, createdAt: '2026-09-23T00:00:00Z' });
-if (issueCurrentStage(succeededIssue).label !== '交付闭环' || issueListProgress(succeededIssue, state.data.runs.at(-1), null).pct !== 100) {
-  throw new Error('persisted completion with a successful run must display delivery closure');
-}
-const reopenedReview = { id: 'reopened-review', status: 'in_review', deliveryState: 'reopened' };
-state.data.tasks.push({ id: 'reopened-task', issueId: reopenedReview.id, runId: 'reopened-run', status: 'completed', createdAt: '2026-09-23T00:00:00Z' });
-state.data.runs.push({ id: 'reopened-run', status: 'succeeded', nodes: {}, createdAt: '2026-09-23T00:00:00Z' });
-if (issueCurrentStage(reopenedReview).label !== '评审中' || issueStatusBucket(reopenedReview) !== 'in_review' || issueMatchesStatusFilter(reopenedReview, 'done')) {
-  throw new Error('a reopened issue must follow its current status instead of the old succeeded run');
+if (!reopenDeliveredButton(closedRequirement).includes('data-reopen-issue')) {
+  throw new Error('a closed requirement must stay reopenable');
 }
 const statusMatrix = [
   ['backlog', 'backlog'],
@@ -1284,7 +1239,7 @@ func TestCodexStyleLeftMiniRailLayout(t *testing.T) {
 	}
 
 	// 2. 左侧小栏只留 4 个日常入口和设置；流程模板、运行记录、定时任务收进设置导航。
-	for _, view := range []string{"observability", "issues", "approvals", "settings"} {
+	for _, view := range []string{"observability", "issues", "settings"} {
 		needle := `data-view="` + view + `"`
 		sub := page[railIdx:sidebarIdx]
 		if !strings.Contains(sub, needle) {
@@ -1318,11 +1273,8 @@ func TestCodexStyleLeftMiniRailLayout(t *testing.T) {
 		t.Fatal("settings navigation must contain the runners entry")
 	}
 
-	// 3. 待我确认按钮包含审批徽标，且底部包含完整个人信息与弹窗入口
+	// 3. 底部包含完整个人信息与弹窗入口
 	railContent := page[railIdx:sidebarIdx]
-	if !strings.Contains(railContent, `id="approvalNavBadge"`) {
-		t.Fatal("#platformRail approvals button must contain #approvalNavBadge")
-	}
 	if !strings.Contains(railContent, `id="userProfileWrap"`) || !strings.Contains(railContent, `id="userProfilePopover"`) {
 		t.Fatal("#platformRail must host #userProfileWrap and #userProfilePopover at bottom")
 	}
