@@ -51,6 +51,7 @@ var removedTables = []string{
 	"knowledge_connectors",
 	"knowledge_document_usage_counts",
 	"knowledge_settings",
+	"local_accounts",
 	"knowledge_submissions",
 	"knowledge_usage_events",
 	"mcp_files",
